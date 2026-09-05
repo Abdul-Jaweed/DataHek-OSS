@@ -15,3 +15,6 @@ htmlcov/
 *.jsonl
 datahek.db
 .env
+# Node
+node_modules/
+dist/
