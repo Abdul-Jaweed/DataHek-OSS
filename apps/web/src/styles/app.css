@@ -1,0 +1,56 @@
+.page { max-width: 1120px; }
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+}
+
+.card {
+  background: var(--bg-900);
+  border: 1px solid var(--border-700);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+
+.alert {
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  font-size: 13px;
+}
+.alert-error { background: var(--danger-50); border: 1px solid var(--danger-500); color: #fecaca; }
+.alert-info { background: var(--bg-800); border: 1px solid var(--info-500); color: var(--text-300); }
+
+.conn-form { display: grid; gap: var(--space-3); margin-bottom: var(--space-6); max-width: 480px; }
+.form-row { display: flex; flex-direction: column; gap: var(--space-1); }
+.form-row input, .form-row select {
+  background: var(--bg-850);
+  border: 1px solid var(--border-700);
+  border-radius: var(--radius-sm);
+  color: var(--text-100);
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+}
+.form-row input:focus, .form-row select:focus { outline: none; border-color: var(--brand-500); box-shadow: var(--glow-brand); }
+.form-actions { display: flex; gap: var(--space-2); }
+
+.conn-list { display: grid; gap: var(--space-3); }
+.conn-row { display: flex; align-items: center; gap: var(--space-4); }
+.conn-name { font-weight: 600; min-width: 140px; }
+.conn-detail { flex: 1; font-size: 13px; }
+
+/* chat page */
+.chat-page { display: flex; flex-direction: column; height: 100%; max-width: 900px; margin: 0 auto; }
+.chat-toolbar { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+.conn-select {
+  background: var(--bg-850); border: 1px solid var(--border-700); border-radius: var(--radius-sm);
+  color: var(--text-100); padding: var(--space-2) var(--space-3);
+}
+.conn-caption { margin-right: auto; }
+.thread-welcome { text-align: center; color: var(--text-500); margin-top: var(--space-16); }
+
+@media (max-width: 768px) {
+  .page-header { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
+}
