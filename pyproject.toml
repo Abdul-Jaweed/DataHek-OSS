@@ -6,6 +6,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
 
+[project.scripts]
+datahek = "datahek.cli:main"
+
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio"]
 llm = ["httpx>=0.27"]

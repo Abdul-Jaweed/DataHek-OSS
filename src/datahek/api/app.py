@@ -217,4 +217,14 @@ def create_app(container=None) -> FastAPI:
             )
         return conv
 
+    @app.get("/evaluations")
+    async def evaluations():
+        from datahek.contracts.evaluation import EvaluationStore
+
+        store: EvaluationStore = c.resolve(EvaluationStore)
+        ctx = RequestContext(source="api")
+        runs = await store.list(ctx)
+        aggregate = await store.aggregate(ctx)
+        return {"total": aggregate["total"], "pass_rate": aggregate["pass_rate"], "runs": runs}
+
     return app

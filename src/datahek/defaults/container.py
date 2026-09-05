@@ -6,6 +6,7 @@ and API code never change.
 from datahek.contracts.audit import AuditSink
 from datahek.contracts.auth import AuthProvider
 from datahek.contracts.connections import ConnectionManager
+from datahek.contracts.evaluation import EvaluationStore
 from datahek.contracts.misc import ConversationStore
 from datahek.contracts.models import ModelProvider
 from datahek.contracts.policy import PolicyEngine
@@ -17,6 +18,7 @@ from datahek.defaults.audit import JsonlAuditSink
 from datahek.defaults.auth import LocalAuthProvider
 from datahek.defaults.connections import LocalConnectionManager
 from datahek.defaults.conversations import SqliteConversationStore
+from datahek.defaults.evaluation import InMemoryEvaluationStore, LocalEvaluator
 from datahek.defaults.models import OpenAICompatibleModelProvider
 from datahek.defaults.policy import LocalPolicyEngine
 from datahek.defaults.secrets import EnvSecretsProvider
@@ -51,6 +53,7 @@ def build_app_container() -> Container:
     c.register(ProviderRegistry, registry, singleton=True)
     c.register(SchemaService, SchemaService(), singleton=True)
     c.register(ModelProvider, OpenAICompatibleModelProvider(), singleton=True)
+    c.register(EvaluationStore, InMemoryEvaluationStore(), singleton=True)
 
     c.register(Planner, lambda: Planner(
         model=c.resolve(ModelProvider),
@@ -61,5 +64,6 @@ def build_app_container() -> Container:
         registry=c.resolve(ProviderRegistry),
         schema_service=c.resolve(SchemaService),
         audit_sink=c.resolve(AuditSink),
+        evaluation_hook=LocalEvaluator(c.resolve(EvaluationStore)),
     ), singleton=True)
     return c

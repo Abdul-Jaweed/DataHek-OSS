@@ -52,6 +52,7 @@ class Engine:
         guardrails: GuardrailPipeline | None = None,
         schema_service=None,
         audit_sink: AuditSink | None = None,
+        evaluation_hook=None,
     ):
         self.registry = registry
         self.guardrails = guardrails or GuardrailPipeline([
@@ -60,6 +61,7 @@ class Engine:
         ])
         self.schema_service = schema_service
         self.audit_sink = audit_sink
+        self.evaluation_hook = evaluation_hook
 
     async def _audit(self, ctx: RequestContext, event: AuditEvent) -> None:
         if self.audit_sink is not None:
@@ -89,6 +91,9 @@ class Engine:
             payload={"guardrail": decision.reason, "plan_sources": [n.source for n in plan.nodes if hasattr(n, "source")]},
         ))
         if decision.decision != "ALLOW":
+            if self.evaluation_hook is not None:
+                await self.evaluation_hook.on_execution_completed(
+                    ctx, plan=plan, result=None, duration_ms=0, decision=decision.decision)
             raise DatahekError(ErrorCode.QUERY_DENIED, decision.reason, details={"decision": decision.decision})
 
         client = await provider.connect(connection)
@@ -99,6 +104,9 @@ class Engine:
             raise
         except Exception as e:
             err = DatahekError(ErrorCode.CONNECTION_FAILED, "Query execution failed")
+            if self.evaluation_hook is not None:
+                await self.evaluation_hook.on_execution_completed(
+                    ctx, plan=plan, result=None, duration_ms=0, decision="ALLOW", failed=True)
             await self._audit(ctx, AuditEvent(
                 event_type="query.execution",
                 actor=ctx.user_id,
@@ -117,6 +125,13 @@ class Engine:
         rows = list(raw.get("rows", []))
         truncated = len(rows) > max_rows
         rows = rows[:max_rows]
+
+        if self.evaluation_hook is not None:
+            await self.evaluation_hook.on_execution_completed(
+                ctx, plan=plan, result=QueryResult(
+                    columns=raw.get("columns", []), rows=rows, row_count=len(rows),
+                    truncated=truncated, execution=ExecutionInfo(provider_id=provider.provider_id, duration_ms=duration_ms),
+                ), duration_ms=duration_ms, decision="ALLOW")
 
         await self._audit(ctx, AuditEvent(
             event_type="query.execution",
