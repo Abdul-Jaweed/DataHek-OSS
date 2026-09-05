@@ -9,6 +9,9 @@ import argparse
 import asyncio
 import sys
 
+from datahek.engine.executor import Engine, ProviderRegistry
+from datahek.engine.planner import Planner
+from datahek.kernel.errors import DatahekError, ErrorCode
 from datahek.contracts.connections import Connection, ConnectionManager
 from datahek.kernel.context import RequestContext
 from datahek.kernel.errors import DatahekError
@@ -25,7 +28,7 @@ async def find_connection_by_name(conn_mgr: ConnectionManager, ctx: RequestConte
         if c.name == name_or_id or c.id == name_or_id:
             return c
     raise DatahekError(
-        __import__("datahek.kernel.errors", fromlist=["ErrorCode"]).ErrorCode.CONNECTION_NOT_FOUND,
+        ErrorCode.CONNECTION_NOT_FOUND,
         f"Connection '{name_or_id}' not found",
     )
 
@@ -34,9 +37,9 @@ async def ask_one(container, question: str, connection_name: str) -> dict:
     from datahek.contracts.reasoner import Reasoner
 
     conn_mgr: ConnectionManager = container.resolve(ConnectionManager)
-    registry = container.resolve(__import__("datahek.engine.executor", fromlist=["ProviderRegistry"]).ProviderRegistry)
-    planner = container.resolve(__import__("datahek.engine.planner", fromlist=["Planner"]).Planner)
-    engine = container.resolve(__import__("datahek.engine.executor", fromlist=["Engine"]).Engine)
+    registry = container.resolve(ProviderRegistry)
+    planner = container.resolve(Planner)
+    engine = container.resolve(Engine)
     reasoner: Reasoner = container.resolve(Reasoner)
 
     ctx = RequestContext(source="cli")

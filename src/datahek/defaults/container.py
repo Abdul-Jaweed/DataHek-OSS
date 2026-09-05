@@ -16,7 +16,7 @@ from datahek.contracts.tenancy import TenantContext
 from datahek.connectors.clickhouse import ClickHouseProvider
 from datahek.connectors.postgres import PostgresProvider
 from datahek.defaults.audit import JsonlAuditSink
-from datahek.defaults.auth import LocalAuthProvider
+from datahek.defaults.auth import AuthConfig, LocalAuthProvider
 from datahek.defaults.connections import LocalConnectionManager
 from datahek.defaults.conversations import SqliteConversationStore
 from datahek.defaults.evaluation import InMemoryEvaluationStore, LocalEvaluator
@@ -29,13 +29,15 @@ from datahek.engine.executor import Engine, ProviderRegistry
 from datahek.engine.planner import Planner
 from datahek.engine.reasoner import ModelReasoner
 from datahek.engine.schema import SchemaService
+from datahek.kernel.config import config_from_env
 from datahek.kernel.di import Container
 from datahek.kernel.entitlements import EntitlementProvider
 
 
 def build_default_container() -> Container:
     c = Container()
-    c.register(AuthProvider, LocalAuthProvider(), singleton=True)
+    c.register(AuthConfig, config_from_env(AuthConfig, prefix="DATAHEK_AUTH_"), singleton=True)
+    c.register(AuthProvider, LocalAuthProvider.from_env(), singleton=True)
     c.register(TenantContext, SingleTenantContext(), singleton=True)
     c.register(AuditSink, JsonlAuditSink(), singleton=True)
     c.register(PolicyEngine, LocalPolicyEngine(), singleton=True)

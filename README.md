@@ -1,133 +1,183 @@
+<div align="center">
+
 # DataHek OSS
 
-**Universal conversational data platform — v0.2.0**
+**Universal conversational data platform** — connect any data source, ask questions in natural language, get safe, explained answers.
 
-Connect any data source. Ask questions in natural language. DataHek discovers the schema, plans a read-only query, validates it through guardrails, executes it safely, and explains the results — across an API, CLI, and MCP server.
+[![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-206%20passing-brightgreen.svg)](#testing)
+[![Version](https://img.shields.io/badge/version-0.2.0-orange.svg)](https://github.com/Abdul-Jaweed/DataHek-OSS)
+[![MCP](https://img.shields.io/badge/MCP-fastmcp-38BDF8.svg)](#mcp-server)
+
+</div>
+
+DataHek OSS turns natural language into **safe, read-only data operations**. It discovers your schema, plans a query, validates it through a guardrail pipeline, executes it, and explains the results — across a REST API, a CLI, an MCP server, and a web UI.
 
 ```
 question → schema discovery → logical plan → validation → guardrails
          → audit → execution → masking → explanation → conversation
 ```
 
+> **One engine. OSS for everyone. Enterprise for the org.** — the open-source core of the DataHek platform; Enterprise adds SSO, multi-tenancy, policy engines, and centralized audit as extensions over the same contracts.
+
 ---
 
-## Quick start
+## ✨ Key features
+
+- **Universal data engine** — a provider-agnostic **Logical Query Plan** compiled per connector (ClickHouse and PostgreSQL today); no provider-specific logic in the core
+- **Read-only by construction** — Write plan nodes are structurally separated and denied before any provider runs
+- **Typed guardrail decisions** — `ALLOW / DENY / REDACT / MASK / REQUIRE_APPROVAL / RATE_LIMIT` with a deterministic pipeline (input → plan → SQL → output)
+- **Masking before reasoning** — sensitive columns (schema tags) are masked before the explanation model sees results; answers are PII-redacted
+- **Full audit** — every guardrail decision and execution recorded with actor, tenant, and decision
+- **Four surfaces, one pipeline** — REST API, CLI, MCP server, and web UI all run the same RequestContext → guardrails → audit path (MCP is never a privileged bypass)
+- **Conversational memory** — multi-turn conversations persisted in SQLite with a streaming explanation endpoint
+- **Evaluation** — every execution scored (validity, safety, latency) + curated offline regression datasets with `POST /evaluations/run`
+- **OSS entitlements** — limits (connections ≤ 5, MCP ≤ 3, prompts ≤ 3) enforced through a replaceable `EntitlementProvider` — the path to Production/Enterprise tiers
+- **Tenant-aware by construction** — every model carries `org_id`/`project_id`; OSS runs a single implicit default tenant
+- **Zero core dependencies** — the kernel is stdlib-only; connectors, model providers, and the API are optional extras
+
+---
+
+## 📋 Requirements
+
+- Python **3.12+**
+- A clickhouse-connect/psycopg-supported database (or any future connector)
+- An OpenAI-compatible LLM endpoint for the planner/reasoner (default: opencode, `mimo-v2.5`)
+
+## 🚀 Installation
 
 ```bash
-# install (all extras)
-uv pip install -e ".[all]"
+# full install (API + CLI + MCP + connectors)
+pip install "datahek-core[all]"
 
-# run the API
+# or minimal, adding extras as needed
+pip install datahek-core
+pip install "datahek-core[api,clickhouse,llm]"
+```
+
+## ⚡ Quick start
+
+```bash
+# 1. configure the LLM (any OpenAI-compatible endpoint)
+export LLM_BASE_URL=https://opencode.ai/zen/go/v1
+export LLM_API_KEY=your-key
+export LLM_MODEL=mimo-v2.5
+
+# 2. run the API
 uvicorn datahek.api.app:create_app --factory --port 8000
-# docs: http://localhost:8000/docs
+# docs: http://localhost:8000/docs · web UI: http://localhost:8000
 
-# or the CLI
+# 3. add a connection
+curl -X POST http://localhost:8000/connections \
+  -H "content-type: application/json" \
+  -d '{"name":"ch1","provider":"clickhouse","host":"localhost","port":8123,"database":"default","settings":{"username":"default","password":"secret"}}'
+
+# 4. ask a question
+curl -X POST http://localhost:8000/ask \
+  -H "content-type: application/json" \
+  -d '{"question":"What is the error count by service in the traces table?","connection_id":"<conn-id>"}'
+# → {"answer":"payment-api has the most errors...","rows":[{...}],...}
+```
+
+### CLI
+
+```bash
 datahek connections
 datahek ask "which service has the most errors?" --connection ch1
 datahek interactive
-
-# or the MCP server (HTTP on :8001)
-python -m datahek.mcp_server
 ```
 
-### Configuration (env)
+### MCP server
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `LLM_BASE_URL` | `https://opencode.ai/zen/go/v1` | OpenAI-compatible chat endpoint |
-| `LLM_API_KEY` | — | API key for the endpoint |
-| `LLM_MODEL` | `mimo-v2.5` | Model identifier |
-| `DATAHEK_DB_PATH` | `datahek.db` | SQLite conversation store |
-| `DATAHEK_AUDIT_PATH` | `datahek-audit.jsonl` | Audit trail |
+```bash
+python -m datahek.mcp_server                     # streamable HTTP on :8001
+claude mcp add data-vault --transport http http://localhost:8001/mcp
+```
 
 ### Docker
 
 ```bash
-docker compose up -d --build
-# api :8000 · mcp :8001 — state in the datahek-data volume
+docker compose up -d --build   # api :8000 · mcp :8001 · state in a volume
 ```
 
----
+## 🔧 Configuration
 
-## Architecture
+| Variable | Default | Purpose |
+|---|---|---|
+| `LLM_BASE_URL` | `https://opencode.ai/zen/go/v1` | OpenAI-compatible chat endpoint |
+| `LLM_API_KEY` | — | Endpoint API key |
+| `LLM_MODEL` | `mimo-v2.5` | Model identifier |
+| `DATAHEK_DB_PATH` | `datahek.db` | SQLite conversation store |
+| `DATAHEK_AUDIT_PATH` | `datahek-audit.jsonl` | Audit trail (JSONL) |
+| `DATAHEK_AUTH_MODE` | `none` | `none` or `local` (enforce API keys) |
+| `DATAHEK_AUTH_LOCAL_USERS` | `{}` | JSON `{"user":"password"}` for local auth |
+
+## 🧠 How it works
 
 ```
-packages/datahek-core (this repo) — v0.2.0
-├── kernel/       contracts foundations: config, ids, RequestContext, errors,
-│                 events, capabilities, DI container, entitlements
-├── contracts/    stable interfaces Enterprise implements without forking:
-│                 auth, tenancy, policy, audit, secrets, connections,
-│                 providers, guardrails, models, reasoner, evaluation, storage
-├── engine/       universal data engine (ADR-003):
-│                 LogicalPlan → validation → guardrails → execution →
-│                 masking → normalized results; planner + reasoner
-├── defaults/     OSS implementations: local auth/policy/tenancy, JSONL audit,
-│                 env secrets, SQLite conversations, OpenAI-compatible model,
-│                 evaluator, masking policy, service container
-├── connectors/   ClickHouse provider (schema introspection, plan→SQL compile)
-└── api/ cli/ mcp_server.py   experience plane (same pipeline, no bypass)
+                    ┌──────────────────────────────┐
+                    │  Experience plane             │
+                    │  API · CLI · MCP · Web UI     │
+                    └──────────────┬───────────────┘
+                                   │ RequestContext (tenant-aware)
+                    ┌──────────────▼───────────────┐
+                    │  Engine (ADR-003)            │
+                    │  schema → plan → guardrails  │
+                    │  → audit → execute → mask    │
+                    └──────────────┬───────────────┘
+              ┌────────────────────┼────────────────────┐
+              ▼                    ▼                    ▼
+       ClickHouse connector  PostgreSQL connector  (next: more)
 ```
 
-### Security model
-
-- **Read-only by construction** — Write plan nodes are structurally separated and denied by the guardrail pipeline before any provider runs
-- **Typed guardrail decisions** — `ALLOW / DENY / REDACT / MASK / REQUIRE_APPROVAL / RATE_LIMIT`
-- **Masking before reasoning** — sensitive columns (schema `semantic_tags`) are masked before the explanation model sees results; answers are PII-redacted
-- **Full audit** — every guardrail decision and execution is recorded with actor, tenant, and decision
-- **Sanitized errors** — driver internals never leak; unexpected failures return a generic `INTERNAL`
-
-### Tenancy
-
-Every model is tenant-aware (`org_id`/`project_id`) by construction; OSS runs a single implicit `default` organization/project. Enterprise replaces `TenantContext`/stores via the container — no core changes.
-
----
-
-## API
-
-| Endpoint | Purpose |
+| Component | Path |
 |---|---|
-| `GET /health` | version, capabilities, entitlements, providers |
-| `POST/GET /connections` | create/list connections |
-| `POST /ask` | question → plan → execute → explain (`answer`, `rows`) |
-| `POST/GET /conversations` | multi-turn conversations (turns recorded on ask) |
-| `GET /evaluations` | execution scores + aggregate pass rate |
+| Platform kernel | `datahek/kernel/` — config, ids, context, errors, events, DI, entitlements |
+| Contracts (Enterprise extension points) | `datahek/contracts/` — auth, tenancy, policy, audit, secrets, providers, guardrails, models, reasoner, evaluation |
+| Engine | `datahek/engine/` — LogicalPlan, guardrails, executor, masking, planner, reasoner, schema, compile |
+| OSS defaults | `datahek/defaults/` — local auth/policy/tenancy, JSONL audit, SQLite conversations, OpenAI-compatible model, evaluator, dataset runner |
+| Connectors | `datahek/connectors/` — ClickHouse, PostgreSQL |
+| Surfaces | `datahek/api/` (FastAPI + web UI), `datahek/cli.py`, `datahek/mcp_server.py` |
 
-Errors: `{code, message, details}` with typed codes (`CONNECTION_NOT_FOUND`, `QUERY_DENIED`, `CONNECTION_FAILED`, …).
-
-## MCP tools
-
-| Tool | Purpose |
-|---|---|
-| `data.list_tables(connection)` | tables with row counts |
-| `data.table_schema(connection, table)` | columns with types |
-| `data.ask(question, connection)` | full pipeline with explanation |
-
-## CLI
-
-```
-datahek connections
-datahek ask "<question>" --connection <name-or-id>
-datahek interactive
-```
-
-## Tests
+## 🧪 Testing
 
 ```bash
-python -m unittest discover tests -v   # 163 tests
+python -m unittest discover tests -v   # 206 tests
 ```
 
-Coverage: kernel foundations, services, contracts/defaults conformance, logical plans, guardrails, engine (audit, masking, evaluation), schema discovery, planner, reasoner, conversations, API, CLI, MCP, masking.
+Coverage: kernel foundations, contracts conformance, logical plans, guardrails, engine (audit/masking/evaluation), schema discovery, planner, reasoner, conversations, auth, entitlements, API, CLI, MCP, streaming, web UI, datasets, both connectors.
 
-## Roadmap (per docs/v2)
+## 🗺️ Roadmap
 
-- ✅ Platform kernel + contracts
-- ✅ Vertical slice (ClickHouse)
-- ✅ API + CLI + MCP surfaces
-- ✅ Conversations (SQLite) · reasoner · evaluation hooks · masking
-- 🔜 Docker packaging polish · docs · CI
-- 🔜 PostgreSQL connector (proves connector generality)
-- 🔜 Enterprise extensions (private repo): SSO, tenancy, policy engine, centralized audit
+- ✅ Platform kernel + contracts · vertical slice (ClickHouse) · API/CLI/MCP/web surfaces · streaming · conversations · reasoner · evaluation + datasets · masking · entitlements · PostgreSQL connector · Docker
+- 🔜 CI · PostgreSQL real-data E2E · additional connectors (MySQL, SQLite) · semantic layer · visualization engine
+- 🔒 **Enterprise** (separate repo): SSO/SCIM, multi-tenancy, policy engine, centralized audit, admin console — built as implementations of the OSS contracts
 
-## License
+## 🤝 Contributing
 
-Apache-2.0 (OSS packages). Enterprise modules are proprietary — see the licensing ADR.
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feat/my-feature`).
+3. Write tests first for any behavior change (`python -m unittest tests.test_xxx`).
+4. Run the full suite (`python -m unittest discover tests`) — keep it green.
+5. Open a pull request describing the change and the tests.
+
+All contributions to OSS packages are licensed under Apache-2.0 (DCO).
+
+## ❓ FAQ / Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `/ask` returns `429 RATE_LIMITED` | Your LLM endpoint is rate-limited — retry later or switch `LLM_BASE_URL`/`LLM_MODEL` |
+| `/ask` returns `502 CONNECTION_FAILED` | Schema discovery failed — check the connection host/port/credentials |
+| Connections reach the limit | OSS default is 5 per project; override `EntitlementProvider` in your composition for more |
+| I want auth | Set `DATAHEK_AUTH_MODE=local` and `DATAHEK_AUTH_LOCAL_USERS='{"admin":"secret"}'`, then send `X-API-Key` |
+| The web UI shows no connections | Add one in the sidebar (host/port/database) and select it |
+
+## 📄 License
+
+[Apache-2.0](LICENSE) — © 2026 Abdul-Jaweed. Enterprise modules (separate repository) are proprietary; see the licensing ADR for the open-core boundary.
+
+## 🙏 Acknowledgements
+
+Built on [LangGraph/LangChain](https://github.com/langchain-ai) ecosystem patterns, [sqlglot](https://github.com/tobymao/sqlglot), [FastMCP](https://github.com/jlowin/fastmcp), [FastAPI](https://fastapi.tiangolo.com/), and [ClickHouse](https://clickhouse.com/) — with architectural guidance from the open-core review (see `docs/v2/` in the parent project).

@@ -21,6 +21,14 @@ class ModelResponse:
     usage: dict = field(default_factory=dict)
 
 
+class ModelProviderError(Exception):
+    """Typed model-provider failure (HTTP status preserved, no raw leak)."""
+
+    def __init__(self, message: str, status_code: int | None = None):
+        self.status_code = status_code
+        super().__init__(message)
+
+
 @runtime_checkable
 class ModelProvider(Protocol):
     async def complete(self, request: ModelRequest) -> ModelResponse: ...

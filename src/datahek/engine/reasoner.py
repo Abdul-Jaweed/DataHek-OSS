@@ -36,7 +36,7 @@ class ModelReasoner(Reasoner):
         self._model = model
         self._max_rows = max_rows_in_prompt
 
-    async def explain(self, question: str, result: QueryResult, plan: LogicalPlan, ctx: RequestContext) -> str:
+    def _build_prompt(self, question: str, result: QueryResult, plan: LogicalPlan) -> str:
         columns = [c["name"] for c in result.columns]
         rows = result.rows[: self._max_rows]
         rows_text = "\n".join(
@@ -45,17 +45,19 @@ class ModelReasoner(Reasoner):
         truncated = len(result.rows) > self._max_rows
 
         source = ", ".join(n.source for n in plan.nodes if hasattr(n, "source"))
-        user = (
+        return (
             f"Question: {question}\n"
             f"Source: {source or 'unknown'}\n"
             f"Columns: {', '.join(columns)}\n"
             f"Rows ({result.row_count}{' truncated in view' if truncated else ''}):\n{rows_text}"
         )
+
+    async def explain(self, question: str, result: QueryResult, plan: LogicalPlan, ctx: RequestContext) -> str:
         try:
             response = await self._model.complete({
                 "messages": [
                     {"role": "system", "content": _EXPLAIN_SYSTEM_PROMPT},
-                    {"role": "user", "content": user},
+                    {"role": "user", "content": self._build_prompt(question, result, plan)},
                 ],
                 "temperature": 0.2,
             })
@@ -63,3 +65,20 @@ class ModelReasoner(Reasoner):
         except Exception as e:
             logger.warning("Explanation model failed; using fallback: %s", e)
             return fallback_summary(result)
+
+    async def stream_explanation(self, question: str, result: QueryResult, plan: LogicalPlan,
+                                 ctx: RequestContext):
+        """Yield explanation chunks; falls back to a single summary on failure."""
+        try:
+            async for chunk in self._model.stream({
+                "messages": [
+                    {"role": "system", "content": _EXPLAIN_SYSTEM_PROMPT},
+                    {"role": "user", "content": self._build_prompt(question, result, plan)},
+                ],
+                "temperature": 0.2,
+            }):
+                if chunk:
+                    yield chunk
+        except Exception as e:
+            logger.warning("Explanation stream failed; using fallback: %s", e)
+            yield fallback_summary(result)

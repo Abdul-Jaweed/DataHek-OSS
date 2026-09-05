@@ -9,7 +9,7 @@ import logging
 from dataclasses import dataclass, field
 
 from datahek.contracts.connections import Connection
-from datahek.contracts.models import ModelProvider, ModelRequest
+from datahek.contracts.models import ModelProvider, ModelProviderError, ModelRequest
 from datahek.contracts.providers import DataProvider
 from datahek.engine.plan import LogicalPlan, validate_plan
 from datahek.engine.schema import SchemaCatalog, SchemaService
@@ -79,7 +79,13 @@ class Planner:
 
         feedback = None
         for attempt in range(self._max_attempts):
-            response = await self._model.complete(self._build_request(question, schema_summary, feedback))
+            try:
+                response = await self._model.complete(self._build_request(question, schema_summary, feedback))
+            except ModelProviderError as e:
+                from datahek.kernel.errors import DatahekError, ErrorCode
+                if e.status_code == 429:
+                    raise DatahekError(ErrorCode.RATE_LIMITED, "Model provider rate limited") from e
+                raise DatahekError(ErrorCode.MODEL_UNAVAILABLE, "Model provider unavailable") from e
             parsed, clarification = self._parse(response.content)
             if clarification:
                 return PlanResult(plan=None, clarification=clarification, confidence=0.3)

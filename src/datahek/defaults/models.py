@@ -2,14 +2,12 @@
 
 Talks to any OpenAI-compatible /chat/completions endpoint (opencode, Groq,
 local LLMs). Uses httpx (optional dependency: ``datahek-core[llm]``).
+HTTP failures surface as typed ``ModelProviderError`` — never raw driver text.
 """
-import logging
 from typing import Any
 
-from datahek.contracts.models import ModelProvider, ModelRequest, ModelResponse
+from datahek.contracts.models import ModelProvider, ModelProviderError, ModelRequest, ModelResponse
 from datahek.kernel.config import Config, config_from_env
-
-logger = logging.getLogger(__name__)
 
 
 class ModelConfig(Config):
@@ -37,6 +35,16 @@ class OpenAICompatibleModelProvider(ModelProvider):
             resp.raise_for_status()
             return resp.json()
 
+    @staticmethod
+    def _convert_error(e: Exception) -> Exception:
+        import httpx
+
+        if isinstance(e, httpx.HTTPStatusError):
+            return ModelProviderError("model provider error", status_code=e.response.status_code)
+        if isinstance(e, httpx.HTTPError):
+            return ModelProviderError("model provider unreachable")
+        return e
+
     async def complete(self, request: ModelRequest) -> ModelResponse:
         payload: dict[str, Any] = {
             "model": self._config.model,
@@ -49,7 +57,13 @@ class OpenAICompatibleModelProvider(ModelProvider):
         if request.get("response_format") == "json_object":
             payload["response_format"] = {"type": "json_object"}
 
-        data = await self._post(payload)
+        try:
+            data = await self._post(payload)
+        except Exception as e:
+            converted = self._convert_error(e)
+            if converted is not e:
+                raise converted from e
+            raise
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as e:
@@ -62,7 +76,13 @@ class OpenAICompatibleModelProvider(ModelProvider):
             "messages": request["messages"],
             "stream": True,
         }
-        data = await self._post(payload)
+        try:
+            data = await self._post(payload)
+        except Exception as e:
+            converted = self._convert_error(e)
+            if converted is not e:
+                raise converted from e
+            raise
         if isinstance(data, dict) and data.get("choices"):
             content = data["choices"][0].get("message", {}).get("content", "")
             if content:

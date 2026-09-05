@@ -22,6 +22,7 @@ from datahek.engine.executor import Engine, ProviderRegistry
 from datahek.engine.planner import Planner
 from datahek.engine.reasoner import Reasoner
 from datahek.engine.schema import SchemaService
+from datahek.kernel.errors import DatahekError, ErrorCode
 from datahek.kernel.context import RequestContext
 from datahek.kernel.errors import DatahekError
 
@@ -48,7 +49,7 @@ def build_mcp_server(container=None) -> FastMCP:
             if conn.name == name_or_id or conn.id == name_or_id:
                 return ctx, conn
         raise DatahekError(
-            __import__("datahek.kernel.errors", fromlist=["ErrorCode"]).ErrorCode.CONNECTION_NOT_FOUND,
+            ErrorCode.CONNECTION_NOT_FOUND,
             f"Connection '{name_or_id}' not found",
         )
 

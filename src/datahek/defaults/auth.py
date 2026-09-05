@@ -2,7 +2,17 @@
 
 Production/Enterprise replace this via the AuthProvider contract (SSO/OIDC/SAML).
 """
+import json
+
 from datahek.contracts.auth import AuthProvider, AuthenticatedIdentity
+from datahek.kernel.config import Config, config_from_env
+
+
+class AuthConfig(Config):
+    """DATAHEK_AUTH_MODE=none|local · DATAHEK_AUTH_LOCAL_USERS='{"user":"pass"}'"""
+
+    mode: str = "none"
+    local_users: str = "{}"
 
 
 class LocalAuthProvider(AuthProvider):
@@ -19,3 +29,23 @@ class LocalAuthProvider(AuthProvider):
                 provider="local",
             )
         return AuthenticatedIdentity(user_id=user_id, authenticated=False, provider="local")
+
+    async def authenticate_api_key(self, token: str) -> AuthenticatedIdentity:
+        for user_id, password in self._users.items():
+            if password == token:
+                return AuthenticatedIdentity(
+                    user_id=user_id,
+                    authenticated=True,
+                    roles=self._roles.get(user_id, frozenset({"analyst"})),
+                    provider="local-key",
+                )
+        return AuthenticatedIdentity(user_id="anonymous", authenticated=False, provider="local-key")
+
+    @classmethod
+    def from_env(cls) -> "LocalAuthProvider":
+        cfg = config_from_env(AuthConfig, prefix="DATAHEK_AUTH_")
+        try:
+            users = json.loads(cfg.local_users)
+        except json.JSONDecodeError:
+            users = {}
+        return cls(users=users if isinstance(users, dict) else {})

@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from datahek.api.app import create_app
 from datahek.contracts.connections import Connection
+from datahek.contracts.models import ModelProvider
 from datahek.contracts.models import ModelResponse
 from datahek.contracts.providers import ConnectorCapabilities, ProviderKind, ReadOnlyLevel
 from datahek.engine.executor import ProviderRegistry
@@ -56,7 +57,7 @@ def _app_with(model_response: str):
     from datahek.defaults.container import build_app_container
 
     container = build_app_container()
-    container.override(__import__("datahek.contracts.models", fromlist=["ModelProvider"]).ModelProvider,
+    container.override(ModelProvider,
                        _FakeModel(model_response))
     registry = ProviderRegistry()
     registry.register(_FakeProvider())
@@ -197,7 +198,7 @@ class TestErrorHygiene(unittest.TestCase):
                 return {"columns": [], "rows": []}
             async def close(self, client): pass
 
-        container.override(__import__("datahek.contracts.models", fromlist=["ModelProvider"]).ModelProvider, FakeModel())
+        container.override(ModelProvider, FakeModel())
         registry = ProviderRegistry()
         registry.register(BrokenSchemaProvider())
         container.override(ProviderRegistry, registry)
@@ -234,7 +235,7 @@ class TestErrorHygiene(unittest.TestCase):
                 return {"columns": [], "rows": []}
             async def close(self, client): pass
 
-        container.override(__import__("datahek.contracts.models", fromlist=["ModelProvider"]).ModelProvider, FakeModel())
+        container.override(ModelProvider, FakeModel())
         registry = ProviderRegistry()
         registry.register(ExplodingProvider())
         container.override(ProviderRegistry, registry)

@@ -133,5 +133,71 @@ class TestPlanner(unittest.TestCase):
         self.assertEqual(result.clarification, "hi")
 
 
+class TestPlannerModelFailures(unittest.TestCase):
+    def _plan_env(self):
+        import time
+
+        from datahek.contracts.connections import Connection
+        from datahek.contracts.models import ModelProviderError
+        from datahek.engine.schema import _CatalogEntry
+        from datahek.kernel.context import RequestContext
+
+        catalog = SchemaCatalog(source="c1:default", tables=[
+            TableMeta(name="traces", columns=[ColumnMeta(name="a", data_type="Int32")])])
+        service = SchemaService()
+        service._entries["c1:default"] = _CatalogEntry(catalog=catalog, fetched_at=time.time())
+        conn = Connection(id="c1", name="ch", provider="clickhouse", org_id="default", project_id="default")
+        provider = type("P", (), {"provider_id": "clickhouse"})()
+        return service, conn, provider
+
+    def test_rate_limit_becomes_typed_error(self):
+        from datahek.contracts.models import ModelProviderError
+        from datahek.kernel.errors import DatahekError, ErrorCode
+
+        class FailingModel:
+            async def complete(self, request):
+                raise ModelProviderError("rate limited", status_code=429)
+            async def stream(self, request):
+                yield ""
+
+        service, conn, provider = self._plan_env()
+        planner = Planner(model=FailingModel(), schema_service=service)
+        with self.assertRaises(DatahekError) as cm:
+            asyncio.run(planner.plan("q", RequestContext(source="api"), conn, provider))
+        self.assertEqual(cm.exception.code, ErrorCode.RATE_LIMITED)
+
+    def test_other_http_error_becomes_model_unavailable(self):
+        from datahek.contracts.models import ModelProviderError
+        from datahek.kernel.errors import DatahekError, ErrorCode
+
+        class FailingModel:
+            async def complete(self, request):
+                raise ModelProviderError("server error", status_code=502)
+            async def stream(self, request):
+                yield ""
+
+        service, conn, provider = self._plan_env()
+        planner = Planner(model=FailingModel(), schema_service=service)
+        with self.assertRaises(DatahekError) as cm:
+            asyncio.run(planner.plan("q", RequestContext(source="api"), conn, provider))
+        self.assertEqual(cm.exception.code, ErrorCode.MODEL_UNAVAILABLE)
+
+
+class TestModelProviderErrorConversion(unittest.TestCase):
+    def test_httpx_error_converted(self):
+        import httpx
+
+        from datahek.defaults.models import OpenAICompatibleModelProvider
+        from datahek.contracts.models import ModelProviderError
+
+        p = OpenAICompatibleModelProvider()
+        err = httpx.HTTPStatusError("429", request=httpx.Request("POST", "http://x"),
+                                    response=httpx.Response(429))
+        with mock.patch.object(p, "_post", side_effect=err):
+            with self.assertRaises(ModelProviderError) as cm:
+                asyncio.run(p.complete({"messages": [{"role": "user", "content": "hi"}]}))
+        self.assertEqual(cm.exception.status_code, 429)
+
+
 if __name__ == "__main__":
     unittest.main()

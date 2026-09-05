@@ -96,7 +96,7 @@ class TestAskRecordsConversation(unittest.TestCase):
 
         from datahek.api.app import create_app
         from datahek.defaults.container import build_app_container
-        from datahek.contracts.models import ModelResponse
+        from datahek.contracts.models import ModelProvider, ModelResponse
         from datahek.contracts.providers import ConnectorCapabilities, ProviderKind
         from datahek.engine.executor import ProviderRegistry
         from datahek.engine.schema import ColumnMeta, SchemaCatalog, TableMeta
@@ -121,7 +121,7 @@ class TestAskRecordsConversation(unittest.TestCase):
             async def close(self, client): pass
 
         container = build_app_container()
-        container.override(__import__("datahek.contracts.models", fromlist=["ModelProvider"]).ModelProvider, FakeModel())
+        container.override(ModelProvider, FakeModel())
         registry = ProviderRegistry()
         registry.register(FakeProvider())
         container.override(ProviderRegistry, registry)
@@ -150,7 +150,7 @@ class TestAskRecordsConversation(unittest.TestCase):
 
         from datahek.api.app import create_app
         from datahek.defaults.container import build_app_container
-        from datahek.contracts.models import ModelResponse
+        from datahek.contracts.models import ModelProvider, ModelResponse
         from datahek.engine.executor import ProviderRegistry
         from datahek.contracts.providers import ConnectorCapabilities, ProviderKind
         from datahek.engine.schema import ColumnMeta, SchemaCatalog, TableMeta
@@ -174,7 +174,7 @@ class TestAskRecordsConversation(unittest.TestCase):
                 return {"columns": [], "rows": []}
             async def close(self, client): pass
 
-        container.override(__import__("datahek.contracts.models", fromlist=["ModelProvider"]).ModelProvider, FakeModel())
+        container.override(ModelProvider, FakeModel())
         registry = ProviderRegistry()
         registry.register(FakeProvider())
         container.override(ProviderRegistry, registry)
