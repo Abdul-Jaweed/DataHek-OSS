@@ -84,5 +84,7 @@ export type StreamEvent =
   | { type: 'start'; conversation_id: string | null; columns: string[]; row_count: number }
   | { type: 'token'; content: string }
   | { type: 'rows'; rows: Record<string, unknown>[]; columns: string[]; row_count: number; truncated: boolean }
+  | { type: 'progress'; stage: string; message: string }
+  | { type: 'error'; code?: string; message: string }
   | { type: 'clarification'; text: string }
   | { type: 'done' };

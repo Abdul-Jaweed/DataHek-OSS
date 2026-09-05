@@ -84,14 +84,46 @@ class TestAskStream(unittest.TestCase):
         self.assertIn("X-Conversation-ID", r.headers)
         events = _events(r.text)
         types = [e["type"] for e in events]
-        self.assertEqual(types[0], "start")
+        self.assertEqual(types[0], "progress")
         self.assertIn("token", types)
-        self.assertEqual(types[-2], "rows")
+        self.assertIn("rows", types)
         self.assertEqual(types[-1], "done")
         tokens = "".join(e["content"] for e in events if e["type"] == "token")
         self.assertEqual(tokens, "The top service.")
         rows_evt = next(e for e in events if e["type"] == "rows")
         self.assertEqual(rows_evt["rows"], [{"service": "payment-api"}])
+
+    def test_progress_stages_in_order(self):
+        r = self.client.post("/ask/stream", json={"question": "top service?", "connection_id": "conn_1"})
+        events = _events(r.text)
+        stages = [e["stage"] for e in events if e["type"] == "progress"]
+        expected = ["connecting", "planning", "executing", "explaining", "done"]
+        self.assertEqual(stages, expected)
+
+    def test_engine_failure_emits_error_event(self):
+        from datahek.engine.executor import ProviderRegistry
+
+        class BoomProvider(_FakeProvider):
+            async def compile_and_execute(self, client, plan, ctx):
+                raise RuntimeError("execution exploded")
+
+        from datahek.contracts.models import ModelProvider
+
+        c = build_app_container()
+        c.override(ModelProvider, _FakePlannerModel())
+        registry = ProviderRegistry()
+        registry.register(BoomProvider())
+        c.override(ProviderRegistry, registry)
+        c.override(ConnectionManager, LocalConnectionManager([
+            Connection(id="conn_1", name="ch1", provider="clickhouse", org_id="default", project_id="default"),
+        ]))
+        client = TestClient(create_app(c))
+        r = client.post("/ask/stream", json={"question": "q", "connection_id": "conn_1"})
+        self.assertEqual(r.status_code, 200)
+        events = _events(r.text)
+        err = next(e for e in events if e["type"] == "error")
+        self.assertEqual(err["code"], "CONNECTION_FAILED")
+        self.assertTrue(err["message"])
 
     def test_clarification_streamed(self):
         from datahek.contracts.models import ModelProvider
@@ -114,8 +146,10 @@ class TestAskStream(unittest.TestCase):
         r = client.post("/ask/stream", json={"question": "q", "connection_id": "conn_1"})
         self.assertEqual(r.status_code, 200)
         events = _events(r.text)
-        self.assertEqual(events[0]["type"], "clarification")
-        self.assertEqual(events[0]["text"], "Which table?")
+        types = [e["type"] for e in events]
+        self.assertIn("progress", types)
+        clarify = next(e for e in events if e["type"] == "clarification")
+        self.assertEqual(clarify["text"], "Which table?")
 
     def test_unknown_connection_is_json_error(self):
         r = self.client.post("/ask/stream", json={"question": "q", "connection_id": "nope"})

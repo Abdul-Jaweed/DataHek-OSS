@@ -348,25 +348,40 @@ def create_app(container=None) -> FastAPI:
                     details={"conversation_id": req.conversation_id},
                 )
 
-        plan_result = await planner.plan(req.question, ctx, conn, provider, extra_prompt=await _prompt_content(req))
-        if plan_result.clarification:
-            await _record_turn(conversations, ctx, req, plan_result.clarification, "clarification")
-            return StreamingResponse(
-                iter([f"data: {_json.dumps({'type': 'clarification', 'text': plan_result.clarification})}\n\n"]),
-                media_type="text/event-stream",
-                headers={"X-Conversation-ID": req.conversation_id or ""},
-            )
-
-        result = await engine.execute(ctx, plan_result.plan, conn)
-        columns = [c["name"] for c in result.columns]
-        rows = [dict(zip(columns, row)) for row in result.rows]
-
         async def gen():
-            yield f"data: {_json.dumps({'type': 'start', 'conversation_id': req.conversation_id, 'columns': columns, 'row_count': result.row_count})}\n\n"
+            def ev(payload: dict) -> str:
+                return f"data: {_json.dumps(payload)}\n\n"
+
+            yield ev({"type": "progress", "stage": "connecting", "message": "Resolving connection and schema…"})
+            yield ev({"type": "progress", "stage": "planning", "message": "Planning a validated query…"})
+            try:
+                plan_result = await planner.plan(req.question, ctx, conn, provider,
+                                                 extra_prompt=await _prompt_content(req))
+                if plan_result.clarification:
+                    await _record_turn(conversations, ctx, req, plan_result.clarification, "clarification")
+                    yield ev({"type": "progress", "stage": "clarifying", "message": "Requesting clarification"})
+                    yield ev({"type": "clarification", "text": plan_result.clarification})
+                    return
+
+                yield ev({"type": "progress", "stage": "executing", "message": "Executing validated query…"})
+                result = await engine.execute(ctx, plan_result.plan, conn)
+            except DatahekError as e:
+                yield ev({"type": "error", "code": e.code.value, "message": str(e)})
+                return
+            except Exception as e:
+                yield ev({"type": "error", "message": str(e)})
+                return
+
+            columns = [c["name"] for c in result.columns]
+            rows = [dict(zip(columns, row)) for row in result.rows]
+
+            yield ev({"type": "start", "conversation_id": req.conversation_id, "columns": columns, "row_count": result.row_count})
+            yield ev({"type": "progress", "stage": "explaining", "message": "Generating answer…"})
             async for chunk in reasoner.stream_explanation(req.question, result, plan_result.plan, ctx):
-                yield f"data: {_json.dumps({'type': 'token', 'content': chunk})}\n\n"
-            yield f"data: {_json.dumps({'type': 'rows', 'rows': rows, 'columns': columns, 'row_count': result.row_count, 'truncated': result.truncated})}\n\n"
-            yield "data: {\"type\": \"done\"}\n\n"
+                yield ev({"type": "token", "content": chunk})
+            yield ev({"type": "rows", "rows": rows, "columns": columns, "row_count": result.row_count, "truncated": result.truncated})
+            yield ev({"type": "progress", "stage": "done", "message": "Complete"})
+            yield ev({"type": "done"})
 
         await _record_turn(conversations, ctx, req, None, "result")
         return StreamingResponse(

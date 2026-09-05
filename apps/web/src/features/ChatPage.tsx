@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus } from '@phosphor-icons/react';
 import type { StreamEvent } from '../api/types';
 import { streamAsk } from '../api/client';
 import { Composer } from '../components/chat/Composer';
 import { MessageBubble, type Message } from '../components/chat/MessageBubble';
+import { ProgressSection, type ProgressState } from '../components/chat/ProgressSection';
 import { EmptyState } from '../components/ui/empty-state';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -26,6 +27,7 @@ function applyEvent(ev: StreamEvent, message: Message): Partial<Message> {
 
 export function ChatPage() {
   const { connections, selectedConnectionId, loadConnections, selectConnection, messages, streaming, setStreaming, appendMessage, patchMessage, newConversation } = useStore();
+  const [progress, setProgress] = useState<ProgressState | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,6 +49,16 @@ export function ChatPage() {
 
     try {
       for await (const ev of streamAsk(text, selectedConnectionId, convId ?? undefined)) {
+        if (ev.type === 'progress') {
+          setProgress({ stage: ev.stage, message: ev.message });
+          continue;
+        }
+        if (ev.type === 'error') {
+          setProgress(null);
+          patchMessage(assistantId, () => ({ streaming: false, error: true, content: ev.message }));
+          continue;
+        }
+        if (ev.type === 'done') setProgress(null);
         patchMessage(assistantId, (m) => applyEvent(ev, m));
       }
     } catch (err) {
@@ -101,6 +113,7 @@ export function ChatPage() {
         </div>
       </div>
 
+      {progress && <ProgressSection progress={progress} />}
       <div ref={threadRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6" aria-live="polite">
         {messages.length === 0 && (
           <p className="pt-16 text-center text-sm text-muted">
