@@ -8,6 +8,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/auth': 'http://localhost:8000',
+      '/settings': 'http://localhost:8000',
       '/health': 'http://localhost:8000',
       '/ask': 'http://localhost:8000',
       '/connections': 'http://localhost:8000',

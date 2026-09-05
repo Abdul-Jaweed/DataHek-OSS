@@ -358,3 +358,26 @@ class TestAuthLogin(unittest.TestCase):
     def test_health_reports_auth_mode(self):
         r = self.client.get("/health")
         self.assertIn("auth_mode", r.json())
+
+
+class TestLlmSettings(unittest.TestCase):
+    def setUp(self):
+        from datahek.api.app import create_app
+        from datahek.defaults.container import build_app_container
+        from fastapi.testclient import TestClient
+        self.client = TestClient(create_app(container=build_app_container()))
+
+    def test_get_llm_settings(self):
+        r = self.client.get("/settings/llm")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertIn("base_url", body)
+        self.assertIn("model", body)
+        self.assertIn("api_key_set", body)
+
+    def test_configure_llm_settings(self):
+        r = self.client.post("/settings/llm", json={"model": "test-model-42"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["model"], "test-model-42")
+        again = self.client.get("/settings/llm").json()
+        self.assertEqual(again["model"], "test-model-42")

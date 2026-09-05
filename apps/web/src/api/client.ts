@@ -50,6 +50,10 @@ export const api = {
   createConversation: (title?: string) => request<{ id: string; title: string | null }>('/conversations', { method: 'POST', body: JSON.stringify({ title: title ?? null }) }),
   getConversation: (id: string) => request<Conversation>(`/conversations/${id}`),
 
+  getLlmSettings: () => request<{ base_url: string; model: string; api_key_set: boolean }>('/settings/llm'),
+  saveLlmSettings: (body: { base_url?: string; api_key?: string; model?: string }) =>
+    request<{ base_url: string; model: string; api_key_set: boolean }>('/settings/llm', { method: 'POST', body: JSON.stringify(body) }),
+
   listPrompts: () => request<Prompt[]>('/prompts'),
   createPrompt: (name: string, content: string) => request<Prompt>('/prompts', { method: 'POST', body: JSON.stringify({ name, content }) }),
   deletePrompt: (id: string) => request<void>(`/prompts/${id}`, { method: 'DELETE' }),

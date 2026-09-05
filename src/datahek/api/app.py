@@ -52,6 +52,12 @@ class LoginRequest(BaseModel):
     password: str = Field(..., min_length=1, max_length=256)
 
 
+class LlmSettingsRequest(BaseModel):
+    base_url: str | None = Field(None, max_length=512)
+    api_key: str | None = Field(None, max_length=512)
+    model: str | None = Field(None, max_length=128)
+
+
 class ConversationRequest(BaseModel):
     title: str | None = Field(None, max_length=200)
 
@@ -155,6 +161,7 @@ def create_app(container=None) -> FastAPI:
     engine: Engine = c.resolve(Engine)
     entitlements: EntitlementProvider = c.resolve(EntitlementProvider)
     reasoner = c.resolve(Reasoner)
+    model_provider: ModelProvider = c.resolve(ModelProvider)
 
     from datahek.defaults.auth import AuthConfig, LocalAuthProvider
     auth_config: AuthConfig = c.resolve(AuthConfig) if c.has(AuthConfig) else AuthConfig()
@@ -218,6 +225,15 @@ def create_app(container=None) -> FastAPI:
             "roles": sorted(ident.roles),
             "provider": ident.provider,
         }
+
+    @app.get("/settings/llm")
+    async def get_llm_settings(_identity=Depends(_require_auth)):
+        return await model_provider.describe()
+
+    @app.post("/settings/llm")
+    async def set_llm_settings(req: LlmSettingsRequest, _identity=Depends(_require_auth)):
+        await model_provider.configure(**req.model_dump(exclude_none=True))
+        return await model_provider.describe()
 
     @app.post("/connections", status_code=201)
     async def create_connection(req: ConnectionRequest, _identity=Depends(_require_auth)):

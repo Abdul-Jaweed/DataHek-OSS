@@ -21,6 +21,23 @@ class OpenAICompatibleModelProvider(ModelProvider):
     def __init__(self, config: ModelConfig | None = None):
         self._config = config or config_from_env(ModelConfig, prefix="LLM_")
 
+    async def configure(self, base_url: str | None = None, api_key: str | None = None,
+                        model: str | None = None) -> None:
+        from dataclasses import replace
+        self._config = replace(
+            self._config,
+            base_url=(base_url or self._config.base_url).rstrip("/"),
+            api_key=self._config.api_key if api_key is None else api_key,
+            model=model or self._config.model,
+        )
+
+    async def describe(self) -> dict:
+        return {
+            "base_url": self._config.base_url,
+            "model": self._config.model,
+            "api_key_set": bool(self._config.api_key),
+        }
+
     @property
     def model(self) -> str:
         return self._config.model
