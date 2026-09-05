@@ -1,4 +1,5 @@
 """Schema catalog and discovery service — grounds planning in real schema."""
+import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -7,6 +8,9 @@ from typing import Any
 from datahek.contracts.connections import Connection
 from datahek.contracts.providers import DataProvider
 from datahek.kernel.context import RequestContext
+from datahek.kernel.errors import DatahekError, ErrorCode
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -119,7 +123,17 @@ class SchemaService:
         now = time.time()
         if not force_refresh and entry and (now - entry.fetched_at) < self._ttl:
             return entry.catalog
-        catalog = await provider.introspect(ctx, connection, key)
+        try:
+            catalog = await provider.introspect(ctx, connection, key)
+        except DatahekError:
+            raise
+        except Exception as e:
+            logger.exception("Schema discovery failed for %s", connection.name)
+            raise DatahekError(
+                ErrorCode.CONNECTION_FAILED,
+                f"Schema discovery failed for '{connection.name}'",
+                details={"connection": connection.name},
+            ) from e
         self._entries[key] = _CatalogEntry(catalog=catalog, fetched_at=now)
         return catalog
 

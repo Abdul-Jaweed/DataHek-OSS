@@ -6,20 +6,24 @@ and API code never change.
 from datahek.contracts.audit import AuditSink
 from datahek.contracts.auth import AuthProvider
 from datahek.contracts.connections import ConnectionManager
+from datahek.contracts.misc import ConversationStore
 from datahek.contracts.models import ModelProvider
 from datahek.contracts.policy import PolicyEngine
+from datahek.contracts.reasoner import Reasoner
 from datahek.contracts.secrets import SecretsProvider
 from datahek.contracts.tenancy import TenantContext
 from datahek.connectors.clickhouse import ClickHouseProvider
 from datahek.defaults.audit import JsonlAuditSink
 from datahek.defaults.auth import LocalAuthProvider
 from datahek.defaults.connections import LocalConnectionManager
+from datahek.defaults.conversations import SqliteConversationStore
 from datahek.defaults.models import OpenAICompatibleModelProvider
 from datahek.defaults.policy import LocalPolicyEngine
 from datahek.defaults.secrets import EnvSecretsProvider
 from datahek.defaults.tenancy import SingleTenantContext
 from datahek.engine.executor import Engine, ProviderRegistry
 from datahek.engine.planner import Planner
+from datahek.engine.reasoner import ModelReasoner
 from datahek.engine.schema import SchemaService
 from datahek.kernel.di import Container
 from datahek.kernel.entitlements import EntitlementProvider
@@ -34,6 +38,7 @@ def build_default_container() -> Container:
     c.register(SecretsProvider, EnvSecretsProvider(), singleton=True)
     c.register(ConnectionManager, LocalConnectionManager(), singleton=True)
     c.register(EntitlementProvider, EntitlementProvider(), singleton=True)
+    c.register(ConversationStore, SqliteConversationStore(), singleton=True)
     return c
 
 
@@ -51,6 +56,7 @@ def build_app_container() -> Container:
         model=c.resolve(ModelProvider),
         schema_service=c.resolve(SchemaService),
     ), singleton=True)
+    c.register(Reasoner, lambda: ModelReasoner(model=c.resolve(ModelProvider)), singleton=True)
     c.register(Engine, lambda: Engine(
         registry=c.resolve(ProviderRegistry),
         schema_service=c.resolve(SchemaService),

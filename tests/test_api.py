@@ -171,5 +171,92 @@ class TestClarification(unittest.TestCase):
         self.assertIsNone(body["rows"])
 
 
+class TestErrorHygiene(unittest.TestCase):
+    def test_schema_failure_is_typed_502(self):
+        from datahek.api.app import create_app
+        from datahek.defaults.container import build_app_container
+        from datahek.contracts.models import ModelResponse
+        from datahek.contracts.providers import ConnectorCapabilities, ProviderKind
+        from datahek.engine.executor import ProviderRegistry
+
+        container = build_app_container()
+
+        class FakeModel:
+            async def complete(self, request):
+                return ModelResponse(content="{}")
+            async def stream(self, request):
+                yield "{}"
+
+        class BrokenSchemaProvider:
+            provider_id = "clickhouse"
+            capabilities = ConnectorCapabilities(kind=ProviderKind.SQL, max_result_rows=1000)
+            async def connect(self, connection): return object()
+            async def introspect(self, ctx, connection, source):
+                raise RuntimeError("driver internal /tmp secret")
+            async def compile_and_execute(self, client, plan, ctx):
+                return {"columns": [], "rows": []}
+            async def close(self, client): pass
+
+        container.override(__import__("datahek.contracts.models", fromlist=["ModelProvider"]).ModelProvider, FakeModel())
+        registry = ProviderRegistry()
+        registry.register(BrokenSchemaProvider())
+        container.override(ProviderRegistry, registry)
+        client = TestClient(create_app(container))
+        r = client.post("/connections", json={"name": "ch", "provider": "clickhouse", "host": "h"})
+        conn_id = r.json()["id"]
+        r = client.post("/ask", json={"question": "q", "connection_id": conn_id})
+        self.assertEqual(r.status_code, 502, r.text)
+        self.assertEqual(r.json()["code"], "CONNECTION_FAILED")
+        self.assertNotIn("secret", r.text)
+
+    def test_unexpected_exception_is_sanitized_500(self):
+        from datahek.api.app import create_app
+        from datahek.defaults.container import build_app_container
+        from datahek.contracts.models import ModelResponse
+        from datahek.contracts.providers import ConnectorCapabilities, ProviderKind
+        from datahek.engine.executor import ProviderRegistry
+
+        container = build_app_container()
+
+        class FakeModel:
+            async def complete(self, request):
+                return ModelResponse(content="{}")
+            async def stream(self, request):
+                yield "{}"
+
+        class ExplodingProvider:
+            provider_id = "clickhouse"
+            capabilities = ConnectorCapabilities(kind=ProviderKind.SQL, max_result_rows=1000)
+            async def connect(self, connection): return object()
+            async def introspect(self, ctx, connection, source):
+                raise ValueError("boom secret internal detail")
+            async def compile_and_execute(self, client, plan, ctx):
+                return {"columns": [], "rows": []}
+            async def close(self, client): pass
+
+        container.override(__import__("datahek.contracts.models", fromlist=["ModelProvider"]).ModelProvider, FakeModel())
+        registry = ProviderRegistry()
+        registry.register(ExplodingProvider())
+        container.override(ProviderRegistry, registry)
+
+        class _Unwrapped:
+            """Force the schema path to raise outside the typed wrapper by
+            hitting an endpoint that calls get_catalog directly."""
+
+        # The /ask path wraps schema errors; simulate an unhandled error via a
+        # direct call to an endpoint that is guaranteed to raise elsewhere.
+        app = create_app(container)
+        client = TestClient(app, raise_server_exceptions=False)
+        # Register a route that raises for the sanitizer test.
+        @app.get("/boom")
+        async def boom():
+            raise RuntimeError("hidden internal detail")
+
+        r = client.get("/boom")
+        self.assertEqual(r.status_code, 500)
+        self.assertEqual(r.json()["code"], "INTERNAL")
+        self.assertNotIn("hidden internal detail", r.text)
+
+
 if __name__ == "__main__":
     unittest.main()

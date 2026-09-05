@@ -19,6 +19,7 @@ from datahek.kernel.errors import DatahekError, ErrorCode
 _STATUS_BY_CODE = {
     ErrorCode.NOT_FOUND: 404,
     ErrorCode.CONNECTION_NOT_FOUND: 404,
+    ErrorCode.CONVERSATION_NOT_FOUND: 404,
     ErrorCode.UNAUTHORIZED: 401,
     ErrorCode.FORBIDDEN: 403,
     ErrorCode.QUERY_DENIED: 422,
@@ -26,6 +27,7 @@ _STATUS_BY_CODE = {
     ErrorCode.VALIDATION: 422,
     ErrorCode.CONNECTION_EXISTS: 409,
     ErrorCode.UNSUPPORTED_PROVIDER: 400,
+    ErrorCode.CONNECTION_FAILED: 502,
     ErrorCode.QUERY_TIMEOUT: 504,
     ErrorCode.RATE_LIMITED: 429,
 }
@@ -40,10 +42,15 @@ class ConnectionRequest(BaseModel):
     settings: dict[str, Any] = Field(default_factory=dict)
 
 
+class ConversationRequest(BaseModel):
+    title: str | None = Field(None, max_length=200)
+
+
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=10_000)
     connection_id: str = Field(..., min_length=1)
     user_id: str = "anonymous"
+    conversation_id: str | None = None
 
 
 def create_app(container=None) -> FastAPI:
@@ -57,12 +64,22 @@ def create_app(container=None) -> FastAPI:
     planner: Planner = c.resolve(Planner)
     engine: Engine = c.resolve(Engine)
     entitlements: EntitlementProvider = c.resolve(EntitlementProvider)
+    reasoner = c.resolve(__import__("datahek.contracts.reasoner", fromlist=["Reasoner"]).Reasoner)
 
     @app.exception_handler(DatahekError)
     async def _datahek_error_handler(request: Request, exc: DatahekError) -> JSONResponse:
         return JSONResponse(
             status_code=_STATUS_BY_CODE.get(exc.code, 400),
             content=exc.to_dict(),
+        )
+
+    @app.exception_handler(Exception)
+    async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
+        import logging
+        logging.getLogger("datahek.api").exception("Unhandled error on %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={"code": ErrorCode.INTERNAL.value, "message": "Internal server error", "details": {}},
         )
 
     @app.get("/health")
@@ -119,28 +136,85 @@ def create_app(container=None) -> FastAPI:
 
     @app.post("/ask")
     async def ask(req: AskRequest):
+        from datahek.contracts.misc import ConversationStore
+
         ctx = RequestContext(source="api", user_id=req.user_id)
         conn = await conn_mgr.get_connection(ctx, req.connection_id)
         provider = registry.get(conn.provider)
 
+        conversations: ConversationStore | None = c.resolve(ConversationStore) if c.has(ConversationStore) else None
+        if req.conversation_id and conversations is not None:
+            existing = await conversations.get(ctx, req.conversation_id)
+            if existing is None:
+                raise DatahekError(
+                    ErrorCode.CONVERSATION_NOT_FOUND,
+                    f"Conversation '{req.conversation_id}' not found",
+                    details={"conversation_id": req.conversation_id},
+                )
+
         plan_result = await planner.plan(req.question, ctx, conn, provider)
         if plan_result.clarification:
-            return {
+            answer = {
                 "clarification": plan_result.clarification,
+                "answer": plan_result.clarification,
                 "rows": None, "columns": None, "row_count": 0,
                 "truncated": False, "plan_sources": [],
+                "conversation_id": req.conversation_id,
+            }
+        else:
+            result = await engine.execute(ctx, plan_result.plan, conn)
+            columns = [c["name"] for c in result.columns]
+            rows = [dict(zip(columns, row)) for row in result.rows]
+            explanation = await reasoner.explain(req.question, result, plan_result.plan, ctx)
+            answer = {
+                "clarification": None,
+                "answer": explanation,
+                "columns": columns,
+                "rows": rows,
+                "row_count": result.row_count,
+                "truncated": result.truncated,
+                "plan_sources": plan_result.sources_used,
+                "conversation_id": req.conversation_id,
             }
 
-        result = await engine.execute(ctx, plan_result.plan, conn)
-        columns = [c["name"] for c in result.columns]
-        rows = [dict(zip(columns, row)) for row in result.rows]
-        return {
-            "clarification": None,
-            "columns": columns,
-            "rows": rows,
-            "row_count": result.row_count,
-            "truncated": result.truncated,
-            "plan_sources": plan_result.sources_used,
-        }
+        if req.conversation_id and conversations is not None:
+            await conversations.append_message(ctx, req.conversation_id,
+                                               {"role": "user", "content": req.question, "message_type": "question"})
+            if answer.get("clarification"):
+                assistant_content, assistant_type = answer["clarification"], "clarification"
+            else:
+                assistant_content, assistant_type = answer["answer"], "result"
+            await conversations.append_message(ctx, req.conversation_id, {
+                "role": "assistant",
+                "content": assistant_content,
+                "message_type": assistant_type,
+            })
+        return answer
+
+    @app.post("/conversations", status_code=201)
+    async def create_conversation(req: ConversationRequest):
+        from datahek.contracts.misc import ConversationStore
+        from datahek.kernel.ids import entity_id
+
+        conversations: ConversationStore = c.resolve(ConversationStore)
+        ctx = RequestContext(source="api")
+        conv_id = entity_id("conversation")
+        await conversations.create(ctx, conv_id, title=req.title)
+        return {"id": conv_id, "title": req.title}
+
+    @app.get("/conversations/{conversation_id}")
+    async def get_conversation(conversation_id: str):
+        from datahek.contracts.misc import ConversationStore
+
+        conversations: ConversationStore = c.resolve(ConversationStore)
+        ctx = RequestContext(source="api")
+        conv = await conversations.get(ctx, conversation_id)
+        if conv is None:
+            raise DatahekError(
+                ErrorCode.CONVERSATION_NOT_FOUND,
+                f"Conversation '{conversation_id}' not found",
+                details={"conversation_id": conversation_id},
+            )
+        return conv
 
     return app

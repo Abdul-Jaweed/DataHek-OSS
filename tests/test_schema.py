@@ -89,6 +89,17 @@ class TestSchemaService(unittest.TestCase):
         asyncio.run(service.get_catalog(ctx, self._conn(), provider, force_refresh=True))
         self.assertEqual(provider.introspect.await_count, 2)
 
+    def test_provider_failure_is_typed(self):
+        from datahek.kernel.errors import DatahekError, ErrorCode
+
+        service = SchemaService()
+        provider = mock.Mock()
+        provider.introspect = mock.AsyncMock(side_effect=RuntimeError("driver internal /tmp secret"))
+        with self.assertRaises(DatahekError) as cm:
+            asyncio.run(service.get_catalog(RequestContext(source="api"), self._conn(), provider))
+        self.assertEqual(cm.exception.code, ErrorCode.CONNECTION_FAILED)
+        self.assertNotIn("secret", str(cm.exception))
+
 
 class TestEngineSchemaValidation(unittest.TestCase):
     def test_unknown_table_denied_before_execution(self):
