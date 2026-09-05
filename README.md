@@ -197,13 +197,6 @@ Coverage: kernel foundations, contracts conformance, logical plans, guardrails, 
 
 ## 👥 Development
 
-Developed by the DataHek team:
-
-- **Abdul-Jaweed** — architecture, engine, connectors, platform
-- **Atanu Biswas** — platform development
-- **Khaleel** — platform development
-- **Shazeer** — platform development
-
 ### Contributing
 
 1. Fork the repository.
@@ -226,7 +219,7 @@ All contributions to OSS packages are licensed under Apache-2.0 (DCO).
 
 ## 📄 License
 
-[Apache-2.0](LICENSE) — © 2026 Abdul-Jaweed. Enterprise modules (separate repository) are proprietary; see the licensing ADR for the open-core boundary.
+[Apache-2.0](LICENSE) — © 2026 DataHek. Enterprise modules (separate repository) are proprietary; see the licensing ADR for the open-core boundary.
 
 ## 🙏 Acknowledgements
 
