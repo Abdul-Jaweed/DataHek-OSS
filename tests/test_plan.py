@@ -86,3 +86,14 @@ class TestAggregatePlanValidation(unittest.TestCase):
             aggregates=[Aggregate(function="count", column="*", alias="n")],
         )])
         validate_plan(plan, tables={"traces"}, columns={"traces": {"service"}})
+
+
+class TestStarColumnWithAggregates(unittest.TestCase):
+    def test_star_column_allowed_with_aggregates(self):
+        from datahek.engine.plan import Aggregate
+
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="traces", columns=["*"],
+            aggregates=[Aggregate(function="count", column="*", alias="n")],
+        )])
+        validate_plan(plan, tables={"traces"}, columns={"traces": {"service", "status", "duration_ms"}})

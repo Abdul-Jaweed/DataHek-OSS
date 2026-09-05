@@ -46,6 +46,7 @@ class PostgresProvider(DataProvider):
             user=connection.settings.get("username", "postgres"),
             password=connection.settings.get("password", ""),
             connect_timeout=10,
+            sslmode=connection.settings.get("sslmode", "prefer"),
         )
 
     async def ping(self, client: Any) -> dict:

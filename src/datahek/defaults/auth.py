@@ -48,4 +48,7 @@ class LocalAuthProvider(AuthProvider):
             users = json.loads(cfg.local_users)
         except json.JSONDecodeError:
             users = {}
-        return cls(users=users if isinstance(users, dict) else {})
+        if not isinstance(users, dict) or not users:
+            # Default local credential: datahek / datahek (override via DATAHEK_AUTH_LOCAL_USERS)
+            users = {"datahek": "datahek"}
+        return cls(users=users)

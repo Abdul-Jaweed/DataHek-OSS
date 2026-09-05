@@ -261,3 +261,100 @@ class TestErrorHygiene(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestConnectionEndpoints(unittest.TestCase):
+    def _client(self, registry):
+        from datahek.api.app import create_app
+        from datahek.defaults.container import build_app_container
+        from datahek.engine.executor import ProviderRegistry
+        from fastapi.testclient import TestClient
+        c = build_app_container()
+        c.override(ProviderRegistry, registry)
+        return TestClient(create_app(container=c))
+
+    def test_test_endpoint_ok(self):
+        from datahek.engine.executor import ProviderRegistry
+        from datahek.connectors.sqlite import SQLiteProvider
+        registry = ProviderRegistry()
+        registry.register(SQLiteProvider())
+        client = self._client(registry)
+        r = client.post("/connections/test", json={
+            "name": "probe", "provider": "sqlite", "host": ":memory:",
+        })
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body["ok"], body)
+        self.assertIn("latency_ms", body)
+
+    def test_test_endpoint_reports_failure(self):
+        import asyncio
+        from datahek.engine.executor import ProviderRegistry
+        from datahek.contracts.providers import ConnectorCapabilities, ProviderKind
+
+        class BoomProvider:
+            provider_id = "boom"
+            capabilities = ConnectorCapabilities(kind=ProviderKind.SQL, dialect="boom")
+
+            async def connect(self, connection):
+                raise RuntimeError("boom")
+
+        registry = ProviderRegistry()
+        registry.register(BoomProvider())
+        client = self._client(registry)
+        r = client.post("/connections/test", json={
+            "name": "probe", "provider": "boom", "host": "x",
+        })
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertFalse(body["ok"])
+        self.assertIn("boom", body["error"])
+
+    def test_delete_connection(self):
+        from datahek.engine.executor import ProviderRegistry
+        from datahek.connectors.sqlite import SQLiteProvider
+        registry = ProviderRegistry()
+        registry.register(SQLiteProvider())
+        client = self._client(registry)
+        created = client.post("/connections", json={
+            "name": "tmp1", "provider": "sqlite", "host": ":memory:",
+        })
+        self.assertEqual(created.status_code, 201)
+        cid = created.json()["id"]
+        r = client.delete(f"/connections/{cid}")
+        self.assertEqual(r.status_code, 204)
+        remaining = client.get("/connections").json()
+        self.assertNotIn(cid, [c["id"] for c in remaining])
+
+    def test_delete_missing_connection_404(self):
+        from datahek.engine.executor import ProviderRegistry
+        from datahek.connectors.sqlite import SQLiteProvider
+        registry = ProviderRegistry()
+        registry.register(SQLiteProvider())
+        client = self._client(registry)
+        r = client.delete("/connections/nope")
+        self.assertEqual(r.status_code, 404)
+
+
+class TestAuthLogin(unittest.TestCase):
+    def setUp(self):
+        from datahek.api.app import create_app
+        from datahek.defaults.container import build_app_container
+        from fastapi.testclient import TestClient
+        self.client = TestClient(create_app(container=build_app_container()))
+
+    def test_login_default_credentials(self):
+        r = self.client.post("/auth/login", json={"username": "datahek", "password": "datahek"})
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["user"], "datahek")
+        self.assertEqual(body["token"], "datahek")
+        self.assertIn("analyst", body["roles"])
+
+    def test_login_wrong_password(self):
+        r = self.client.post("/auth/login", json={"username": "datahek", "password": "wrong"})
+        self.assertEqual(r.status_code, 401)
+        self.assertEqual(r.json()["code"], "UNAUTHORIZED")
+
+    def test_health_reports_auth_mode(self):
+        r = self.client.get("/health")
+        self.assertIn("auth_mode", r.json())

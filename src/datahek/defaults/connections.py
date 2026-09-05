@@ -28,3 +28,7 @@ class LocalConnectionManager(ConnectionManager):
 
     async def list_connections(self, ctx: RequestContext) -> list[Connection]:
         return [c for c in self._connections.values() if c.org_id == ctx.organization_id]
+
+    async def remove(self, ctx: RequestContext, connection_id: str) -> None:
+        await self.get_connection(ctx, connection_id)
+        del self._connections[connection_id]

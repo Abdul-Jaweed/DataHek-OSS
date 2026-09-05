@@ -110,6 +110,8 @@ def validate_plan(
             )
         known = columns.get(node.source, set())
         for col in node.columns:
+            if col == "*" and node.aggregates:
+                continue  # count(*)-style: dropped by the compiler when aggregating
             if col not in known:
                 raise DatahekError(
                     ErrorCode.PLAN_INVALID,

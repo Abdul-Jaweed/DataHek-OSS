@@ -1,19 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
-import { api, streamAsk } from '../api/client';
-import type { Connection, StreamEvent } from '../api/types';
+import { useEffect, useRef } from 'react';
+import { Plus } from '@phosphor-icons/react';
+import type { StreamEvent } from '../api/types';
+import { streamAsk } from '../api/client';
 import { Composer } from '../components/chat/Composer';
 import { MessageBubble, type Message } from '../components/chat/MessageBubble';
-import { EmptyState } from '../components/ui/EmptyState';
-import { Button } from '../components/ui/Button';
+import { EmptyState } from '../components/ui/empty-state';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import { ensureConversation, useStore } from '../store/use-store';
 
-function eventToMessage(ev: StreamEvent, message: Message): Partial<Message> {
+function applyEvent(ev: StreamEvent, message: Message): Partial<Message> {
   switch (ev.type) {
     case 'token':
       return { content: message.content + ev.content };
     case 'rows':
       return { columns: ev.columns, rows: ev.rows, rowCount: ev.row_count, truncated: ev.truncated };
     case 'clarification':
-      return { content: ev.text, clarification: true };
+      return { content: ev.text, clarification: true, streaming: false };
     case 'done':
       return { streaming: false };
     default:
@@ -22,82 +25,59 @@ function eventToMessage(ev: StreamEvent, message: Message): Partial<Message> {
 }
 
 export function ChatPage() {
-  const [connections, setConnections] = useState<Connection[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [streaming, setStreaming] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const { connections, selectedConnectionId, loadConnections, selectConnection, messages, streaming, setStreaming, appendMessage, patchMessage, newConversation } = useStore();
   const threadRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    api.listConnections().then((conns) => {
-      setConnections(conns);
-      if (conns.length > 0) setSelectedId((prev) => prev ?? conns[0].id);
-    }).catch(() => setConnections([]));
-  }, []);
+    loadConnections();
+  }, [loadConnections]);
 
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
   }, [messages]);
 
   const send = async (text: string) => {
-    if (!selectedId) return;
-    let convId = conversationId;
-    if (!convId) {
-      try {
-        const conv = await api.createConversation();
-        convId = conv.id;
-        setConversationId(convId);
-      } catch { /* fall through */ }
-    }
+    if (!selectedConnectionId) return;
+    const convId = await ensureConversation();
 
     const assistantId = `a-${Date.now()}`;
-    setMessages((m) => [
-      ...m,
-      { id: `u-${Date.now()}`, role: 'user', content: text },
-      { id: assistantId, role: 'assistant', content: '', streaming: true },
-    ]);
+    appendMessage({ id: `u-${Date.now()}`, role: 'user', content: text });
+    appendMessage({ id: assistantId, role: 'assistant', content: '', streaming: true });
     setStreaming(true);
 
     try {
-      for await (const ev of streamAsk(text, selectedId, convId ?? undefined)) {
-        setMessages((m) => m.map((msg) => (msg.id === assistantId ? { ...msg, ...eventToMessage(ev, msg) } : msg)));
+      for await (const ev of streamAsk(text, selectedConnectionId, convId ?? undefined)) {
+        patchMessage(assistantId, (m) => applyEvent(ev, m));
       }
     } catch (err) {
-      setMessages((m) =>
-        m.map((msg) =>
-          msg.id === assistantId
-            ? { ...msg, streaming: false, error: true, content: err instanceof Error ? err.message : String(err) }
-            : msg,
-        ),
-      );
+      patchMessage(assistantId, () => ({
+        streaming: false,
+        error: true,
+        content: err instanceof Error ? err.message : String(err),
+      }));
     } finally {
       setStreaming(false);
     }
   };
 
-  const newConversation = () => {
-    setMessages([]);
-    setConversationId(null);
-  };
-
   if (connections.length === 0) {
     return (
-      <EmptyState
-        title="No connections yet"
-        description="Connect a database to start asking questions in natural language."
-        actionLabel="Add a connection"
-      />
+      <div className="p-6 sm:p-10">
+        <EmptyState
+          title="No connections yet"
+          description="Connect a database to start asking questions in natural language."
+        />
+      </div>
     );
   }
 
   return (
-    <div className="chat-page">
-      <div className="chat-toolbar">
+    <div className="flex h-full flex-col">
+      <div className="flex items-center gap-3 border-b border-border px-4 py-3 sm:px-6">
         <select
-          className="conn-select mono"
-          value={selectedId ?? ''}
-          onChange={(e) => setSelectedId(e.target.value || null)}
+          className="h-9 cursor-pointer rounded-md border border-border bg-surface px-3 font-mono text-sm text-foreground focus:outline-none focus:border-brand"
+          value={selectedConnectionId ?? ''}
+          onChange={(e) => selectConnection(e.target.value || null)}
           aria-label="Connection"
         >
           {connections.map((c) => (
@@ -106,14 +86,19 @@ export function ChatPage() {
             </option>
           ))}
         </select>
-        {conversationId && <span className="caption conn-caption">conv {conversationId.slice(-8)}</span>}
-        <Button variant="ghost" size="sm" onClick={newConversation} disabled={streaming}>
-          New conversation
-        </Button>
+        <Badge variant="neutral" className="hidden sm:inline-flex">
+          {selectedConnectionId ? 'read-only' : 'no connection'}
+        </Badge>
+        <div className="ml-auto">
+          <Button variant="ghost" size="sm" icon={<Plus size={16} />} onClick={newConversation} disabled={streaming}>
+            <span className="hidden sm:inline">New</span>
+          </Button>
+        </div>
       </div>
-      <div className="thread" ref={threadRef} aria-live="polite">
+
+      <div ref={threadRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6" aria-live="polite">
         {messages.length === 0 && (
-          <p className="muted thread-welcome">
+          <p className="pt-16 text-center text-sm text-muted">
             Ask anything about your data. Follow-ups keep context.
           </p>
         )}
@@ -121,7 +106,8 @@ export function ChatPage() {
           <MessageBubble key={m.id} message={m} />
         ))}
       </div>
-      <Composer hasConnection={!!selectedId} streaming={streaming} onSend={send} />
+
+      <Composer hasConnection={!!selectedConnectionId} streaming={streaming} onSend={send} />
     </div>
   );
 }

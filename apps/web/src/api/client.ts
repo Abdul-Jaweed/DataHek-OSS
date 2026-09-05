@@ -36,10 +36,16 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   health: () => request<Health>('/health'),
+  login: (username: string, password: string) =>
+    request<{ token: string; user: string; roles: string[]; provider: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
 
   listConnections: () => request<Connection[]>('/connections'),
   createConnection: (body: ConnectionCreate) => request<Connection>('/connections', { method: 'POST', body: JSON.stringify(body) }),
-  testConnection: (id: string) => request<{ ok: boolean; latency_ms?: number; error?: string }>(`/connections/${id}/test`, { method: 'POST' }),
+  testConnection: (body: ConnectionCreate) => request<{ ok: boolean; latency_ms?: number; error?: string }>('/connections/test', { method: 'POST', body: JSON.stringify(body) }),
+  deleteConnection: (id: string) => request<void>(`/connections/${id}`, { method: 'DELETE' }),
 
   createConversation: (title?: string) => request<{ id: string; title: string | null }>('/conversations', { method: 'POST', body: JSON.stringify({ title: title ?? null }) }),
   getConversation: (id: string) => request<Conversation>(`/conversations/${id}`),

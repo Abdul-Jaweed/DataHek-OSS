@@ -1,4 +1,5 @@
 """DataHek OSS API — health, connections, ask, conversations, evaluations, web UI."""
+import time
 from typing import Any
 
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -44,6 +45,11 @@ class ConnectionRequest(BaseModel):
     port: int | None = Field(None, ge=1, le=65535)
     database: str | None = None
     settings: dict[str, Any] = Field(default_factory=dict)
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=128)
+    password: str = Field(..., min_length=1, max_length=256)
 
 
 class ConversationRequest(BaseModel):
@@ -190,6 +196,7 @@ def create_app(container=None) -> FastAPI:
         return {
             "status": "ok",
             "version": __version__,
+            "auth_mode": auth_config.mode,
             "capabilities": {
                 name: OSS_CAPABILITIES.supports(name)
                 for name in ("sso", "multi_tenancy", "advanced_rbac", "policy_engine",
@@ -197,6 +204,19 @@ def create_app(container=None) -> FastAPI:
             },
             "entitlements": entitlements.all_limits(),
             "providers": registry.ids(),
+        }
+
+    @app.post("/auth/login")
+    async def auth_login(req: LoginRequest, _identity=None):
+        """Local login: returns the API token for subsequent requests (X-API-Key)."""
+        ident = await auth_provider.authenticate(req.username, req.password)
+        if not ident.authenticated:
+            raise DatahekError(ErrorCode.UNAUTHORIZED, "Invalid username or password")
+        return {
+            "token": req.password,
+            "user": ident.user_id,
+            "roles": sorted(ident.roles),
+            "provider": ident.provider,
         }
 
     @app.post("/connections", status_code=201)
@@ -244,6 +264,47 @@ def create_app(container=None) -> FastAPI:
             "id": c.id, "name": c.name, "provider": c.provider,
             "host": c.host, "port": c.port, "database": c.database,
         } for c in conns]
+
+    @app.post("/connections/test")
+    async def test_connection(req: ConnectionRequest, _identity=Depends(_require_auth)):
+        """Test connectivity for the values as-entered (nothing persisted)."""
+        from datahek.contracts.connections import Connection
+
+        if req.provider not in registry.ids():
+            raise DatahekError(
+                ErrorCode.UNSUPPORTED_PROVIDER,
+                f"Provider '{req.provider}' is not supported",
+                details={"provider": req.provider},
+            )
+        ctx = RequestContext(source="api")
+        conn = Connection(
+            id="probe", name=req.name or "probe", provider=req.provider,
+            org_id=ctx.organization_id, project_id=ctx.project_id,
+            host=req.host, port=req.port, database=req.database,
+            settings=req.settings,
+        )
+        provider = registry.get(conn.provider)
+        start = time.perf_counter()
+        try:
+            client = await provider.connect(conn)
+            await provider.introspect(ctx, conn, f"{conn.id}:{conn.database}")
+            if hasattr(client, "close"):
+                try:
+                    client.close()
+                except Exception:
+                    pass
+            return {"ok": True, "latency_ms": int((time.perf_counter() - start) * 1000)}
+        except Exception as exc:
+            return {
+                "ok": False,
+                "latency_ms": int((time.perf_counter() - start) * 1000),
+                "error": str(exc)[:500],
+            }
+
+    @app.delete("/connections/{connection_id}", status_code=204)
+    async def delete_connection(connection_id: str, _identity=Depends(_require_auth)):
+        ctx = RequestContext(source="api")
+        await conn_mgr.remove(ctx, connection_id)
 
     @app.post("/ask")
     async def ask(req: AskRequest, _identity=Depends(_require_auth)):

@@ -3,6 +3,7 @@
 export interface Health {
   status: string;
   version: string;
+  auth_mode?: string;
   capabilities: Record<string, boolean>;
   entitlements: Record<string, number>;
   providers: string[];

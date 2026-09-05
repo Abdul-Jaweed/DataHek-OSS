@@ -64,6 +64,20 @@ class TestPostgresClient(unittest.TestCase):
             asyncio.run(p.connect(_conn()))
         self.assertGreaterEqual(m.call_args.kwargs["connect_timeout"], 5)
 
+    def test_connect_defaults_to_sslmode_prefer(self):
+        p = PostgresProvider()
+        with mock.patch("datahek.connectors.postgres.psycopg.connect") as m:
+            asyncio.run(p.connect(_conn()))
+        self.assertEqual(m.call_args.kwargs["sslmode"], "prefer")
+
+    def test_connect_honors_sslmode_setting(self):
+        p = PostgresProvider()
+        c = _conn()
+        c.settings["sslmode"] = "require"
+        with mock.patch("datahek.connectors.postgres.psycopg.connect") as m:
+            asyncio.run(p.connect(c))
+        self.assertEqual(m.call_args.kwargs["sslmode"], "require")
+
     def test_introspect(self):
         p = PostgresProvider()
         client = mock.Mock()
