@@ -55,6 +55,12 @@ class AskRequest(BaseModel):
     connection_id: str = Field(..., min_length=1)
     user_id: str = "anonymous"
     conversation_id: str | None = None
+    prompt_id: str | None = None
+
+
+class PromptRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    content: str = Field(..., min_length=1, max_length=4_000)
 
 
 def create_app(container=None) -> FastAPI:
@@ -73,8 +79,19 @@ def create_app(container=None) -> FastAPI:
                 "role": "assistant", "content": content, "message_type": message_type,
             })
 
+    async def _prompt_content(req):
+        from datahek.contracts.prompts import PromptStore
+
+        if not req.prompt_id or not c.has(PromptStore):
+            return None
+        tpl = await c.resolve(PromptStore).get(RequestContext(source="api"), req.prompt_id)
+        if tpl is None:
+            raise DatahekError(ErrorCode.NOT_FOUND, f"Prompt '{req.prompt_id}' not found")
+        return tpl["content"]
+
     async def _ask_pipeline(req, c, conn_mgr, registry, planner, engine, reasoner, entitlements):
         from datahek.contracts.misc import ConversationStore
+        from datahek.contracts.prompts import PromptStore
         from datahek.defaults.guardrails import redact_pii
 
         ctx = RequestContext(source="api", user_id=req.user_id)
@@ -91,7 +108,14 @@ def create_app(container=None) -> FastAPI:
                     details={"conversation_id": req.conversation_id},
                 )
 
-        plan_result = await planner.plan(req.question, ctx, conn, provider)
+        extra_prompt = None
+        if req.prompt_id and c.has(PromptStore):
+            tpl = await c.resolve(PromptStore).get(ctx, req.prompt_id)
+            if tpl is None:
+                raise DatahekError(ErrorCode.NOT_FOUND, f"Prompt '{req.prompt_id}' not found")
+            extra_prompt = tpl["content"]
+
+        plan_result = await planner.plan(req.question, ctx, conn, provider, extra_prompt=extra_prompt)
         if plan_result.clarification:
             await _record_turn(conversations, ctx, req, plan_result.clarification, "clarification")
             return {
@@ -246,7 +270,7 @@ def create_app(container=None) -> FastAPI:
                     details={"conversation_id": req.conversation_id},
                 )
 
-        plan_result = await planner.plan(req.question, ctx, conn, provider)
+        plan_result = await planner.plan(req.question, ctx, conn, provider, extra_prompt=await _prompt_content(req))
         if plan_result.clarification:
             await _record_turn(conversations, ctx, req, plan_result.clarification, "clarification")
             return StreamingResponse(
@@ -298,6 +322,52 @@ def create_app(container=None) -> FastAPI:
                 details={"conversation_id": conversation_id},
             )
         return conv
+
+    @app.post("/prompts", status_code=201)
+    async def create_prompt(req: PromptRequest, _identity=Depends(_require_auth)):
+        from datahek.contracts.prompts import PromptStore
+        from datahek.kernel.ids import entity_id
+
+        prompts: PromptStore = c.resolve(PromptStore)
+        ctx = RequestContext(source="api")
+        current = len(await prompts.list(ctx))
+        limit = entitlements.limit("prompt.templates")
+        if limit is not None and current >= limit:
+            raise DatahekError(
+                ErrorCode.RATE_LIMITED,
+                f"Prompt template limit reached ({limit})",
+                details={"resource": "prompt.templates", "limit": limit, "current": current},
+            )
+        pid = entity_id("prompt")
+        await prompts.create(ctx, pid, name=req.name, content=req.content)
+        return {"id": pid, "name": req.name, "content": req.content}
+
+    @app.get("/prompts")
+    async def list_prompts(_identity=Depends(_require_auth)):
+        from datahek.contracts.prompts import PromptStore
+
+        prompts: PromptStore = c.resolve(PromptStore)
+        return await prompts.list(RequestContext(source="api"))
+
+    @app.get("/prompts/{prompt_id}")
+    async def get_prompt(prompt_id: str, _identity=Depends(_require_auth)):
+        from datahek.contracts.prompts import PromptStore
+
+        prompts: PromptStore = c.resolve(PromptStore)
+        tpl = await prompts.get(RequestContext(source="api"), prompt_id)
+        if tpl is None:
+            raise DatahekError(ErrorCode.NOT_FOUND, f"Prompt '{prompt_id}' not found")
+        return tpl
+
+    @app.delete("/prompts/{prompt_id}", status_code=204)
+    async def delete_prompt(prompt_id: str, _identity=Depends(_require_auth)):
+        from datahek.contracts.prompts import PromptStore
+
+        prompts: PromptStore = c.resolve(PromptStore)
+        ctx = RequestContext(source="api")
+        if await prompts.get(ctx, prompt_id) is None:
+            raise DatahekError(ErrorCode.NOT_FOUND, f"Prompt '{prompt_id}' not found")
+        await prompts.delete(ctx, prompt_id)
 
     @app.get("/evaluations")
     async def evaluations(_identity=Depends(_require_auth)):

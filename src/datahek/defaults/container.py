@@ -10,6 +10,7 @@ from datahek.contracts.evaluation import EvaluationStore
 from datahek.contracts.misc import ConversationStore
 from datahek.contracts.models import ModelProvider
 from datahek.contracts.policy import PolicyEngine
+from datahek.contracts.prompts import PromptStore
 from datahek.contracts.reasoner import Reasoner
 from datahek.contracts.secrets import SecretsProvider
 from datahek.contracts.tenancy import TenantContext
@@ -23,6 +24,7 @@ from datahek.defaults.evaluation import InMemoryEvaluationStore, LocalEvaluator
 from datahek.defaults.masking import TagBasedMaskingPolicy
 from datahek.defaults.models import OpenAICompatibleModelProvider
 from datahek.defaults.policy import LocalPolicyEngine
+from datahek.defaults.prompts import SqlitePromptStore
 from datahek.defaults.secrets import EnvSecretsProvider
 from datahek.defaults.tenancy import SingleTenantContext
 from datahek.engine.executor import Engine, ProviderRegistry
@@ -45,6 +47,7 @@ def build_default_container() -> Container:
     c.register(ConnectionManager, LocalConnectionManager(), singleton=True)
     c.register(EntitlementProvider, EntitlementProvider(), singleton=True)
     c.register(ConversationStore, SqliteConversationStore(), singleton=True)
+    c.register(PromptStore, SqlitePromptStore(), singleton=True)
     return c
 
 

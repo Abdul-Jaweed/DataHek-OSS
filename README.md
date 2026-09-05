@@ -32,6 +32,8 @@ question → schema discovery → logical plan → validation → guardrails
 - **Full audit** — every guardrail decision and execution recorded with actor, tenant, and decision
 - **Four surfaces, one pipeline** — REST API, CLI, MCP server, and web UI all run the same RequestContext → guardrails → audit path (MCP is never a privileged bypass)
 - **Conversational memory** — multi-turn conversations persisted in SQLite with a streaming explanation endpoint
+- **Skills** — keyword-triggered domain guidance (analytics, time-series, debugging, exploration) injected into the planner prompt
+- **Prompt management** — up to 3 custom planner prompt templates (entitlement-enforced), tenant-scoped
 - **Evaluation** — every execution scored (validity, safety, latency) + curated offline regression datasets with `POST /evaluations/run`
 - **OSS entitlements** — limits (connections ≤ 5, MCP ≤ 3, prompts ≤ 3) enforced through a replaceable `EntitlementProvider` — the path to Production/Enterprise tiers
 - **Tenant-aware by construction** — every model carries `org_id`/`project_id`; OSS runs a single implicit default tenant

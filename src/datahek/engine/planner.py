@@ -60,10 +60,12 @@ def build_schema_summary(catalog: SchemaCatalog) -> str:
 
 
 class Planner:
-    def __init__(self, model: ModelProvider, schema_service: SchemaService, max_attempts: int = MAX_PLAN_ATTEMPTS):
+    def __init__(self, model: ModelProvider, schema_service: SchemaService,
+                 max_attempts: int = MAX_PLAN_ATTEMPTS, skills=None):
         self._model = model
         self._schema_service = schema_service
         self._max_attempts = max_attempts
+        self._skills = skills
 
     async def plan(
         self,
@@ -71,16 +73,23 @@ class Planner:
         ctx: RequestContext,
         connection: Connection,
         provider: DataProvider,
+        extra_prompt: str | None = None,
     ) -> PlanResult:
         catalog = await self._schema_service.get_catalog(ctx, connection, provider)
         tables = self._schema_service.tables(catalog)
         columns = self._schema_service.columns(catalog)
         schema_summary = build_schema_summary(catalog)
 
+        skill_prompt = ""
+        if self._skills is not None:
+            from datahek.engine.skills import build_skill_prompt
+            skill_prompt = build_skill_prompt(self._skills.match(question))
+
         feedback = None
         for attempt in range(self._max_attempts):
             try:
-                response = await self._model.complete(self._build_request(question, schema_summary, feedback))
+                response = await self._model.complete(
+                    self._build_request(question, schema_summary, feedback, skill_prompt, extra_prompt))
             except ModelProviderError as e:
                 from datahek.kernel.errors import DatahekError, ErrorCode
                 if e.status_code == 429:
@@ -106,8 +115,13 @@ class Planner:
         )
 
     @staticmethod
-    def _build_request(question: str, schema_summary: str, feedback: str | None) -> ModelRequest:
+    def _build_request(question: str, schema_summary: str, feedback: str | None,
+                       skill_prompt: str = "", extra_prompt: str | None = None) -> ModelRequest:
         user = f"Question: {question}\n\nSchema:\n{schema_summary}"
+        if skill_prompt:
+            user += f"\n\n{skill_prompt}"
+        if extra_prompt:
+            user += f"\n\nAdditional guidance:\n{extra_prompt}"
         if feedback:
             user += f"\n\nFeedback: {feedback}"
         return {
