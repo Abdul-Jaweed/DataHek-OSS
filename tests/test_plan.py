@@ -58,6 +58,20 @@ class TestPlanModel(unittest.TestCase):
         plan = LogicalPlan(nodes=[ReadNode(source="traces", columns=["a"], limit=10)])
         validate_plan(plan, tables={"traces"}, columns={"traces": {"a"}})
 
+    def test_from_dict_normalizes_object_order_by(self):
+        plan = LogicalPlan.from_dict({"nodes": [
+            {"type": "ReadNode", "source": "traces", "columns": ["a"],
+             "order_by": [{"column": "a", "direction": "DESC"}], "limit": 5},
+        ]})
+        self.assertEqual(plan.nodes[0].order_by, ["a DESC"])
+
+    def test_from_dict_keeps_string_order_by(self):
+        plan = LogicalPlan.from_dict({"nodes": [
+            {"type": "ReadNode", "source": "traces", "columns": ["a"],
+             "order_by": ["a ASC"], "limit": 5},
+        ]})
+        self.assertEqual(plan.nodes[0].order_by, ["a ASC"])
+
 
 if __name__ == "__main__":
     unittest.main()

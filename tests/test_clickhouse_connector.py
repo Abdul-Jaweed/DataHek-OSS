@@ -115,3 +115,11 @@ class TestCompileAggregateStrayColumn(unittest.TestCase):
         sql = compile_sql(plan)
         self.assertEqual(sql, "SELECT service, avg(duration_ms) AS avg_d FROM traces GROUP BY service LIMIT 1000")
         self.assertNotIn("SELECT service, duration_ms", sql)
+
+    def test_object_order_by_compiles(self):
+        plan = LogicalPlan.from_dict({"nodes": [
+            {"type": "ReadNode", "source": "orders", "columns": ["region"],
+             "order_by": [{"column": "region", "direction": "DESC"}], "limit": 5},
+        ]})
+        sql = compile_sql(plan)
+        self.assertIn("ORDER BY region DESC", sql)

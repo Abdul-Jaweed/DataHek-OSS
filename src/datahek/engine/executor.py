@@ -1,4 +1,5 @@
 """Engine executor — schema validation → capabilities → guardrails → provider → result."""
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -43,6 +44,9 @@ class QueryResult:
     row_count: int = 0
     truncated: bool = False
     execution: ExecutionInfo | None = None
+
+
+logger = logging.getLogger(__name__)
 
 
 class Engine:
@@ -105,6 +109,7 @@ class Engine:
         except DatahekError:
             raise
         except Exception as e:
+            logger.exception("Query execution failed for provider %s", provider.provider_id)
             err = DatahekError(ErrorCode.CONNECTION_FAILED, "Query execution failed")
             if self.evaluation_hook is not None:
                 await self.evaluation_hook.on_execution_completed(

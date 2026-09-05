@@ -35,6 +35,7 @@ class ClickHouseProvider(DataProvider):
             username=connection.settings.get("username", "default"),
             password=connection.settings.get("password", ""),
             database=connection.database or "default",
+            connect_timeout=10,
         )
 
     async def ping(self, client: Any) -> dict:

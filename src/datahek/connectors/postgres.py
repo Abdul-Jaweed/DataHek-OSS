@@ -45,6 +45,7 @@ class PostgresProvider(DataProvider):
             dbname=connection.database or "postgres",
             user=connection.settings.get("username", "postgres"),
             password=connection.settings.get("password", ""),
+            connect_timeout=10,
         )
 
     async def ping(self, client: Any) -> dict:
@@ -55,16 +56,16 @@ class PostgresProvider(DataProvider):
         client = await self.connect(connection)
         try:
             tables = []
-            client.execute(_TABLES_SQL)
-            names = [row[0] for row in (client.fetchall() or [])]
+            cur = client.execute(_TABLES_SQL)
+            names = [row[0] for row in (cur.fetchall() or [])]
             for name in names:
-                client.execute(_COLUMNS_SQL, (name,))
-                columns = [ColumnMeta(name=r[0], data_type=r[1]) for r in (client.fetchall() or [])]
+                cur = client.execute(_COLUMNS_SQL, (name,))
+                columns = [ColumnMeta(name=r[0], data_type=r[1]) for r in (cur.fetchall() or [])]
                 row_count = None
                 if len(tables) < MAX_INTROSPECT_TABLES:
                     try:
-                        client.execute(f'SELECT count(*) FROM "{name}"')
-                        rows = client.fetchall() or []
+                        cur = client.execute(f'SELECT count(*) FROM "{name}"')
+                        rows = cur.fetchall() or []
                         row_count = rows[0][0] if rows else None
                     except Exception:
                         row_count = None
@@ -75,10 +76,10 @@ class PostgresProvider(DataProvider):
 
     async def compile_and_execute(self, client: Any, plan: LogicalPlan, ctx: RequestContext) -> dict:
         sql = compile_sql(plan)
-        client.execute(sql)
-        rows = client.fetchall() or []
+        cur = client.execute(sql)
+        rows = cur.fetchall() or []
         columns = []
-        description = getattr(client, "description", None)
+        description = getattr(cur, "description", None)
         if description:
             try:
                 columns = [{"name": d.name, "type": "Any"} for d in description]

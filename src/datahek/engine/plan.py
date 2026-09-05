@@ -43,6 +43,15 @@ class WriteNode(PlanNode):
     payload: dict = field(default_factory=dict)
 
 
+def _normalize_order(entry: Any) -> str:
+    """Accept both 'col DESC' strings and {'column','direction'} objects."""
+    if isinstance(entry, dict):
+        column = entry.get("column", "")
+        direction = (entry.get("direction") or "ASC").upper()
+        return f"{column} {direction}".strip()
+    return str(entry)
+
+
 @dataclass(frozen=True)
 class LogicalPlan:
     version: int = PLAN_VERSION
@@ -75,6 +84,7 @@ class LogicalPlan:
             kind = nd.pop("type")
             if kind == "ReadNode":
                 nd["aggregates"] = [Aggregate(**a) for a in nd.get("aggregates", [])]
+                nd["order_by"] = [_normalize_order(o) for o in nd.get("order_by", [])]
                 nodes.append(ReadNode(**nd))
             elif kind == "WriteNode":
                 nodes.append(WriteNode(**nd))

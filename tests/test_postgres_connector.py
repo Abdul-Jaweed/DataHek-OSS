@@ -58,15 +58,25 @@ class TestPostgresClient(unittest.TestCase):
         self.assertEqual(kwargs["dbname"], "appdb")
         self.assertEqual(kwargs["user"], "app")
 
+    def test_connect_sets_timeout(self):
+        p = PostgresProvider()
+        with mock.patch("datahek.connectors.postgres.psycopg.connect") as m:
+            asyncio.run(p.connect(_conn()))
+        self.assertGreaterEqual(m.call_args.kwargs["connect_timeout"], 5)
+
     def test_introspect(self):
         p = PostgresProvider()
         client = mock.Mock()
-        client.fetchall.side_effect = [
-            [("orders",), ("customers",)],                      # tables
-            [("region", "text"), ("total_amount", "numeric")],  # columns (orders)
-            [(100,)],                                           # row count
-            [("id", "integer")],                                # columns (customers)
-            [(50,)],                                            # row count
+
+        def cursor(result):
+            return mock.Mock(fetchall=lambda: result)
+
+        client.execute.side_effect = [
+            cursor([("orders",), ("customers",)]),                      # tables
+            cursor([("region", "text"), ("total_amount", "numeric")]),  # columns (orders)
+            cursor([(100,)]),                                           # row count
+            cursor([("id", "integer")]),                                # columns (customers)
+            cursor([(50,)]),                                            # row count
         ]
         with mock.patch.object(PostgresProvider, "connect", return_value=client):
             cat = asyncio.run(p.introspect(RequestContext(source="api"), _conn(), "c1:appdb"))
@@ -81,7 +91,7 @@ class TestPostgresClient(unittest.TestCase):
         p = PostgresProvider()
         plan = LogicalPlan(nodes=[ReadNode(source="orders", columns=["region"], limit=10)])
         client = mock.Mock()
-        client.fetchall.return_value = [("west",), ("east",)]
+        client.execute.return_value = mock.Mock(fetchall=lambda: [("west",), ("east",)])
         out = asyncio.run(p.compile_and_execute(client, plan, RequestContext(source="api")))
         self.assertEqual(out["rows"], [("west",), ("east",)])
         self.assertIn("SELECT region FROM orders", client.execute.call_args.args[0])
@@ -104,7 +114,7 @@ class TestRegistryIntegration(unittest.TestCase):
         conn = _conn()
         with mock.patch.object(PostgresProvider, "connect", return_value=mock.Mock()) as m:
             client = m.return_value
-            client.fetchall.return_value = [("west",)]
+            client.execute.return_value = mock.Mock(fetchall=lambda: [("west",)])
             result = asyncio.run(engine.execute(RequestContext(source="api"), plan, conn))
         self.assertEqual(result.rows, [("west",)])
 
