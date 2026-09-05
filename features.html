@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="DataHek Cloud features — natural language data access, structural guardrails, full audit, managed connections, and enterprise governance." />
+<title>Features — DataHek Cloud</title>
+<link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link href="assets/css/site.css" rel="stylesheet" />
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<nav class="nav" aria-label="Main">
+  <div class="container nav-inner">
+    <a class="logo" href="index.html" aria-label="DataHek Cloud home">
+      <span class="mark"><svg width="18" height="18" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true"><path d="M15.5 2.5 5 19h8l-1.5 10.5L27 13h-9l1.5-10.5z"/></svg></span>
+      DataHek <span class="cloud-tag">Cloud</span>
+    </a>
+    <div class="nav-links" id="nav-links">
+      <a href="index.html">Home</a>
+      <a href="features.html" class="active" aria-current="page">Features</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener">Open Source</a>
+    </div>
+    <div class="nav-cta">
+      <a class="btn btn-primary btn-sm" href="index.html#get-started">Get Started</a>
+      <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+  <header class="feat-page-hero feat-hero">
+    <div class="container">
+      <span class="badge reveal">Features</span>
+      <h1 class="reveal">The engine behind every answer.</h1>
+      <p class="sub reveal">Validation, guardrails, audit, and governance — not bolted on, but built into the pipeline.</p>
+    </div>
+  </header>
+
+  <section class="block" style="padding-top:24px">
+    <div class="container">
+
+      <!-- 1: NL -> SQL -->
+      <div class="feat-row reveal">
+        <div class="txt">
+          <p class="eyebrow">Natural language</p>
+          <h2>Ask questions. Get validated SQL.</h2>
+          <p>Describe what you need in plain English. DataHek plans the query against your actual schema, validates every node, and only executes plans that pass structural checks.</p>
+          <ul>
+            <li><span class="chk">✓</span>Schema-aware planning — no hallucinated tables or columns</li>
+            <li><span class="chk">✓</span>Multi-turn conversations with memory of previous answers</li>
+            <li><span class="chk">✓</span>Clarifying questions when the request is ambiguous</li>
+          </ul>
+        </div>
+        <div class="feat-visual">
+          <span class="q">Q · "Average order value by region, last quarter"</span>
+          <span class="sql">SELECT region, avg(total_amount) AS aov<br />FROM orders WHERE ts &gt;= now() - INTERVAL 3 MONTH<br />GROUP BY region ORDER BY aov DESC</span>
+          <div class="rows">
+            <div><span>europe</span><span>€ 214.50</span></div>
+            <div><span>americas</span><span>€ 198.20</span></div>
+            <div><span>apac</span><span>€ 176.80</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2: Guardrails -->
+      <div class="feat-row reveal">
+        <div class="feat-visual" style="order:-1">
+          <span class="q">Blocked · "DELETE FROM orders"</span>
+          <span class="sql" style="color:var(--danger)">✗ MULTI_STATEMENT / WRITE_REJECTED</span>
+          <div class="rows">
+            <div><span>policy</span><span>read-only structural</span></div>
+            <div><span>validation</span><span>AST + injection scan</span></div>
+            <div><span>audit</span><span>refusal recorded</span></div>
+          </div>
+        </div>
+        <div class="txt">
+          <p class="eyebrow">Safety</p>
+          <h2>Guardrails that are structural, not optional</h2>
+          <p>Write operations are rejected at the plan level — before any SQL is generated. Every query is AST-validated, scanned for injection, and bounded by complexity and timeout limits.</p>
+          <ul>
+            <li><span class="chk">✓</span>Read-only enforcement across API, UI, CLI &amp; MCP surfaces</li>
+            <li><span class="chk">✓</span>SQL AST validation &amp; multi-statement rejection</li>
+            <li><span class="chk">✓</span>Injection detection, complexity limits, and query timeouts</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 3: Connections -->
+      <div class="feat-row reveal">
+        <div class="txt">
+          <p class="eyebrow">Connections</p>
+          <h2>Managed connections, zero plumbing</h2>
+          <p>Point DataHek Cloud at your warehouse and it handles schema discovery, connection health, and secret resolution. One catalog, one permission model.</p>
+          <ul>
+            <li><span class="chk">✓</span>ClickHouse, PostgreSQL, MySQL &amp; SQLite</li>
+            <li><span class="chk">✓</span>Schema introspection with per-table metadata</li>
+            <li><span class="chk">✓</span>Connection testing and health monitoring</li>
+          </ul>
+        </div>
+        <div class="feat-visual">
+          <span class="q">Connections</span>
+          <div class="rows" style="margin-top:12px">
+            <div><span>clickhouse · analytics</span><span style="color:var(--success)">healthy</span></div>
+            <div><span>postgres · orders</span><span style="color:var(--success)">healthy</span></div>
+            <div><span>mysql · legacy</span><span style="color:var(--success)">healthy</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4: Audit -->
+      <div class="feat-row reveal">
+        <div class="feat-visual" style="order:-1">
+          <span class="q">Audit trail</span>
+          <div class="rows" style="margin-top:12px">
+            <div><span>09:41:02</span><span>alice · "total revenue"</span></div>
+            <div><span>09:41:03</span><span>plan validated · read-only</span></div>
+            <div><span>09:41:04</span><span>executed · 1.2s · 12 rows</span></div>
+            <div><span>09:41:05</span><span>answer delivered</span></div>
+          </div>
+        </div>
+        <div class="txt">
+          <p class="eyebrow">Governance</p>
+          <h2>Every question leaves a trail</h2>
+          <p>Who asked, against which connection, what SQL was planned, which policies applied, what was returned — recorded end-to-end and searchable.</p>
+          <ul>
+            <li><span class="chk">✓</span>Full request → plan → execution → result lineage</li>
+            <li><span class="chk">✓</span>Policy refusals and masking events included</li>
+            <li><span class="chk">✓</span>Searchable history with retention controls</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 5: Evaluations -->
+      <div class="feat-row reveal">
+        <div class="txt">
+          <p class="eyebrow">Reliability</p>
+          <h2>Changes are measured, not trusted</h2>
+          <p>Every model and prompt change is scored against a curated regression dataset — plan validity, safety, execution success, and latency.</p>
+          <ul>
+            <li><span class="chk">✓</span>Regression suite with safety and correctness scores</li>
+            <li><span class="chk">✓</span>Latency and failure tracking per change</li>
+            <li><span class="chk">✓</span>Comparable run history</li>
+          </ul>
+        </div>
+        <div class="feat-visual">
+          <span class="q">Latest evaluation</span>
+          <div class="rows" style="margin-top:12px">
+            <div><span>cases</span><span>16</span></div>
+            <div><span>passed</span><span style="color:var(--success)">16 / 16</span></div>
+            <div><span>pass rate</span><span>100%</span></div>
+            <div><span>latency p50</span><span>4.2s</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6: Enterprise -->
+      <div class="feat-row reveal">
+        <div class="feat-visual" style="order:-1">
+          <span class="q">Identity &amp; policies</span>
+          <div class="rows" style="margin-top:12px">
+            <div><span>auth</span><span>SSO · SCIM · enforced</span></div>
+            <div><span>rbac</span><span>groups · per-connection</span></div>
+            <div><span>policies</span><span>versioned · audited</span></div>
+            <div><span>approvals</span><span>sensitive queries</span></div>
+          </div>
+        </div>
+        <div class="txt">
+          <p class="eyebrow">Enterprise</p>
+          <h2>Identity, policy, and scale — coming soon</h2>
+          <p>SSO and SCIM, advanced RBAC, a central policy engine, approval workflows, and high-availability operations. Built on the same engine as OSS — never a fork.</p>
+          <ul>
+            <li><span class="chk">✓</span>SSO, SCIM &amp; enforced authentication</li>
+            <li><span class="chk">✓</span>Central policy engine with versioning</li>
+            <li><span class="chk">✓</span>Centralized audit, quotas, and SLAs</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-band" id="get-started">
+    <div class="container">
+      <span class="badge reveal">Get started</span>
+      <h2 class="title reveal" style="margin-top:20px">See it with your own data.</h2>
+      <p class="lede reveal" style="margin:14px auto 0">Join the early access list, or run the same engine yourself with OSS.</p>
+      <div class="hero-cta reveal">
+        <a class="btn btn-primary btn-lg" href="index.html#get-started">Get started free</a>
+        <a class="btn btn-secondary btn-lg" href="pricing.html">See pricing</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer-inner">
+      <div class="about">
+        <a class="logo" href="index.html">
+          <span class="mark"><svg width="18" height="18" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true"><path d="M15.5 2.5 5 19h8l-1.5 10.5L27 13h-9l1.5-10.5z"/></svg></span>
+          DataHek <span class="cloud-tag">Cloud</span>
+        </a>
+        <p>The hosted AI data platform. Ask your data anything — with guardrails, audit, and governance built in.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="pricing.html">Pricing</a></li>
+          <li><a href="index.html#get-started">Get Started</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Open Source</h4>
+        <ul>
+          <li><a href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener">GitHub repository</a></li>
+          <li><a href="https://github.com/Abdul-Jaweed/DataHek-OSS#readme" target="_blank" rel="noopener">Documentation</a></li>
+          <li><a href="https://github.com/Abdul-Jaweed/DataHek-OSS/blob/main/LICENSE" target="_blank" rel="noopener">Apache-2.0 license</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Company</h4>
+        <ul>
+          <li><a href="mailto:hello@datahek.dev">Contact</a></li>
+          <li><a href="index.html#get-started">Early access</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© <span class="js-year">2026</span> DataHek. All rights reserved.</span>
+      <span class="oss-note"><a href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener">DataHek OSS</a> is Apache-2.0 open source — this site is the hosted product.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/js/site.js"></script>
+</body>
+</html>
