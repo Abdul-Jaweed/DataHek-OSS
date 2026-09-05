@@ -1,0 +1,63 @@
+"""Logical plan model (ADR-003) — versioned, serializable, provider-agnostic."""
+import unittest
+
+from datahek.engine.plan import Aggregate, LogicalPlan, ReadNode, WriteNode, validate_plan
+from datahek.kernel.errors import DatahekError, ErrorCode
+
+
+class TestPlanModel(unittest.TestCase):
+    def test_read_plan_construction(self):
+        plan = LogicalPlan(nodes=[
+            ReadNode(source="traces", columns=["service", "duration_ms"], limit=100),
+        ])
+        self.assertTrue(plan.read_only)
+        self.assertEqual(plan.version, 1)
+
+    def test_write_plan_not_read_only(self):
+        plan = LogicalPlan(nodes=[WriteNode(source="traces", operation="delete")])
+        self.assertFalse(plan.read_only)
+
+    def test_aggregates(self):
+        plan = LogicalPlan(nodes=[
+            ReadNode(
+                source="traces",
+                columns=["service"],
+                group_by=["service"],
+                aggregates=[Aggregate(function="count", column="*", alias="n")],
+                order_by=["n DESC"],
+                limit=10,
+            ),
+        ])
+        node = plan.nodes[0]
+        self.assertEqual(node.aggregates[0].alias, "n")
+        self.assertEqual(node.limit, 10)
+
+    def test_serialization_roundtrip(self):
+        plan = LogicalPlan(nodes=[ReadNode(source="t", columns=["a"], limit=5)])
+        restored = LogicalPlan.from_dict(plan.to_dict())
+        self.assertEqual(restored.nodes[0].source, "t")
+        self.assertEqual(restored.nodes[0].limit, 5)
+
+    def test_plan_validation_unknown_source(self):
+        plan = LogicalPlan(nodes=[ReadNode(source="ghost", columns=["a"])])
+        with self.assertRaises(DatahekError) as cm:
+            validate_plan(plan, tables={"traces"}, columns={"traces": {"a", "b"}})
+        self.assertEqual(cm.exception.code, ErrorCode.PLAN_INVALID)
+
+    def test_plan_validation_unknown_column(self):
+        plan = LogicalPlan(nodes=[ReadNode(source="traces", columns=["nope"])])
+        with self.assertRaises(DatahekError):
+            validate_plan(plan, tables={"traces"}, columns={"traces": {"a"}})
+
+    def test_plan_validation_group_by_must_be_in_columns(self):
+        plan = LogicalPlan(nodes=[ReadNode(source="traces", columns=["a"], group_by=["b"])])
+        with self.assertRaises(DatahekError):
+            validate_plan(plan, tables={"traces"}, columns={"traces": {"a"}})
+
+    def test_plan_validation_ok(self):
+        plan = LogicalPlan(nodes=[ReadNode(source="traces", columns=["a"], limit=10)])
+        validate_plan(plan, tables={"traces"}, columns={"traces": {"a"}})
+
+
+if __name__ == "__main__":
+    unittest.main()

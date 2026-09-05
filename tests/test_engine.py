@@ -1,0 +1,101 @@
+"""Engine executor — routes plans through capabilities, guardrails, providers."""
+import asyncio
+import unittest
+
+from datahek.contracts.connections import Connection
+from datahek.contracts.providers import ConnectorCapabilities, DataProvider, ProviderKind, ReadOnlyLevel
+from datahek.engine.executor import Engine, ProviderRegistry
+from datahek.engine.plan import LogicalPlan, ReadNode, WriteNode
+from datahek.kernel.context import RequestContext
+from datahek.kernel.errors import DatahekError, ErrorCode
+
+
+class _FakeProvider(DataProvider):
+    provider_id = "fake"
+    capabilities = ConnectorCapabilities(kind=ProviderKind.SQL, dialect="fake", max_result_rows=10)
+
+    def __init__(self):
+        self.executed = []
+
+    async def connect(self, connection):
+        return object()
+
+    async def ping(self, client):
+        return {"ok": True}
+
+    async def compile_and_execute(self, client, plan, ctx):
+        self.executed.append(plan)
+        return {"columns": [{"name": "a", "type": "Int32"}], "rows": [(1,), (2,), (3,)]}
+
+    async def close(self, client):
+        pass
+
+
+class TestProviderRegistry(unittest.TestCase):
+    def test_register_and_get(self):
+        r = ProviderRegistry()
+        r.register(_FakeProvider())
+        self.assertIsInstance(r.get("fake"), _FakeProvider)
+
+    def test_unknown_provider(self):
+        r = ProviderRegistry()
+        with self.assertRaises(KeyError):
+            r.get("nope")
+
+
+class TestEngine(unittest.TestCase):
+    def setUp(self):
+        self.provider = _FakeProvider()
+        registry = ProviderRegistry()
+        registry.register(self.provider)
+        self.engine = Engine(registry)
+        self.ctx = RequestContext(source="api")
+        self.conn = Connection(id="c1", name="c", provider="fake", org_id="default", project_id="default")
+
+    def test_execute_read_plan(self):
+        plan = LogicalPlan(nodes=[ReadNode(source="t", columns=["a"], limit=5)])
+        result = asyncio.run(self.engine.execute(self.ctx, plan, self.conn))
+        self.assertEqual(result.row_count, 3)
+        self.assertEqual(result.columns[0]["name"], "a")
+        self.assertFalse(result.truncated)
+
+    def test_execute_truncates_to_capability_limit(self):
+        provider = _FakeProvider()
+        provider.capabilities = ConnectorCapabilities(kind=ProviderKind.SQL, max_result_rows=2)
+        registry = ProviderRegistry()
+        registry.register(provider)
+        engine = Engine(registry)
+        plan = LogicalPlan(nodes=[ReadNode(source="t", columns=["a"], limit=100)])
+        result = asyncio.run(engine.execute(self.ctx, plan, self.conn))
+        self.assertTrue(result.truncated)
+        self.assertEqual(len(result.rows), 2)
+        self.assertEqual(plan.nodes[0].limit, 2)
+
+    def test_write_plan_denied(self):
+        plan = LogicalPlan(nodes=[WriteNode(source="t", operation="delete")])
+        with self.assertRaises(DatahekError) as cm:
+            asyncio.run(self.engine.execute(self.ctx, plan, self.conn))
+        self.assertEqual(cm.exception.code, ErrorCode.QUERY_DENIED)
+
+    def test_connection_provider_mismatch(self):
+        conn = Connection(id="c2", name="c", provider="clickhouse", org_id="default", project_id="default")
+        with self.assertRaises(DatahekError) as cm:
+            asyncio.run(self.engine.execute(self.ctx, LogicalPlan(nodes=[ReadNode(source="t", columns=["a"])]), conn))
+        self.assertEqual(cm.exception.code, ErrorCode.VALIDATION)
+
+    def test_provider_error_never_leaks_driver_text(self):
+        class Broken(_FakeProvider):
+            async def compile_and_execute(self, client, plan, ctx):
+                raise RuntimeError("driver internal /tmp/x secret")
+
+        registry = ProviderRegistry()
+        registry.register(Broken())
+        engine = Engine(registry)
+        with self.assertRaises(DatahekError) as cm:
+            asyncio.run(engine.execute(self.ctx, LogicalPlan(nodes=[ReadNode(source="t", columns=["a"])]), self.conn))
+        self.assertNotIn("secret", str(cm.exception))
+        self.assertEqual(cm.exception.code, ErrorCode.CONNECTION_FAILED)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+
+# Tooling
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Runtime state
+*.jsonl
+datahek.db
+.env
