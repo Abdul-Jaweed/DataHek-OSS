@@ -21,3 +21,6 @@ dist/
 
 # design spec (kept local, not tracked)
 docs/frontend/
+
+# vite cache
+.vite/
