@@ -7,35 +7,12 @@ from typing import Any
 
 from datahek.contracts.connections import Connection
 from datahek.contracts.providers import ConnectorCapabilities, DataProvider, ProviderKind, ReadOnlyLevel
-from datahek.engine.plan import DEFAULT_LIMIT, LogicalPlan, ReadNode, WriteNode
+from datahek.engine.compile import compile_sql
+from datahek.engine.plan import LogicalPlan
 from datahek.engine.schema import ColumnMeta, SchemaCatalog, TableMeta
 from datahek.kernel.context import RequestContext
 
 MAX_INTROSPECT_TABLES = 20
-
-
-def compile_sql(plan: LogicalPlan) -> str:
-    """Compile a read-only LogicalPlan to ClickHouse SQL."""
-    if not plan.read_only:
-        raise ValueError("Write plans cannot be compiled to SQL")
-    node = plan.nodes[0]
-    if not isinstance(node, ReadNode):
-        raise ValueError(f"Unsupported node type: {type(node).__name__}")
-
-    select_cols = list(node.columns)
-    for agg in node.aggregates:
-        select_cols.append(f"{agg.function}({agg.column}) AS {agg.alias}")
-
-    sql = f"SELECT {', '.join(select_cols)} FROM {node.source}"
-    if node.filter:
-        sql += f" WHERE {node.filter}"
-    if node.group_by:
-        sql += f" GROUP BY {', '.join(node.group_by)}"
-    if node.order_by:
-        sql += f" ORDER BY {', '.join(node.order_by)}"
-    limit = node.limit or DEFAULT_LIMIT
-    sql += f" LIMIT {limit}"
-    return sql
 
 
 class ClickHouseProvider(DataProvider):

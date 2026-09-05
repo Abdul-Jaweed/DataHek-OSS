@@ -2,7 +2,8 @@
 import unittest
 from unittest import mock
 
-from datahek.connectors.clickhouse import ClickHouseProvider, compile_sql
+from datahek.connectors.clickhouse import ClickHouseProvider
+from datahek.engine.compile import compile_sql
 from datahek.engine.plan import Aggregate, LogicalPlan, ReadNode
 from datahek.contracts.providers import ProviderKind, ReadOnlyLevel
 from datahek.kernel.context import RequestContext
