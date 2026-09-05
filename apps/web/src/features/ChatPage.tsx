@@ -50,6 +50,11 @@ export function ChatPage() {
         patchMessage(assistantId, (m) => applyEvent(ev, m));
       }
     } catch (err) {
+      const code = (err as { code?: string } | null)?.code;
+      if (code === 'CONNECTION_NOT_FOUND') {
+        useStore.getState().selectConnection(null);
+        void useStore.getState().loadConnections();
+      }
       patchMessage(assistantId, () => ({
         streaming: false,
         error: true,

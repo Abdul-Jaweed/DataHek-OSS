@@ -67,11 +67,14 @@ export const useStore = create<DataHekState>((set) => ({
   loadConnections: async () => {
     try {
       const conns = await api.listConnections();
-      set((s) => ({
-        connections: conns,
-        selectedConnectionId: s.selectedConnectionId ?? conns[0]?.id ?? null,
-        loaded: true,
-      }));
+      set((s) => {
+        const stillValid = conns.some((c) => c.id === s.selectedConnectionId);
+        return {
+          connections: conns,
+          selectedConnectionId: stillValid ? s.selectedConnectionId : conns[0]?.id ?? null,
+          loaded: true,
+        };
+      });
     } catch {
       set({ loaded: true });
     }
