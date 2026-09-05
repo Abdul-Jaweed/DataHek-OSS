@@ -9,6 +9,7 @@ from typing import Any
 import psycopg
 
 from datahek.contracts.connections import Connection
+from datahek.kernel.errors import DatahekError, ErrorCode
 from datahek.contracts.providers import ConnectorCapabilities, DataProvider, ProviderKind, ReadOnlyLevel
 from datahek.engine.compile import compile_sql
 from datahek.engine.plan import LogicalPlan
@@ -77,7 +78,13 @@ class PostgresProvider(DataProvider):
 
     async def compile_and_execute(self, client: Any, plan: LogicalPlan, ctx: RequestContext) -> dict:
         sql = compile_sql(plan)
-        cur = client.execute(sql)
+        try:
+            cur = client.execute(sql)
+        except psycopg.errors.ProgrammingError as e:
+            raise DatahekError(ErrorCode.QUERY_FAILED, f"PostgreSQL rejected the query: {e}",
+                               details={"sql": sql}) from e
+        except psycopg.OperationalError as e:
+            raise DatahekError(ErrorCode.CONNECTION_FAILED, f"PostgreSQL connection error: {e}") from e
         rows = cur.fetchall() or []
         columns = []
         description = getattr(cur, "description", None)

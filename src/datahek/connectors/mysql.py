@@ -7,6 +7,7 @@ from typing import Any
 import pymysql
 
 from datahek.contracts.connections import Connection
+from datahek.kernel.errors import DatahekError, ErrorCode
 from datahek.contracts.providers import ConnectorCapabilities, DataProvider, ProviderKind, ReadOnlyLevel
 from datahek.engine.compile import compile_sql
 from datahek.engine.plan import LogicalPlan
@@ -76,8 +77,14 @@ class MySQLProvider(DataProvider):
 
     async def compile_and_execute(self, client: Any, plan: LogicalPlan, ctx: RequestContext) -> dict:
         sql = compile_sql(plan)
-        cur = client.cursor()
-        cur.execute(sql)
+        try:
+            cur = client.cursor()
+            cur.execute(sql)
+        except pymysql.err.ProgrammingError as e:
+            raise DatahekError(ErrorCode.QUERY_FAILED, f"MySQL rejected the query: {e}",
+                               details={"sql": sql}) from e
+        except pymysql.err.OperationalError as e:
+            raise DatahekError(ErrorCode.CONNECTION_FAILED, f"MySQL connection error: {e}") from e
         rows = cur.fetchall() or []
         return {"columns": [{"name": d[0], "type": "Any"} for d in (cur.description or [])],
                 "rows": list(rows)}

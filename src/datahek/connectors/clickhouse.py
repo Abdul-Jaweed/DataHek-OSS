@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 from datahek.contracts.connections import Connection
+from datahek.kernel.errors import DatahekError, ErrorCode
 from datahek.contracts.providers import ConnectorCapabilities, DataProvider, ProviderKind, ReadOnlyLevel
 from datahek.engine.compile import compile_sql
 from datahek.engine.plan import LogicalPlan
@@ -82,7 +83,17 @@ class ClickHouseProvider(DataProvider):
 
     async def compile_and_execute(self, client: Any, plan: LogicalPlan, ctx: RequestContext) -> dict:
         sql = compile_sql(plan)
-        result = client.query(sql)
+        try:
+            result = client.query(sql)
+        except Exception as e:
+            from clickhouse_connect.driver.exceptions import DatabaseError, OperationalError
+            if isinstance(e, OperationalError):
+                raise DatahekError(ErrorCode.CONNECTION_FAILED, f"ClickHouse connection error: {e}") from e
+            if isinstance(e, DatabaseError):
+                raise DatahekError(ErrorCode.QUERY_FAILED, f"ClickHouse rejected the query: {e}",
+                                   details={"sql": sql}) from e
+            raise DatahekError(ErrorCode.QUERY_FAILED, f"ClickHouse query failed: {e}",
+                               details={"sql": sql}) from e
         return {
             "columns": [{"name": c, "type": "Any"} for c in (getattr(result, "column_names", None) or [])],
             "rows": list(getattr(result, "result_rows", []) or []),

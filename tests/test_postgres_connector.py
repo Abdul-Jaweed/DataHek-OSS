@@ -135,3 +135,30 @@ class TestRegistryIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestQueryErrorMapping(unittest.TestCase):
+    def test_programming_error_becomes_query_failed(self):
+        import psycopg
+        from datahek.kernel.errors import ErrorCode, DatahekError
+        p = PostgresProvider()
+        client = mock.Mock()
+        client.execute.side_effect = psycopg.errors.UndefinedColumn("column \"duration\" does not exist")
+        with self.assertRaises(DatahekError) as cm:
+            asyncio.run(p.compile_and_execute(
+                client,
+                LogicalPlan(nodes=[ReadNode(source="orders", columns=["region"])]),
+                RequestContext(source="api")))
+        self.assertEqual(cm.exception.code, ErrorCode.QUERY_FAILED)
+
+    def test_operational_error_becomes_connection_failed(self):
+        import psycopg
+        from datahek.kernel.errors import ErrorCode, DatahekError
+        p = PostgresProvider()
+        client = mock.Mock()
+        client.execute.side_effect = psycopg.OperationalError("connection closed")
+        with self.assertRaises(DatahekError) as cm:
+            asyncio.run(p.compile_and_execute(
+                client,
+                LogicalPlan(nodes=[ReadNode(source="orders", columns=["region"])]),
+                RequestContext(source="api")))
+        self.assertEqual(cm.exception.code, ErrorCode.CONNECTION_FAILED)

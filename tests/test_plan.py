@@ -97,3 +97,28 @@ class TestStarColumnWithAggregates(unittest.TestCase):
             aggregates=[Aggregate(function="count", column="*", alias="n")],
         )])
         validate_plan(plan, tables={"traces"}, columns={"traces": {"service", "status", "duration_ms"}})
+
+
+class TestAggregateColumnValidation(unittest.TestCase):
+    def test_aggregate_on_unknown_column_rejected(self):
+        from datahek.engine.plan import Aggregate
+
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="traces", columns=["service"],
+            group_by=["service"],
+            aggregates=[Aggregate(function="avg", column="duration", alias="avg_duration")],
+        )])
+        with self.assertRaises(DatahekError) as cm:
+            validate_plan(plan, tables={"traces"}, columns={"traces": {"service", "status"}})
+        self.assertEqual(cm.exception.code, ErrorCode.PLAN_INVALID)
+        self.assertIn("duration", str(cm.exception))
+
+    def test_aggregate_on_known_column_accepted(self):
+        from datahek.engine.plan import Aggregate
+
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="traces", columns=["service"],
+            group_by=["service"],
+            aggregates=[Aggregate(function="avg", column="duration_ms", alias="avg_duration")],
+        )])
+        validate_plan(plan, tables={"traces"}, columns={"traces": {"service", "duration_ms"}})

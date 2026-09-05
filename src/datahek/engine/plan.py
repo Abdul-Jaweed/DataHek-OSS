@@ -124,3 +124,12 @@ def validate_plan(
                     ErrorCode.PLAN_INVALID,
                     f"GROUP BY column '{col}' must be in SELECT columns",
                 )
+        for agg in node.aggregates:
+            if agg.column == "*":
+                continue  # count(*)
+            if agg.column not in known:
+                raise DatahekError(
+                    ErrorCode.PLAN_INVALID,
+                    f"Unknown column '{agg.column}' on '{node.source}' (aggregate)",
+                    details={"column": agg.column, "source": node.source},
+                )

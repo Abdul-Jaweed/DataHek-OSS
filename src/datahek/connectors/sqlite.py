@@ -60,7 +60,11 @@ class SQLiteProvider(DataProvider):
 
     async def compile_and_execute(self, client: Any, plan: LogicalPlan, ctx: RequestContext) -> dict:
         sql = compile_sql(plan)
-        cur = client.execute(sql)
+        try:
+            cur = client.execute(sql)
+        except sqlite3.OperationalError as e:
+            raise DatahekError(ErrorCode.QUERY_FAILED, f"SQLite rejected the query: {e}",
+                               details={"sql": sql}) from e
         rows = cur.fetchall() or []
         return {"columns": [{"name": d[0], "type": "Any"} for d in (cur.description or [])],
                 "rows": list(rows)}
