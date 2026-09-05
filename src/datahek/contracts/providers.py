@@ -1,10 +1,13 @@
 """Data provider contract — the engine routes LogicalPlans to providers (ADR-003)."""
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from datahek.contracts.connections import Connection
 from datahek.kernel.context import RequestContext
+
+if TYPE_CHECKING:
+    from datahek.engine.schema import SchemaCatalog
 
 
 class ProviderKind(str, Enum):
@@ -41,5 +44,6 @@ class DataProvider(Protocol):
 
     async def connect(self, connection: Connection) -> Any: ...
     async def ping(self, client: Any) -> dict: ...
+    async def introspect(self, ctx: RequestContext, connection: Connection, source: str) -> "SchemaCatalog": ...
     async def compile_and_execute(self, client: Any, plan: dict, ctx: RequestContext) -> dict: ...
     async def close(self, client: Any) -> None: ...

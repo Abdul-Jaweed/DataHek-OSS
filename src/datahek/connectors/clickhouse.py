@@ -1,13 +1,17 @@
-"""ClickHouse connector — logical plan → SQL compilation + execution.
+"""ClickHouse connector — schema introspection, plan → SQL compilation, execution.
 
 The core stays dialect-free; ClickHouse specifics live here (ADR-003).
 """
+import asyncio
 from typing import Any
 
 from datahek.contracts.connections import Connection
 from datahek.contracts.providers import ConnectorCapabilities, DataProvider, ProviderKind, ReadOnlyLevel
 from datahek.engine.plan import DEFAULT_LIMIT, LogicalPlan, ReadNode, WriteNode
+from datahek.engine.schema import ColumnMeta, SchemaCatalog, TableMeta
 from datahek.kernel.context import RequestContext
+
+MAX_INTROSPECT_TABLES = 20
 
 
 def compile_sql(plan: LogicalPlan) -> str:
@@ -60,9 +64,46 @@ class ClickHouseProvider(DataProvider):
         client.query("SELECT 1")
         return {"ok": True}
 
+    async def introspect(self, ctx: RequestContext, connection: Connection, source: str) -> SchemaCatalog:
+        client = await self.connect(connection)
+        try:
+            tables = []
+            for name in await asyncio.to_thread(self._list_tables, client):
+                columns = await asyncio.to_thread(self._list_columns, client, name)
+                row_count = None
+                if len(tables) < MAX_INTROSPECT_TABLES:
+                    row_count = await asyncio.to_thread(self._row_count, client, name)
+                tables.append(TableMeta(name=name, columns=columns, row_count=row_count))
+            return SchemaCatalog(source=source, tables=tables)
+        finally:
+            await self.close(client)
+
+    @staticmethod
+    def _list_tables(client: Any) -> list[str]:
+        result = client.query(
+            "SELECT name FROM system.tables WHERE database = currentDatabase() ORDER BY name"
+        )
+        return [row[0] for row in getattr(result, "result_rows", []) or []]
+
+    @staticmethod
+    def _list_columns(client: Any, table: str) -> list[ColumnMeta]:
+        result = client.query(
+            "SELECT name, type FROM system.columns "
+            f"WHERE database = currentDatabase() AND table = '{table}' ORDER BY position"
+        )
+        return [ColumnMeta(name=row[0], data_type=row[1]) for row in getattr(result, "result_rows", []) or []]
+
+    @staticmethod
+    def _row_count(client: Any, table: str) -> int | None:
+        try:
+            result = client.query(f"SELECT count() FROM {table}")
+            rows = getattr(result, "result_rows", None) or []
+            return rows[0][0] if rows else None
+        except Exception:
+            return None
+
     async def compile_and_execute(self, client: Any, plan: LogicalPlan, ctx: RequestContext) -> dict:
         sql = compile_sql(plan)
-        timeout = ctx.entitlements  # placeholder: timeout policy later
         result = client.query(sql)
         return {
             "columns": [{"name": c, "type": "Any"} for c in (getattr(result, "column_names", None) or [])],

@@ -1,12 +1,14 @@
-"""Engine executor — capabilities → guardrails → provider → normalized result."""
+"""Engine executor — schema validation → capabilities → guardrails → provider → result."""
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from datahek.contracts.audit import AuditEvent, AuditSink
 from datahek.contracts.connections import Connection
 from datahek.contracts.guardrails import GuardrailResult
 from datahek.contracts.providers import DataProvider
 from datahek.engine.guardrails import GuardrailPipeline, PlanComplexityGuardrail, PlanReadOnlyGuardrail
-from datahek.engine.plan import LogicalPlan
+from datahek.engine.plan import LogicalPlan, validate_plan
 from datahek.kernel.context import RequestContext
 from datahek.kernel.errors import DatahekError, ErrorCode
 
@@ -22,6 +24,9 @@ class ProviderRegistry:
         if provider_id not in self._providers:
             raise KeyError(f"Unsupported provider: {provider_id}")
         return self._providers[provider_id]
+
+    def ids(self) -> list[str]:
+        return list(self._providers)
 
 
 @dataclass
@@ -41,12 +46,24 @@ class QueryResult:
 
 
 class Engine:
-    def __init__(self, registry: ProviderRegistry, guardrails: GuardrailPipeline | None = None):
+    def __init__(
+        self,
+        registry: ProviderRegistry,
+        guardrails: GuardrailPipeline | None = None,
+        schema_service=None,
+        audit_sink: AuditSink | None = None,
+    ):
         self.registry = registry
         self.guardrails = guardrails or GuardrailPipeline([
             PlanReadOnlyGuardrail(),
             PlanComplexityGuardrail(),
         ])
+        self.schema_service = schema_service
+        self.audit_sink = audit_sink
+
+    async def _audit(self, ctx: RequestContext, event: AuditEvent) -> None:
+        if self.audit_sink is not None:
+            await self.audit_sink.record(event)
 
     async def execute(self, ctx: RequestContext, plan: LogicalPlan, connection: Connection) -> QueryResult:
         try:
@@ -54,29 +71,73 @@ class Engine:
         except KeyError as e:
             raise DatahekError(ErrorCode.VALIDATION, str(e)) from e
 
+        if self.schema_service is not None:
+            catalog = await self.schema_service.get_catalog(ctx, connection, provider)
+            validate_plan(plan, self.schema_service.tables(catalog), self.schema_service.columns(catalog))
+
         payload: dict[str, Any] = {"plan": plan, "capabilities": provider.capabilities}
         decision: GuardrailResult = await self.guardrails.run(ctx, payload)
+
+        await self._audit(ctx, AuditEvent(
+            event_type="guardrail.decision",
+            actor=ctx.user_id,
+            action="execute",
+            resource_ref=connection.id,
+            decision=decision.decision,
+            policy_version=decision.policy_version,
+            tenant={"org": ctx.organization_id, "project": ctx.project_id},
+            payload={"guardrail": decision.reason, "plan_sources": [n.source for n in plan.nodes if hasattr(n, "source")]},
+        ))
         if decision.decision != "ALLOW":
             raise DatahekError(ErrorCode.QUERY_DENIED, decision.reason, details={"decision": decision.decision})
 
         client = await provider.connect(connection)
+        started = time.monotonic()
         try:
             raw = await provider.compile_and_execute(client, plan, ctx)
         except DatahekError:
             raise
         except Exception as e:
-            raise DatahekError(ErrorCode.CONNECTION_FAILED, "Query execution failed") from e
+            err = DatahekError(ErrorCode.CONNECTION_FAILED, "Query execution failed")
+            await self._audit(ctx, AuditEvent(
+                event_type="query.execution",
+                actor=ctx.user_id,
+                action="execute",
+                resource_ref=connection.id,
+                decision="ALLOW",
+                tenant={"org": ctx.organization_id, "project": ctx.project_id},
+                payload={"outcome": "failed", "error_code": err.code.value},
+            ))
+            raise err from e
         finally:
             await provider.close(client)
 
+        duration_ms = int((time.monotonic() - started) * 1000)
         max_rows = getattr(provider.capabilities, "max_result_rows", 1000)
         rows = list(raw.get("rows", []))
         truncated = len(rows) > max_rows
         rows = rows[:max_rows]
+
+        await self._audit(ctx, AuditEvent(
+            event_type="query.execution",
+            actor=ctx.user_id,
+            action="execute",
+            resource_ref=connection.id,
+            decision="ALLOW",
+            tenant={"org": ctx.organization_id, "project": ctx.project_id},
+            payload={
+                "outcome": "completed",
+                "provider": provider.provider_id,
+                "plan_sources": [n.source for n in plan.nodes if hasattr(n, "source")],
+                "row_count": len(rows),
+                "truncated": truncated,
+                "duration_ms": duration_ms,
+            },
+        ))
         return QueryResult(
             columns=raw.get("columns", []),
             rows=rows,
             row_count=len(rows),
             truncated=truncated,
-            execution=ExecutionInfo(provider_id=provider.provider_id),
+            execution=ExecutionInfo(provider_id=provider.provider_id, duration_ms=duration_ms),
         )

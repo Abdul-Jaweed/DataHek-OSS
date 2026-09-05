@@ -1,13 +1,23 @@
 """Engine executor — routes plans through capabilities, guardrails, providers."""
 import asyncio
 import unittest
+from unittest import mock
 
+from datahek.contracts.audit import AuditEvent
 from datahek.contracts.connections import Connection
 from datahek.contracts.providers import ConnectorCapabilities, DataProvider, ProviderKind, ReadOnlyLevel
 from datahek.engine.executor import Engine, ProviderRegistry
 from datahek.engine.plan import LogicalPlan, ReadNode, WriteNode
 from datahek.kernel.context import RequestContext
 from datahek.kernel.errors import DatahekError, ErrorCode
+
+
+class _RecorderSink:
+    def __init__(self):
+        self.events: list[AuditEvent] = []
+
+    async def record(self, event: AuditEvent) -> None:
+        self.events.append(event)
 
 
 class _FakeProvider(DataProvider):
@@ -95,6 +105,53 @@ class TestEngine(unittest.TestCase):
             asyncio.run(engine.execute(self.ctx, LogicalPlan(nodes=[ReadNode(source="t", columns=["a"])]), self.conn))
         self.assertNotIn("secret", str(cm.exception))
         self.assertEqual(cm.exception.code, ErrorCode.CONNECTION_FAILED)
+
+
+class TestEngineAudit(unittest.TestCase):
+    def setUp(self):
+        self.sink = _RecorderSink()
+        registry = ProviderRegistry()
+        registry.register(_FakeProvider())
+        self.engine = Engine(registry, audit_sink=self.sink)
+        self.ctx = RequestContext(source="api", user_id="alice")
+        self.conn = Connection(id="c1", name="c", provider="fake", org_id="default", project_id="default")
+
+    def test_successful_execution_audited(self):
+        plan = LogicalPlan(nodes=[ReadNode(source="t", columns=["a"], limit=5)])
+        asyncio.run(self.engine.execute(self.ctx, plan, self.conn))
+        types = [e.event_type for e in self.sink.events]
+        self.assertIn("guardrail.decision", types)
+        self.assertIn("query.execution", types)
+        exec_evt = self.sink.events[-1]
+        self.assertEqual(exec_evt.actor, "alice")
+        self.assertEqual(exec_evt.resource_ref, "c1")
+        self.assertEqual(exec_evt.payload["outcome"], "completed")
+        self.assertIn("row_count", exec_evt.payload)
+        self.assertEqual(exec_evt.tenant, {"org": "default", "project": "default"})
+
+    def test_denied_plan_audited_as_deny(self):
+        plan = LogicalPlan(nodes=[WriteNode(source="t", operation="delete")])
+        with self.assertRaises(DatahekError):
+            asyncio.run(self.engine.execute(self.ctx, plan, self.conn))
+        decision_evts = [e for e in self.sink.events if e.event_type == "guardrail.decision"]
+        self.assertEqual(len(decision_evts), 1)
+        self.assertEqual(decision_evts[0].decision, "DENY")
+        self.assertNotIn("query.execution", [e.event_type for e in self.sink.events])
+
+    def test_failed_execution_audited_with_sanitized_code(self):
+        class Broken(_FakeProvider):
+            async def compile_and_execute(self, client, plan, ctx):
+                raise RuntimeError("driver internal /tmp/x secret")
+
+        registry = ProviderRegistry()
+        registry.register(Broken())
+        engine = Engine(registry, audit_sink=self.sink)
+        with self.assertRaises(DatahekError):
+            asyncio.run(engine.execute(self.ctx, LogicalPlan(nodes=[ReadNode(source="t", columns=["a"])]), self.conn))
+        exec_evt = [e for e in self.sink.events if e.event_type == "query.execution"][-1]
+        self.assertEqual(exec_evt.payload["outcome"], "failed")
+        self.assertEqual(exec_evt.payload["error_code"], "CONNECTION_FAILED")
+        self.assertNotIn("secret", str(exec_evt.payload))
 
 
 if __name__ == "__main__":

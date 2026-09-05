@@ -40,6 +40,9 @@ class EntitlementProvider:
     def limit(self, capability: str) -> int | None:
         return self._limits.get(capability)
 
+    def all_limits(self) -> dict[str, int]:
+        return dict(self._limits)
+
     def check(self, capability: str, current: int) -> bool:
         limit = self._limits.get(capability)
         if limit is None:

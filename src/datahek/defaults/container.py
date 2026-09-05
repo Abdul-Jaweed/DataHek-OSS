@@ -6,16 +6,23 @@ and API code never change.
 from datahek.contracts.audit import AuditSink
 from datahek.contracts.auth import AuthProvider
 from datahek.contracts.connections import ConnectionManager
+from datahek.contracts.models import ModelProvider
 from datahek.contracts.policy import PolicyEngine
 from datahek.contracts.secrets import SecretsProvider
 from datahek.contracts.tenancy import TenantContext
+from datahek.connectors.clickhouse import ClickHouseProvider
 from datahek.defaults.audit import JsonlAuditSink
 from datahek.defaults.auth import LocalAuthProvider
 from datahek.defaults.connections import LocalConnectionManager
+from datahek.defaults.models import OpenAICompatibleModelProvider
 from datahek.defaults.policy import LocalPolicyEngine
 from datahek.defaults.secrets import EnvSecretsProvider
 from datahek.defaults.tenancy import SingleTenantContext
+from datahek.engine.executor import Engine, ProviderRegistry
+from datahek.engine.planner import Planner
+from datahek.engine.schema import SchemaService
 from datahek.kernel.di import Container
+from datahek.kernel.entitlements import EntitlementProvider
 
 
 def build_default_container() -> Container:
@@ -26,4 +33,27 @@ def build_default_container() -> Container:
     c.register(PolicyEngine, LocalPolicyEngine(), singleton=True)
     c.register(SecretsProvider, EnvSecretsProvider(), singleton=True)
     c.register(ConnectionManager, LocalConnectionManager(), singleton=True)
+    c.register(EntitlementProvider, EntitlementProvider(), singleton=True)
+    return c
+
+
+def build_app_container() -> Container:
+    """OSS composition for the API surface: engine + planner + schema + model."""
+    c = build_default_container()
+
+    registry = ProviderRegistry()
+    registry.register(ClickHouseProvider())
+    c.register(ProviderRegistry, registry, singleton=True)
+    c.register(SchemaService, SchemaService(), singleton=True)
+    c.register(ModelProvider, OpenAICompatibleModelProvider(), singleton=True)
+
+    c.register(Planner, lambda: Planner(
+        model=c.resolve(ModelProvider),
+        schema_service=c.resolve(SchemaService),
+    ), singleton=True)
+    c.register(Engine, lambda: Engine(
+        registry=c.resolve(ProviderRegistry),
+        schema_service=c.resolve(SchemaService),
+        audit_sink=c.resolve(AuditSink),
+    ), singleton=True)
     return c
