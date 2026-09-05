@@ -1,0 +1,50 @@
+[project]
+name = "datahek-core"
+version = "0.2.0"
+description = "DataHek OSS — universal conversational data platform. Connect any data source, ask in natural language, get safe answers."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+keywords = ["data", "sql", "agent", "llm", "conversational", "analytics", "clickhouse", "postgresql", "mcp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.scripts]
+datahek = "datahek.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+llm = ["httpx>=0.27"]
+clickhouse = ["clickhouse-connect>=1.6.0"]
+postgres = ["psycopg[binary]>=3"]
+mysql = ["pymysql>=1.1"]
+sqlite = []
+mcp = ["fastmcp>=3.4.5"]
+api = ["fastapi>=0.141.1", "uvicorn>=0.30.0", "pydantic>=2"]
+all = [
+    "httpx>=0.27",
+    "clickhouse-connect>=1.6.0",
+    "psycopg[binary]>=3",
+    "pymysql>=1.1",
+    "fastmcp>=3.4.5",
+    "fastapi>=0.141.1",
+    "uvicorn>=0.30.0",
+    "pydantic>=2",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

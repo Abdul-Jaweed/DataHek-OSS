@@ -1,0 +1,43 @@
+# DataHek OSS — self-hosted deployment
+# Usage: docker compose up -d --build
+#   api  :8000  (OpenAPI at /docs)
+#   mcp  :8001  (MCP endpoint at /mcp)
+# State (SQLite db + audit jsonl) lives in the datahek-data volume.
+services:
+  api:
+    build: .
+    container_name: datahek-oss-api
+    environment:
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://opencode.ai/zen/go/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-mimo-v2.5}
+      DATAHEK_DB_PATH: /app/data/datahek.db
+      DATAHEK_AUDIT_PATH: /app/data/datahek-audit.jsonl
+    ports:
+      - "8000:8000"
+    volumes:
+      - datahek-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  mcp:
+    build: .
+    container_name: datahek-oss-mcp
+    command: python -m datahek.mcp_server --transport http --host 0.0.0.0 --port 8001
+    environment:
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://opencode.ai/zen/go/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-mimo-v2.5}
+      DATAHEK_DB_PATH: /app/data/datahek.db
+      DATAHEK_AUDIT_PATH: /app/data/datahek-audit.jsonl
+    ports:
+      - "8001:8001"
+    volumes:
+      - datahek-data:/app/data
+
+volumes:
+  datahek-data:
