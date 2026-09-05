@@ -46,7 +46,7 @@ def _plan_json():
             {
                 "type": "ReadNode",
                 "source": "traces",
-                "columns": ["service", "duration_ms"],
+                "columns": ["service"],
                 "filter": "status = 'error'",
                 "group_by": ["service"],
                 "aggregates": [{"function": "count", "column": "*", "alias": "n"}],

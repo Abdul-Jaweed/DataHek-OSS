@@ -61,3 +61,14 @@ class TestPlanModel(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestAggregatePlanValidation(unittest.TestCase):
+    def test_grouped_columns_with_aggregates_ok(self):
+        from datahek.engine.plan import Aggregate
+
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="traces", columns=["service"],
+            group_by=["service"],
+            aggregates=[Aggregate(function="count", column="*", alias="n")],
+        )])
+        validate_plan(plan, tables={"traces"}, columns={"traces": {"service"}})

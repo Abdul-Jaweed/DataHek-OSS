@@ -102,3 +102,16 @@ def asyncio_run(coro):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestCompileAggregateStrayColumn(unittest.TestCase):
+    def test_stray_column_dropped_when_aggregating(self):
+        from datahek.engine.plan import Aggregate
+
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="traces", columns=["service", "duration_ms"],
+            group_by=["service"],
+            aggregates=[Aggregate(function="avg", column="duration_ms", alias="avg_d")],
+        )])
+        sql = compile_sql(plan)
+        self.assertEqual(sql, "SELECT service, avg(duration_ms) AS avg_d FROM traces GROUP BY service LIMIT 1000")
+        self.assertNotIn("SELECT service, duration_ms", sql)

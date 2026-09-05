@@ -16,6 +16,11 @@ def compile_sql(plan: LogicalPlan) -> str:
         raise ValueError(f"Unsupported node type: {type(node).__name__}")
 
     select_cols = list(node.columns)
+    if node.aggregates:
+        # With aggregates, only grouped columns are valid in SELECT;
+        # stray non-grouped columns (e.g. LLM planning noise) are dropped.
+        grouped = set(node.group_by)
+        select_cols = [c for c in select_cols if c in grouped]
     for agg in node.aggregates:
         select_cols.append(f"{agg.function}({agg.column}) AS {agg.alias}")
 
