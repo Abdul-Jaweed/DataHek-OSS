@@ -53,6 +53,7 @@ class Engine:
         schema_service=None,
         audit_sink: AuditSink | None = None,
         evaluation_hook=None,
+        masking_policy=None,
     ):
         self.registry = registry
         self.guardrails = guardrails or GuardrailPipeline([
@@ -62,6 +63,7 @@ class Engine:
         self.schema_service = schema_service
         self.audit_sink = audit_sink
         self.evaluation_hook = evaluation_hook
+        self.masking_policy = masking_policy
 
     async def _audit(self, ctx: RequestContext, event: AuditEvent) -> None:
         if self.audit_sink is not None:
@@ -126,12 +128,23 @@ class Engine:
         truncated = len(rows) > max_rows
         rows = rows[:max_rows]
 
+        result = QueryResult(
+            columns=raw.get("columns", []),
+            rows=rows,
+            row_count=len(rows),
+            truncated=truncated,
+            execution=ExecutionInfo(provider_id=provider.provider_id, duration_ms=duration_ms),
+        )
+        if self.masking_policy is not None and self.schema_service is not None:
+            catalog = await self.schema_service.get_catalog(ctx, connection, provider)
+            sensitive = await self.masking_policy.sensitive_columns(ctx, plan, catalog)
+            if sensitive:
+                from datahek.engine.masking import mask_result
+                result = mask_result(result, sensitive)
+
         if self.evaluation_hook is not None:
             await self.evaluation_hook.on_execution_completed(
-                ctx, plan=plan, result=QueryResult(
-                    columns=raw.get("columns", []), rows=rows, row_count=len(rows),
-                    truncated=truncated, execution=ExecutionInfo(provider_id=provider.provider_id, duration_ms=duration_ms),
-                ), duration_ms=duration_ms, decision="ALLOW")
+                ctx, plan=plan, result=result, duration_ms=duration_ms, decision="ALLOW")
 
         await self._audit(ctx, AuditEvent(
             event_type="query.execution",
@@ -149,10 +162,4 @@ class Engine:
                 "duration_ms": duration_ms,
             },
         ))
-        return QueryResult(
-            columns=raw.get("columns", []),
-            rows=rows,
-            row_count=len(rows),
-            truncated=truncated,
-            execution=ExecutionInfo(provider_id=provider.provider_id, duration_ms=duration_ms),
-        )
+        return result

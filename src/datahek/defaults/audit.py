@@ -1,5 +1,6 @@
 """JsonlAuditSink — OSS default: append-only JSONL audit trail."""
 import json
+import os
 from pathlib import Path
 
 from datahek.contracts.audit import AuditEvent, AuditSink
@@ -7,7 +8,7 @@ from datahek.contracts.audit import AuditEvent, AuditSink
 
 class JsonlAuditSink(AuditSink):
     def __init__(self, path: Path | str | None = None):
-        self._path = Path(path) if path else Path("datahek-audit.jsonl")
+        self._path = Path(path or os.getenv("DATAHEK_AUDIT_PATH", "datahek-audit.jsonl"))
 
     async def record(self, event: AuditEvent) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)

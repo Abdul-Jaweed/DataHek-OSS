@@ -165,7 +165,8 @@ def create_app(container=None) -> FastAPI:
             result = await engine.execute(ctx, plan_result.plan, conn)
             columns = [c["name"] for c in result.columns]
             rows = [dict(zip(columns, row)) for row in result.rows]
-            explanation = await reasoner.explain(req.question, result, plan_result.plan, ctx)
+            from datahek.defaults.guardrails import redact_pii
+            explanation = redact_pii(await reasoner.explain(req.question, result, plan_result.plan, ctx))
             answer = {
                 "clarification": None,
                 "answer": explanation,

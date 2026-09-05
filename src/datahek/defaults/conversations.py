@@ -5,6 +5,7 @@ ConversationStore contract (PostgreSQL, RLS).
 """
 import asyncio
 import json
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -35,8 +36,8 @@ CREATE INDEX IF NOT EXISTS idx_conversations_tenant ON conversations(org_id, pro
 
 
 class SqliteConversationStore:
-    def __init__(self, path: Path | str = "datahek.db"):
-        self._path = Path(path)
+    def __init__(self, path: Path | str | None = None):
+        self._path = Path(path or os.getenv("DATAHEK_DB_PATH", "datahek.db"))
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with self._session() as conn:
             conn.executescript(_SCHEMA)

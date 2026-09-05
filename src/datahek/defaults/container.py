@@ -19,6 +19,7 @@ from datahek.defaults.auth import LocalAuthProvider
 from datahek.defaults.connections import LocalConnectionManager
 from datahek.defaults.conversations import SqliteConversationStore
 from datahek.defaults.evaluation import InMemoryEvaluationStore, LocalEvaluator
+from datahek.defaults.masking import TagBasedMaskingPolicy
 from datahek.defaults.models import OpenAICompatibleModelProvider
 from datahek.defaults.policy import LocalPolicyEngine
 from datahek.defaults.secrets import EnvSecretsProvider
@@ -65,5 +66,6 @@ def build_app_container() -> Container:
         schema_service=c.resolve(SchemaService),
         audit_sink=c.resolve(AuditSink),
         evaluation_hook=LocalEvaluator(c.resolve(EvaluationStore)),
+        masking_policy=TagBasedMaskingPolicy(),
     ), singleton=True)
     return c

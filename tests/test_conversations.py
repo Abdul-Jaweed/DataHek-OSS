@@ -77,6 +77,18 @@ class TestConversationStore(unittest.TestCase):
         conv = _run(store2.get(self.ctx, "conv_1"))
         self.assertEqual(conv["messages"][0]["content"], "persisted")
 
+    def test_env_path_override(self):
+        import os
+
+        target = str(Path(self._tmp.name) / "env.db")
+        os.environ["DATAHEK_DB_PATH"] = target
+        try:
+            store = SqliteConversationStore()
+            _run(store.create(self.ctx, "conv_1"))
+        finally:
+            os.environ.pop("DATAHEK_DB_PATH", None)
+        self.assertTrue(Path(target).exists())
+
 
 class TestAskRecordsConversation(unittest.TestCase):
     def test_ask_with_conversation_records_turns(self):
