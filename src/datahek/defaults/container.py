@@ -15,7 +15,9 @@ from datahek.contracts.reasoner import Reasoner
 from datahek.contracts.secrets import SecretsProvider
 from datahek.contracts.tenancy import TenantContext
 from datahek.connectors.clickhouse import ClickHouseProvider
+from datahek.connectors.mysql import MySQLProvider
 from datahek.connectors.postgres import PostgresProvider
+from datahek.connectors.sqlite import SQLiteProvider
 from datahek.defaults.audit import JsonlAuditSink
 from datahek.defaults.auth import AuthConfig, LocalAuthProvider
 from datahek.defaults.connections import LocalConnectionManager
@@ -58,6 +60,8 @@ def build_app_container() -> Container:
     registry = ProviderRegistry()
     registry.register(ClickHouseProvider())
     registry.register(PostgresProvider())
+    registry.register(MySQLProvider())
+    registry.register(SQLiteProvider())
     c.register(ProviderRegistry, registry, singleton=True)
     c.register(SchemaService, SchemaService(), singleton=True)
     c.register(ModelProvider, OpenAICompatibleModelProvider(), singleton=True)
