@@ -3,6 +3,8 @@
 Enterprise replaces implementations via ``Container.override`` — the agent
 and API code never change.
 """
+import os
+
 from datahek.contracts.audit import AuditSink
 from datahek.contracts.auth import AuthProvider
 from datahek.contracts.connections import ConnectionManager
@@ -21,12 +23,19 @@ from datahek.connectors.sqlite import SQLiteProvider
 from datahek.defaults.audit import JsonlAuditSink
 from datahek.defaults.auth import AuthConfig, LocalAuthProvider
 from datahek.defaults.connections import LocalConnectionManager
+from datahek.defaults.connections_pg import PostgresConnectionManager
 from datahek.defaults.conversations import SqliteConversationStore
+from datahek.defaults.conversations_pg import PostgresConversationStore
 from datahek.defaults.evaluation import InMemoryEvaluationStore, LocalEvaluator
+from datahek.defaults.evaluation_pg import PostgresEvaluationStore
+from datahek.defaults.infisical import InfisicalSecretsProvider
 from datahek.defaults.masking import TagBasedMaskingPolicy
 from datahek.defaults.models import OpenAICompatibleModelProvider
+from datahek.defaults.pg import PgMetadata, metadata_config
 from datahek.defaults.policy import LocalPolicyEngine
 from datahek.defaults.prompts import SqlitePromptStore
+from datahek.defaults.prompts_pg import PostgresPromptStore
+from datahek.defaults.redis_llm import RedisLlmSettingsStore
 from datahek.defaults.secrets import EnvSecretsProvider
 from datahek.defaults.tenancy import SingleTenantContext
 from datahek.engine.executor import Engine, ProviderRegistry
@@ -41,15 +50,32 @@ from datahek.kernel.entitlements import EntitlementProvider
 def build_default_container() -> Container:
     c = Container()
     c.register(AuthConfig, config_from_env(AuthConfig, prefix="DATAHEK_AUTH_"), singleton=True)
-    c.register(AuthProvider, LocalAuthProvider.from_env(), singleton=True)
+    if InfisicalSecretsProvider.is_configured():
+        c.register(SecretsProvider, InfisicalSecretsProvider.from_env(), singleton=True)
+    else:
+        c.register(SecretsProvider, EnvSecretsProvider(), singleton=True)
+    if isinstance(c.resolve(SecretsProvider), InfisicalSecretsProvider):
+        c.register(AuthProvider,
+                   LocalAuthProvider.from_infisical(c.resolve(SecretsProvider)), singleton=True)
+    else:
+        c.register(AuthProvider, LocalAuthProvider.from_env(), singleton=True)
     c.register(TenantContext, SingleTenantContext(), singleton=True)
     c.register(AuditSink, JsonlAuditSink(), singleton=True)
     c.register(PolicyEngine, LocalPolicyEngine(), singleton=True)
-    c.register(SecretsProvider, EnvSecretsProvider(), singleton=True)
-    c.register(ConnectionManager, LocalConnectionManager(), singleton=True)
+    pg = PgMetadata()
+    if pg._url:
+        c.register(PgMetadata, pg, singleton=True)
+        c.register(ConnectionManager,
+                   PostgresConnectionManager(
+                       pg, encryption_key=os.environ.get("DATAHEK_ENCRYPTION_KEY")),
+                   singleton=True)
+        c.register(ConversationStore, PostgresConversationStore(pg), singleton=True)
+        c.register(PromptStore, PostgresPromptStore(pg), singleton=True)
+    else:
+        c.register(ConnectionManager, LocalConnectionManager(), singleton=True)
+        c.register(ConversationStore, SqliteConversationStore(), singleton=True)
+        c.register(PromptStore, SqlitePromptStore(), singleton=True)
     c.register(EntitlementProvider, EntitlementProvider(), singleton=True)
-    c.register(ConversationStore, SqliteConversationStore(), singleton=True)
-    c.register(PromptStore, SqlitePromptStore(), singleton=True)
     return c
 
 
@@ -64,12 +90,30 @@ def build_app_container() -> Container:
     registry.register(SQLiteProvider())
     c.register(ProviderRegistry, registry, singleton=True)
     c.register(SchemaService, SchemaService(), singleton=True)
-    c.register(ModelProvider, OpenAICompatibleModelProvider(), singleton=True)
-    c.register(EvaluationStore, InMemoryEvaluationStore(), singleton=True)
+
+    cfg = metadata_config()
+    settings_store = None
+    if cfg.redis_url:
+        settings_store = RedisLlmSettingsStore(url=cfg.redis_url)
+        c.register(RedisLlmSettingsStore, settings_store, singleton=True)
+
+    if isinstance(c.resolve(SecretsProvider), InfisicalSecretsProvider):
+        model_provider = OpenAICompatibleModelProvider.from_infisical(c.resolve(SecretsProvider))
+        if settings_store is not None and hasattr(model_provider, "_settings_store"):
+            model_provider._settings_store = settings_store
+    else:
+        model_provider = OpenAICompatibleModelProvider(settings_store=settings_store)
+    c.register(ModelProvider, model_provider, singleton=True)
+
+    if c.has(PgMetadata) and getattr(c.resolve(PgMetadata), "_url", None):
+        c.register(EvaluationStore, PostgresEvaluationStore(c.resolve(PgMetadata)), singleton=True)
+    else:
+        c.register(EvaluationStore, InMemoryEvaluationStore(), singleton=True)
 
     c.register(Planner, lambda: Planner(
         model=c.resolve(ModelProvider),
         schema_service=c.resolve(SchemaService),
+        secrets=c.resolve(SecretsProvider),
     ), singleton=True)
     c.register(Reasoner, lambda: ModelReasoner(model=c.resolve(ModelProvider)), singleton=True)
     c.register(Engine, lambda: Engine(
@@ -78,5 +122,6 @@ def build_app_container() -> Container:
         audit_sink=c.resolve(AuditSink),
         evaluation_hook=LocalEvaluator(c.resolve(EvaluationStore)),
         masking_policy=TagBasedMaskingPolicy(),
+        secrets=c.resolve(SecretsProvider),
     ), singleton=True)
     return c

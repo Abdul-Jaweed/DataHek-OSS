@@ -65,7 +65,7 @@ cp .env.example .env        # then edit LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
 docker compose up -d --build
 
 # 4. open the app
-open http://localhost:8000            # web UI + API docs at /docs
+# API docs: http://localhost:8000/docs · web app: cd apps/web && npm install && npm run dev → http://localhost:5173
 ```
 
 | Service | Port | Purpose |
@@ -151,6 +151,43 @@ python -m datahek.mcp_server    # streamable HTTP on :8001
 | `DATAHEK_AUDIT_PATH` | `datahek-audit.jsonl` | Audit trail (JSONL) |
 | `DATAHEK_AUTH_MODE` | `none` | `none` or `local` (enforce API keys) |
 | `DATAHEK_AUTH_LOCAL_USERS` | `{"datahek":"datahek"}` | JSON `{"user":"password"}` for local auth |
+| `DATAHEK_METADATA_URL` | *(empty)* | PostgreSQL URL for durable connections/conversations/prompts/evaluations (empty → SQLite/in-memory defaults) |
+| `DATAHEK_METADATA_REDIS_URL` | *(empty)* | Redis URL for LLM settings persistence across restarts (empty → runtime settings only) |
+| `DATAHEK_ENCRYPTION_KEY` | *(empty)* | Optional: encrypt connection settings at rest in PostgreSQL |
+| `INFISICAL_HOST` / `INFISICAL_CLIENT_ID` / `INFISICAL_CLIENT_SECRET` / `INFISICAL_PROJECT_ID` / `INFISICAL_ENVIRONMENT` | *(empty)* / `dev` | Optional: fetch secrets from Infisical (see below) |
+
+### Persistent metadata (optional)
+
+By default DataHek keeps state in local SQLite (`DATAHEK_DB_PATH`) and in-memory
+structures. For durable, restart-proof metadata set `DATAHEK_METADATA_URL` (and
+optionally `DATAHEK_METADATA_REDIS_URL`):
+
+- **PostgreSQL** — when `DATAHEK_METADATA_URL` is set, connections,
+  conversations, prompt templates, and evaluation runs are stored in
+  PostgreSQL. The schema is created automatically at API startup.
+  `DATAHEK_ENCRYPTION_KEY` encrypts stored connection settings at rest
+  (any non-empty string); without it, settings are stored as plain JSON.
+  This encryption-at-rest guarantee covers PostgreSQL connection settings
+  only — the Redis LLM settings store persists the API key as plaintext,
+  so treat `DATAHEK_METADATA_REDIS_URL` as sensitive.
+- **Redis** — when `DATAHEK_METADATA_REDIS_URL` is set, LLM settings saved via
+  the UI/API (`/settings/llm`) persist across API restarts and are re-applied on
+  startup.
+- **Infisical** — with `INFISICAL_HOST` / `INFISICAL_CLIENT_ID` /
+  `INFISICAL_CLIENT_SECRET` / `INFISICAL_PROJECT_ID` set, secrets are fetched
+  from Infisical: database credentials referenced as
+  `secret://infisical/<folder>/<key>` in connection settings, auth users at the
+  `/auth` folder (`datahek_users`), and LLM configuration at `/llm`.
+
+The Docker quick start already wires all of this up: `docker compose up -d
+--build` starts `postgres` (port `5433`) and `redis` (port `6380`) alongside
+the `api` and `mcp` services, so metadata is persistent by default in the
+compose stack. Leave the URLs unset to keep the zero-dependency SQLite defaults.
+
+> **Security note:** the development compose publishes PostgreSQL (`5433`) and
+> Redis (`6380`) on localhost with default credentials (`datahek`/`datahek`,
+> no Redis password). Do not expose these ports beyond localhost in shared or
+> production environments.
 
 ---
 

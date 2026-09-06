@@ -3,16 +3,57 @@
 #   api  :8000  (OpenAPI at /docs)
 #   mcp  :8001  (MCP endpoint at /mcp)
 # State (SQLite db + audit jsonl) lives in the datahek-data volume.
+# Optional persistent metadata: when DATAHEK_METADATA_URL is set (as below),
+# connections/conversations/prompts/evaluations live in PostgreSQL and LLM
+# settings survive restarts via Redis.
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: datahek-oss-postgres
+    environment:
+      POSTGRES_USER: datahek
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datahek}
+      POSTGRES_DB: datahek
+    ports:
+      - "5433:5432"
+    volumes:
+      - datahek-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datahek"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: datahek-oss-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - datahek-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   api:
     build: .
     container_name: datahek-oss-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       LLM_BASE_URL: ${LLM_BASE_URL:-https://opencode.ai/zen/go/v1}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-mimo-v2.5}
       DATAHEK_DB_PATH: /app/data/datahek.db
       DATAHEK_AUDIT_PATH: /app/data/datahek-audit.jsonl
+      DATAHEK_METADATA_URL: postgresql://datahek:${POSTGRES_PASSWORD:-datahek}@postgres:5432/datahek
+      DATAHEK_ENCRYPTION_KEY: ${DATAHEK_ENCRYPTION_KEY:-}
+      DATAHEK_METADATA_REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
     volumes:
@@ -28,12 +69,20 @@ services:
     build: .
     container_name: datahek-oss-mcp
     command: python -m datahek.mcp_server --transport http --host 0.0.0.0 --port 8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       LLM_BASE_URL: ${LLM_BASE_URL:-https://opencode.ai/zen/go/v1}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-mimo-v2.5}
       DATAHEK_DB_PATH: /app/data/datahek.db
       DATAHEK_AUDIT_PATH: /app/data/datahek-audit.jsonl
+      DATAHEK_METADATA_URL: postgresql://datahek:${POSTGRES_PASSWORD:-datahek}@postgres:5432/datahek
+      DATAHEK_ENCRYPTION_KEY: ${DATAHEK_ENCRYPTION_KEY:-}
+      DATAHEK_METADATA_REDIS_URL: redis://redis:6379/0
     ports:
       - "8001:8001"
     volumes:
@@ -41,3 +90,5 @@ services:
 
 volumes:
   datahek-data:
+  datahek-pg:
+  datahek-redis:

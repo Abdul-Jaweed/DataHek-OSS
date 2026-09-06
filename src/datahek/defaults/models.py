@@ -4,10 +4,19 @@ Talks to any OpenAI-compatible /chat/completions endpoint (opencode, Groq,
 local LLMs). Uses httpx (optional dependency: ``datahek-core[llm]``).
 HTTP failures surface as typed ``ModelProviderError`` — never raw driver text.
 """
+import logging
 from typing import Any
 
 from datahek.contracts.models import ModelProvider, ModelProviderError, ModelRequest, ModelResponse
+from datahek.contracts.secrets import SecretRef, SecretsProvider
+from datahek.defaults.async_util import run_sync
 from datahek.kernel.config import Config, config_from_env
+
+_LLM_SECRET_FIELDS = (
+    ("llm_base_url", "base_url"),
+    ("llm_api_key", "api_key"),
+    ("llm_model", "model"),
+)
 
 
 class ModelConfig(Config):
@@ -18,8 +27,40 @@ class ModelConfig(Config):
 
 
 class OpenAICompatibleModelProvider(ModelProvider):
-    def __init__(self, config: ModelConfig | None = None):
+    def __init__(self, config: ModelConfig | None = None,
+                 settings_store: "RedisLlmSettingsStore | None" = None):
         self._config = config or config_from_env(ModelConfig, prefix="LLM_")
+        self._settings_store = settings_store
+
+    @classmethod
+    def from_infisical(cls, secrets: SecretsProvider) -> "OpenAICompatibleModelProvider":
+        """Build from Infisical ``/llm`` secrets (llm_base_url/api_key/model), env fallback.
+
+        Env (``LLM_*``) is the baseline; each Infisical value that resolves
+        successfully overrides its field. Unavailable secrets keep env values.
+        """
+        async def _resolve():
+            cfg = config_from_env(ModelConfig, prefix="LLM_")
+            overrides: dict[str, str] = {}
+            for secret_key, field in _LLM_SECRET_FIELDS:
+                ref = SecretRef(provider="infisical", name=f"llm/{secret_key}")
+                try:
+                    value = await secrets.get_secret(ref)
+                except Exception as exc:
+                    logging.getLogger(__name__).warning(
+                        "LLM secret '%s' unavailable from Infisical (%s); using env value",
+                        secret_key, exc)
+                    continue
+                if value.value:
+                    overrides[field] = value.value
+            if not overrides:
+                return cfg
+            from dataclasses import replace
+            if overrides.get("base_url"):
+                overrides["base_url"] = overrides["base_url"].rstrip("/")
+            return replace(cfg, **overrides)
+
+        return cls(config=run_sync(_resolve()))
 
     async def configure(self, base_url: str | None = None, api_key: str | None = None,
                         model: str | None = None) -> None:
@@ -30,6 +71,25 @@ class OpenAICompatibleModelProvider(ModelProvider):
             api_key=self._config.api_key if api_key is None else api_key,
             model=model or self._config.model,
         )
+
+    async def reload_from_store(self) -> None:
+        """Apply persisted Redis settings as overrides on top of env config."""
+        if self._settings_store is None:
+            return
+        stored = await self._settings_store.load()
+        if not stored:
+            return
+        overrides = {k: v for k, v in stored.items()
+                     if k in ("base_url", "api_key", "model") and v is not None}
+        if not overrides:
+            return
+        from dataclasses import replace
+        if overrides.get("base_url"):
+            overrides["base_url"] = overrides["base_url"].rstrip("/")
+        self._config = replace(self._config, **overrides)
+
+    def model_id(self) -> str:
+        return self._config.model
 
     async def describe(self) -> dict:
         return {

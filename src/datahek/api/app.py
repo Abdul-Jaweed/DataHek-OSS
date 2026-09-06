@@ -1,5 +1,7 @@
 """DataHek OSS API — health, connections, ask, conversations, evaluations, web UI."""
+import logging
 import time
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -19,6 +21,16 @@ from datahek.kernel.capabilities import OSS_CAPABILITIES
 from datahek.kernel.context import RequestContext
 from datahek.kernel.entitlements import EntitlementProvider
 from datahek.kernel.errors import DatahekError, ErrorCode
+
+try:
+    from datahek.defaults.pg import PgMetadata
+except ImportError:  # optional extra; metadata absent → PG wiring disabled
+    PgMetadata = None
+
+try:
+    from datahek.defaults.redis_llm import RedisLlmSettingsStore
+except ImportError:  # optional extra; store absent → behavior unchanged
+    RedisLlmSettingsStore = None
 
 _STATUS_BY_CODE = {
     ErrorCode.NOT_FOUND: 404,
@@ -155,7 +167,23 @@ def create_app(container=None) -> FastAPI:
             "conversation_id": req.conversation_id,
         }
 
-    app = FastAPI(title="DataHek OSS", version=__version__)
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if PgMetadata is not None and c.has(PgMetadata):
+            pg = c.resolve(PgMetadata)
+            if pg is not None and getattr(pg, "_url", None):
+                await pg.init_schema()
+        if RedisLlmSettingsStore is not None and c.has(RedisLlmSettingsStore):
+            reload = getattr(model_provider, "reload_from_store", None)
+            if reload is not None:
+                try:
+                    await reload()
+                except Exception as exc:
+                    logging.getLogger(__name__).warning(
+                        "LLM settings reload from Redis failed (%s); continuing with env config", exc)
+        yield
+
+    app = FastAPI(title="DataHek OSS", version=__version__, lifespan=lifespan)
     conn_mgr: ConnectionManager = c.resolve(ConnectionManager)
     registry: ProviderRegistry = c.resolve(ProviderRegistry)
     planner: Planner = c.resolve(Planner)
@@ -234,6 +262,14 @@ def create_app(container=None) -> FastAPI:
     @app.post("/settings/llm")
     async def set_llm_settings(req: LlmSettingsRequest, _identity=Depends(_require_auth)):
         await model_provider.configure(**req.model_dump(exclude_none=True))
+        if RedisLlmSettingsStore is not None and c.has(RedisLlmSettingsStore):
+            try:
+                await c.resolve(RedisLlmSettingsStore).save(req.model_dump(exclude_none=True))
+            except Exception as exc:
+                import logging
+                logging.getLogger("datahek.api").warning(
+                    "Failed to persist LLM settings to store: %s", exc
+                )
         return await model_provider.describe()
 
     @app.post("/connections", status_code=201)
