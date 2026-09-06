@@ -17,8 +17,11 @@ CREATE TABLE IF NOT EXISTS connections (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, provider TEXT NOT NULL,
   org_id TEXT NOT NULL, project_id TEXT NOT NULL,
   host TEXT, port INTEGER, database TEXT, settings_json TEXT NOT NULL,
+  secret_ref_provider TEXT, secret_ref_name TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS secret_ref_provider TEXT;
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS secret_ref_name TEXT;
 CREATE TABLE IF NOT EXISTS conversations (
   id TEXT PRIMARY KEY, org_id TEXT NOT NULL, project_id TEXT NOT NULL,
   title TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now()

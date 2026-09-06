@@ -193,6 +193,61 @@ class TestPostgresConnectionManager(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_secret_ref_round_trip(self):
+        import asyncio
+        from datahek.defaults.pg import PgMetadata
+        from datahek.defaults.connections_pg import PostgresConnectionManager
+        from datahek.contracts.connections import Connection
+        from datahek.contracts.secrets import SecretRef
+        from datahek.kernel.context import RequestContext
+
+        async def run():
+            pg = PgMetadata(url=PG_URL)
+            await pg.init_schema()
+            mgr = PostgresConnectionManager(pg, encryption_key="test-key-32-bytes-long!!")
+            ctx = RequestContext(source="api")
+            conn = Connection(id="sref2", name="sref2-name", provider="clickhouse",
+                              org_id="default", project_id="default",
+                              secret_ref=SecretRef(provider="infisical", name="pg_password"),
+                              settings={"password": "s3cret"})
+            await mgr.add(ctx, conn)
+            try:
+                got = await mgr.get_connection(ctx, "sref2")
+                self.assertEqual(got.secret_ref, SecretRef(provider="infisical", name="pg_password"))
+                listed = [c for c in await mgr.list_connections(ctx) if c.id == "sref2"]
+                self.assertEqual(len(listed), 1)
+                self.assertEqual(listed[0].secret_ref, SecretRef(provider="infisical", name="pg_password"))
+            finally:
+                await mgr.remove(ctx, "sref2")
+                await pg.close()
+
+        asyncio.run(run())
+
+    def test_secret_ref_absent_stays_none(self):
+        import asyncio
+        from datahek.defaults.pg import PgMetadata
+        from datahek.defaults.connections_pg import PostgresConnectionManager
+        from datahek.contracts.connections import Connection
+        from datahek.kernel.context import RequestContext
+
+        async def run():
+            pg = PgMetadata(url=PG_URL)
+            await pg.init_schema()
+            mgr = PostgresConnectionManager(pg, encryption_key="test-key-32-bytes-long!!")
+            ctx = RequestContext(source="api")
+            conn = Connection(id="noref1", name="noref-name", provider="clickhouse",
+                              org_id="default", project_id="default",
+                              settings={"password": "s3cret"})
+            await mgr.add(ctx, conn)
+            try:
+                got = await mgr.get_connection(ctx, "noref1")
+                self.assertIsNone(got.secret_ref)
+            finally:
+                await mgr.remove(ctx, "noref1")
+                await pg.close()
+
+        asyncio.run(run())
+
 
 if __name__ == "__main__":
     unittest.main()

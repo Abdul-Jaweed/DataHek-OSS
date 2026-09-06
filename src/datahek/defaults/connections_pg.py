@@ -12,11 +12,15 @@ import json
 from cryptography.fernet import Fernet
 
 from datahek.contracts.connections import Connection
+from datahek.contracts.secrets import SecretRef
 from datahek.defaults.pg import PgMetadata
 from datahek.kernel.context import RequestContext
 from datahek.kernel.errors import DatahekError, ErrorCode
 
-_COLUMNS = "id, name, provider, org_id, project_id, host, port, database, settings_json"
+_COLUMNS = (
+    "id, name, provider, org_id, project_id, host, port, database,"
+    " settings_json, secret_ref_provider, secret_ref_name"
+)
 
 
 def _derive_fernet_key(encryption_key: str) -> bytes:
@@ -46,8 +50,9 @@ class PostgresConnectionManager:
                 )
             conn.execute(
                 "INSERT INTO connections (id, name, provider, org_id, project_id,"
-                " host, port, database, settings_json) VALUES (%s, %s, %s, %s, %s,"
-                " %s, %s, %s, %s)",
+                " host, port, database, settings_json, secret_ref_provider,"
+                " secret_ref_name) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,"
+                " %s)",
                 (
                     connection.id,
                     connection.name,
@@ -58,6 +63,8 @@ class PostgresConnectionManager:
                     connection.port,
                     connection.database,
                     self._encode_settings(connection.settings),
+                    connection.secret_ref.provider if connection.secret_ref else None,
+                    connection.secret_ref.name if connection.secret_ref else None,
                 ),
             )
         finally:
@@ -120,6 +127,9 @@ class PostgresConnectionManager:
             return json.loads(self._fernet.decrypt(stored.encode()))
 
     def _row_to_connection(self, row) -> Connection:
+        secret_ref = None
+        if row[9] is not None and row[10] is not None:
+            secret_ref = SecretRef(provider=row[9], name=row[10])
         return Connection(
             id=row[0],
             name=row[1],
@@ -130,4 +140,5 @@ class PostgresConnectionManager:
             port=row[6],
             database=row[7],
             settings=self._decode_settings(row[8]),
+            secret_ref=secret_ref,
         )
