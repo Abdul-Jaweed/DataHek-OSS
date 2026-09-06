@@ -65,6 +65,18 @@ services:
       retries: 5
       start_period: 10s
 
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: datahek-oss-web
+    depends_on:
+      - api
+    environment:
+      API_PROXY_TARGET: http://api:8000
+    ports:
+      - "5173:5173"
+
   mcp:
     build: .
     container_name: datahek-oss-mcp
