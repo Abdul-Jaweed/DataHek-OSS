@@ -88,6 +88,26 @@ class TestAuthFromInfisical(unittest.TestCase):
             provider = LocalAuthProvider.from_infisical(secrets)
         self.assertTrue(asyncio.run(provider.authenticate("envuser", "envpw")).authenticated)
 
+    def test_fails_closed_when_infisical_provider_raises(self):
+        infisical = InfisicalSecretsProvider(host="https://infisical.test", client_id="cid",
+                                             client_secret="csec", project_id="pid")
+        with mock.patch.dict(os.environ, {"DATAHEK_AUTH_LOCAL_USERS": '{"envuser": "envpw"}'}), \
+             mock.patch.object(InfisicalSecretsProvider, "get_secret",
+                               new=mock.AsyncMock(side_effect=RuntimeError("infisical down"))):
+            provider = LocalAuthProvider.from_infisical(infisical)
+
+        self.assertFalse(asyncio.run(provider.authenticate("datahek", "datahek")).authenticated)
+        self.assertFalse(asyncio.run(provider.authenticate("envuser", "envpw")).authenticated)
+
+    def test_fails_closed_when_infisical_payload_invalid(self):
+        infisical = InfisicalSecretsProvider(host="https://infisical.test", client_id="cid",
+                                             client_secret="csec", project_id="pid")
+        with mock.patch.object(InfisicalSecretsProvider, "get_secret",
+                               new=mock.AsyncMock(return_value=SecretValue(value="not json"))):
+            provider = LocalAuthProvider.from_infisical(infisical)
+
+        self.assertFalse(asyncio.run(provider.authenticate("datahek", "datahek")).authenticated)
+
     def test_env_secrets_provider_triggers_fallback(self):
         secrets = EnvSecretsProvider()
         with mock.patch.dict(os.environ, {"DATAHEK_AUTH_LOCAL_USERS": '{"envuser": "envpw"}'}):

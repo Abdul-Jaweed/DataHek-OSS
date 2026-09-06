@@ -1,4 +1,5 @@
 """DataHek OSS API — health, connections, ask, conversations, evaluations, web UI."""
+import logging
 import time
 from contextlib import asynccontextmanager
 from typing import Any
@@ -175,7 +176,11 @@ def create_app(container=None) -> FastAPI:
         if RedisLlmSettingsStore is not None and c.has(RedisLlmSettingsStore):
             reload = getattr(model_provider, "reload_from_store", None)
             if reload is not None:
-                await reload()
+                try:
+                    await reload()
+                except Exception as exc:
+                    logging.getLogger(__name__).warning(
+                        "LLM settings reload from Redis failed (%s); continuing with env config", exc)
         yield
 
     app = FastAPI(title="DataHek OSS", version=__version__, lifespan=lifespan)

@@ -154,7 +154,7 @@ python -m datahek.mcp_server    # streamable HTTP on :8001
 | `DATAHEK_METADATA_URL` | *(empty)* | PostgreSQL URL for durable connections/conversations/prompts/evaluations (empty → SQLite/in-memory defaults) |
 | `DATAHEK_METADATA_REDIS_URL` | *(empty)* | Redis URL for LLM settings persistence across restarts (empty → runtime settings only) |
 | `DATAHEK_ENCRYPTION_KEY` | *(empty)* | Optional: encrypt connection settings at rest in PostgreSQL |
-| `INFISICAL_HOST` / `INFISICAL_CLIENT_ID` / `INFISICAL_CLIENT_SECRET` / `INFISICAL_PROJECT_ID` | *(empty)* | Optional: fetch secrets from Infisical (see below) |
+| `INFISICAL_HOST` / `INFISICAL_CLIENT_ID` / `INFISICAL_CLIENT_SECRET` / `INFISICAL_PROJECT_ID` / `INFISICAL_ENVIRONMENT` | *(empty)* / `dev` | Optional: fetch secrets from Infisical (see below) |
 
 ### Persistent metadata (optional)
 
@@ -167,6 +167,9 @@ optionally `DATAHEK_METADATA_REDIS_URL`):
   PostgreSQL. The schema is created automatically at API startup.
   `DATAHEK_ENCRYPTION_KEY` encrypts stored connection settings at rest
   (any non-empty string); without it, settings are stored as plain JSON.
+  This encryption-at-rest guarantee covers PostgreSQL connection settings
+  only — the Redis LLM settings store persists the API key as plaintext,
+  so treat `DATAHEK_METADATA_REDIS_URL` as sensitive.
 - **Redis** — when `DATAHEK_METADATA_REDIS_URL` is set, LLM settings saved via
   the UI/API (`/settings/llm`) persist across API restarts and are re-applied on
   startup.
@@ -180,6 +183,11 @@ The Docker quick start already wires all of this up: `docker compose up -d
 --build` starts `postgres` (port `5433`) and `redis` (port `6380`) alongside
 the `api` and `mcp` services, so metadata is persistent by default in the
 compose stack. Leave the URLs unset to keep the zero-dependency SQLite defaults.
+
+> **Security note:** the development compose publishes PostgreSQL (`5433`) and
+> Redis (`6380`) on localhost with default credentials (`datahek`/`datahek`,
+> no Redis password). Do not expose these ports beyond localhost in shared or
+> production environments.
 
 ---
 

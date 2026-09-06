@@ -1,5 +1,6 @@
 """InfisicalSecretsProvider + secret:// reference resolution."""
 import asyncio
+import os
 import unittest
 from unittest import mock
 
@@ -13,6 +14,7 @@ from datahek.engine.executor import Engine, ProviderRegistry, _resolve_secrets
 from datahek.engine.plan import LogicalPlan, ReadNode
 from datahek.engine.schema import ColumnMeta, SchemaCatalog, SchemaService, TableMeta
 from datahek.kernel.context import RequestContext
+from datahek.kernel.errors import DatahekError
 
 
 class _FakeSecrets:
@@ -79,13 +81,14 @@ class TestInfisicalSecretsProvider(unittest.TestCase):
         get_url = get.call_args.args[0]
         self.assertIn("/api/v3/secrets/raw/pg_password", get_url)
         self.assertEqual(get.call_args.kwargs["headers"]["Authorization"], "Bearer tok")
-        self.assertEqual(get.call_args.kwargs["params"], {"environment": "dev", "secretPath": "/"})
+        self.assertEqual(get.call_args.kwargs["params"],
+                         {"environment": "dev", "secretPath": "/", "workspaceId": "pid"})
 
     def test_get_secret_derives_folder_from_ref_name(self):
         from datahek.defaults.infisical import InfisicalSecretsProvider
 
         provider = InfisicalSecretsProvider(host="https://infisical.test", client_id="cid",
-                                            client_secret="csec")
+                                            client_secret="csec", project_id="pid")
         with mock.patch.object(httpx.AsyncClient, "post", new=mock.AsyncMock()) as post, \
              mock.patch.object(httpx.AsyncClient, "get", new=mock.AsyncMock()) as get:
             post.return_value = _FakeResponse({"accessToken": "tok"})
@@ -96,26 +99,79 @@ class TestInfisicalSecretsProvider(unittest.TestCase):
         self.assertIn("/api/v3/secrets/raw/pg_password", get_url)
         self.assertEqual(get.call_args.kwargs["params"]["secretPath"], "/creds")
 
-    def test_store_secret_posts_secret_value(self):
+    def test_get_secret_requires_project_id(self):
         from datahek.defaults.infisical import InfisicalSecretsProvider
 
         provider = InfisicalSecretsProvider(host="https://infisical.test", client_id="cid",
                                             client_secret="csec")
+        with self.assertRaises(DatahekError) as cm:
+            asyncio.run(provider.get_secret(SecretRef(provider="infisical", name="pg_password")))
+        self.assertEqual(cm.exception.code.value, "VALIDATION")
+        self.assertIn("Infisical project_id not configured", str(cm.exception))
+
+    def test_store_secret_requires_project_id(self):
+        from datahek.defaults.infisical import InfisicalSecretsProvider
+
+        provider = InfisicalSecretsProvider(host="https://infisical.test", client_id="cid",
+                                            client_secret="csec")
+        with self.assertRaises(DatahekError) as cm:
+            asyncio.run(provider.store_secret(SecretRef(provider="infisical", name="pg_password"),
+                                              SecretValue(value="sup3r")))
+        self.assertIn("Infisical project_id not configured", str(cm.exception))
+
+    def test_environment_configurable_per_instance(self):
+        from datahek.defaults.infisical import InfisicalSecretsProvider
+
+        provider = InfisicalSecretsProvider(host="https://infisical.test", client_id="cid",
+                                            client_secret="csec", project_id="pid",
+                                            environment="prod")
+        with mock.patch.object(httpx.AsyncClient, "post", new=mock.AsyncMock()) as post, \
+             mock.patch.object(httpx.AsyncClient, "get", new=mock.AsyncMock()) as get:
+            post.return_value = _FakeResponse({"accessToken": "tok"})
+            get.return_value = _FakeResponse({"secretValue": "sup3r"})
+            asyncio.run(provider.get_secret(SecretRef(provider="infisical", name="pg_password")))
+
+        self.assertEqual(get.call_args.kwargs["params"]["environment"], "prod")
+        self.assertEqual(get.call_args.kwargs["params"]["workspaceId"], "pid")
+
+    def test_from_env_reads_environment(self):
+        from datahek.defaults.infisical import InfisicalSecretsProvider
+
+        with mock.patch.dict(os.environ, {
+            "INFISICAL_HOST": "https://infisical.test",
+            "INFISICAL_CLIENT_ID": "cid",
+            "INFISICAL_CLIENT_SECRET": "csec",
+            "INFISICAL_PROJECT_ID": "pid",
+            "INFISICAL_ENVIRONMENT": "prod",
+        }):
+            provider = InfisicalSecretsProvider.from_env()
+
+        self.assertEqual(provider._host, "https://infisical.test")
+        self.assertEqual(provider._project_id, "pid")
+        self.assertEqual(provider._environment, "prod")
+
+    def test_store_secret_posts_secret_value(self):
+        from datahek.defaults.infisical import InfisicalSecretsProvider
+
+        provider = InfisicalSecretsProvider(host="https://infisical.test", client_id="cid",
+                                            client_secret="csec", project_id="pid")
         with mock.patch.object(httpx.AsyncClient, "post", new=mock.AsyncMock()) as post:
             post.return_value = _FakeResponse({"accessToken": "tok"})
             asyncio.run(provider.store_secret(SecretRef(provider="infisical", name="creds/pg_password"),
                                               SecretValue(value="sup3r")))
 
-        store_calls = [c for c in post.call_args_list if "/api/v3/secrets/pg_password" in c.args[0]]
+        store_calls = [c for c in post.call_args_list if "/api/v3/secrets/raw/pg_password" in c.args[0]]
         self.assertEqual(len(store_calls), 1)
         self.assertEqual(store_calls[0].kwargs["json"],
-                         {"secretValue": "sup3r", "environment": "dev", "secretPath": "/creds"})
+                         {"secretValue": "sup3r", "environment": "dev", "secretPath": "/creds",
+                          "type": "shared"})
+        self.assertEqual(store_calls[0].kwargs["params"], {"workspaceId": "pid"})
 
     def test_token_cached_between_calls(self):
         from datahek.defaults.infisical import InfisicalSecretsProvider
 
         provider = InfisicalSecretsProvider(host="https://infisical.test", client_id="cid",
-                                            client_secret="csec")
+                                            client_secret="csec", project_id="pid")
         with mock.patch.object(httpx.AsyncClient, "post", new=mock.AsyncMock()) as post, \
              mock.patch.object(httpx.AsyncClient, "get", new=mock.AsyncMock()) as get:
             post.return_value = _FakeResponse({"accessToken": "tok"})
@@ -147,6 +203,16 @@ class TestResolveSecrets(unittest.TestCase):
         resolved = asyncio.run(_resolve_secrets(conn, secrets))
 
         self.assertIs(resolved, conn)
+        self.assertEqual(secrets.refs, [])
+
+    def test_executor_rejects_bare_secret_prefix(self):
+        secrets = _FakeSecrets()
+        conn = Connection(id="c1", name="pg", provider="postgres", org_id="o", project_id="p",
+                          settings={"password": "secret://"})
+        with self.assertRaises(DatahekError) as cm:
+            asyncio.run(_resolve_secrets(conn, secrets))
+        self.assertEqual(cm.exception.code.value, "VALIDATION")
+        self.assertIn("Invalid secret reference", str(cm.exception))
         self.assertEqual(secrets.refs, [])
 
     def test_execute_resolves_before_connect(self):

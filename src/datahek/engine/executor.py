@@ -60,7 +60,10 @@ async def _resolve_secrets(connection: Connection, secrets: SecretsProvider) -> 
     changed = False
     for k, v in resolved.items():
         if isinstance(v, str) and v.startswith("secret://"):
-            provider, rest = v[len("secret://"):].split("/", 1)
+            remainder = v[len("secret://"):]
+            if "/" not in remainder:
+                raise DatahekError(ErrorCode.VALIDATION, "Invalid secret reference")
+            provider, rest = remainder.split("/", 1)
             path, _, key = rest.rpartition("/")
             val = await secrets.get_secret(SecretRef(provider=provider, name=rest))
             resolved[k] = val.value
