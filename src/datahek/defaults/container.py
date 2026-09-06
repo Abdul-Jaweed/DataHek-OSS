@@ -23,6 +23,7 @@ from datahek.defaults.auth import AuthConfig, LocalAuthProvider
 from datahek.defaults.connections import LocalConnectionManager
 from datahek.defaults.conversations import SqliteConversationStore
 from datahek.defaults.evaluation import InMemoryEvaluationStore, LocalEvaluator
+from datahek.defaults.infisical import InfisicalSecretsProvider
 from datahek.defaults.masking import TagBasedMaskingPolicy
 from datahek.defaults.models import OpenAICompatibleModelProvider
 from datahek.defaults.policy import LocalPolicyEngine
@@ -45,7 +46,10 @@ def build_default_container() -> Container:
     c.register(TenantContext, SingleTenantContext(), singleton=True)
     c.register(AuditSink, JsonlAuditSink(), singleton=True)
     c.register(PolicyEngine, LocalPolicyEngine(), singleton=True)
-    c.register(SecretsProvider, EnvSecretsProvider(), singleton=True)
+    if InfisicalSecretsProvider.is_configured():
+        c.register(SecretsProvider, InfisicalSecretsProvider.from_env(), singleton=True)
+    else:
+        c.register(SecretsProvider, EnvSecretsProvider(), singleton=True)
     c.register(ConnectionManager, LocalConnectionManager(), singleton=True)
     c.register(EntitlementProvider, EntitlementProvider(), singleton=True)
     c.register(ConversationStore, SqliteConversationStore(), singleton=True)
@@ -78,5 +82,6 @@ def build_app_container() -> Container:
         audit_sink=c.resolve(AuditSink),
         evaluation_hook=LocalEvaluator(c.resolve(EvaluationStore)),
         masking_policy=TagBasedMaskingPolicy(),
+        secrets=c.resolve(SecretsProvider),
     ), singleton=True)
     return c

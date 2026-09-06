@@ -8,6 +8,7 @@ from datahek.contracts.audit import AuditEvent, AuditSink
 from datahek.contracts.connections import Connection
 from datahek.contracts.guardrails import GuardrailResult
 from datahek.contracts.providers import DataProvider
+from datahek.contracts.secrets import SecretRef, SecretsProvider
 from datahek.engine.guardrails import GuardrailPipeline, PlanComplexityGuardrail, PlanReadOnlyGuardrail
 from datahek.engine.plan import LogicalPlan, validate_plan
 from datahek.kernel.context import RequestContext
@@ -49,6 +50,27 @@ class QueryResult:
 logger = logging.getLogger(__name__)
 
 
+async def _resolve_secrets(connection: Connection, secrets: SecretsProvider) -> Connection:
+    """Replace ``secret://<provider>/<path>/<key>`` settings values at connect time.
+
+    The ref name carries the full remainder after the provider, so providers
+    (e.g. Infisical) can derive the secret path from it.
+    """
+    resolved = dict(connection.settings)
+    changed = False
+    for k, v in resolved.items():
+        if isinstance(v, str) and v.startswith("secret://"):
+            provider, rest = v[len("secret://"):].split("/", 1)
+            path, _, key = rest.rpartition("/")
+            val = await secrets.get_secret(SecretRef(provider=provider, name=rest))
+            resolved[k] = val.value
+            changed = True
+    if not changed:
+        return connection
+    from dataclasses import replace
+    return replace(connection, settings=resolved)
+
+
 class Engine:
     def __init__(
         self,
@@ -58,6 +80,7 @@ class Engine:
         audit_sink: AuditSink | None = None,
         evaluation_hook=None,
         masking_policy=None,
+        secrets: SecretsProvider | None = None,
     ):
         self.registry = registry
         self.guardrails = guardrails or GuardrailPipeline([
@@ -68,6 +91,7 @@ class Engine:
         self.audit_sink = audit_sink
         self.evaluation_hook = evaluation_hook
         self.masking_policy = masking_policy
+        self.secrets = secrets
 
     async def _audit(self, ctx: RequestContext, event: AuditEvent) -> None:
         if self.audit_sink is not None:
@@ -78,6 +102,9 @@ class Engine:
             provider = self.registry.get(connection.provider)
         except KeyError as e:
             raise DatahekError(ErrorCode.VALIDATION, str(e)) from e
+
+        if self.secrets is not None:
+            connection = await _resolve_secrets(connection, self.secrets)
 
         if self.schema_service is not None:
             catalog = await self.schema_service.get_catalog(ctx, connection, provider)
