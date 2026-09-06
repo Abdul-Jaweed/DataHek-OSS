@@ -485,10 +485,4 @@ def create_app(container=None) -> FastAPI:
                           org_id=ctx.organization_id, project_id=ctx.project_id)
         return await runner.run(ctx, conn)
 
-    @app.get("/", response_class=HTMLResponse)
-    @app.get("/ui", response_class=HTMLResponse)
-    async def index():
-        from datahek.api.web import index_html
-        return index_html()
-
     return app
