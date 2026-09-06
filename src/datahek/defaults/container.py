@@ -42,14 +42,18 @@ from datahek.kernel.entitlements import EntitlementProvider
 def build_default_container() -> Container:
     c = Container()
     c.register(AuthConfig, config_from_env(AuthConfig, prefix="DATAHEK_AUTH_"), singleton=True)
-    c.register(AuthProvider, LocalAuthProvider.from_env(), singleton=True)
-    c.register(TenantContext, SingleTenantContext(), singleton=True)
-    c.register(AuditSink, JsonlAuditSink(), singleton=True)
-    c.register(PolicyEngine, LocalPolicyEngine(), singleton=True)
     if InfisicalSecretsProvider.is_configured():
         c.register(SecretsProvider, InfisicalSecretsProvider.from_env(), singleton=True)
     else:
         c.register(SecretsProvider, EnvSecretsProvider(), singleton=True)
+    if isinstance(c.resolve(SecretsProvider), InfisicalSecretsProvider):
+        c.register(AuthProvider,
+                   LocalAuthProvider.from_infisical(c.resolve(SecretsProvider)), singleton=True)
+    else:
+        c.register(AuthProvider, LocalAuthProvider.from_env(), singleton=True)
+    c.register(TenantContext, SingleTenantContext(), singleton=True)
+    c.register(AuditSink, JsonlAuditSink(), singleton=True)
+    c.register(PolicyEngine, LocalPolicyEngine(), singleton=True)
     c.register(ConnectionManager, LocalConnectionManager(), singleton=True)
     c.register(EntitlementProvider, EntitlementProvider(), singleton=True)
     c.register(ConversationStore, SqliteConversationStore(), singleton=True)
@@ -68,7 +72,11 @@ def build_app_container() -> Container:
     registry.register(SQLiteProvider())
     c.register(ProviderRegistry, registry, singleton=True)
     c.register(SchemaService, SchemaService(), singleton=True)
-    c.register(ModelProvider, OpenAICompatibleModelProvider(), singleton=True)
+    if isinstance(c.resolve(SecretsProvider), InfisicalSecretsProvider):
+        c.register(ModelProvider,
+                   OpenAICompatibleModelProvider.from_infisical(c.resolve(SecretsProvider)), singleton=True)
+    else:
+        c.register(ModelProvider, OpenAICompatibleModelProvider(), singleton=True)
     c.register(EvaluationStore, InMemoryEvaluationStore(), singleton=True)
 
     c.register(Planner, lambda: Planner(
