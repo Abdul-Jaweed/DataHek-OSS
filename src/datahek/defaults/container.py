@@ -74,6 +74,7 @@ def build_app_container() -> Container:
     c.register(Planner, lambda: Planner(
         model=c.resolve(ModelProvider),
         schema_service=c.resolve(SchemaService),
+        secrets=c.resolve(SecretsProvider),
     ), singleton=True)
     c.register(Reasoner, lambda: ModelReasoner(model=c.resolve(ModelProvider)), singleton=True)
     c.register(Engine, lambda: Engine(

@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from datahek.contracts.connections import Connection
 from datahek.contracts.models import ModelProvider, ModelProviderError, ModelRequest
 from datahek.contracts.providers import DataProvider
+from datahek.contracts.secrets import SecretsProvider
+from datahek.engine.executor import _resolve_secrets
 from datahek.engine.plan import LogicalPlan, validate_plan
 from datahek.engine.schema import SchemaCatalog, SchemaService
 from datahek.kernel.context import RequestContext
@@ -61,11 +63,13 @@ def build_schema_summary(catalog: SchemaCatalog) -> str:
 
 class Planner:
     def __init__(self, model: ModelProvider, schema_service: SchemaService,
-                 max_attempts: int = MAX_PLAN_ATTEMPTS, skills=None):
+                 max_attempts: int = MAX_PLAN_ATTEMPTS, skills=None,
+                 secrets: SecretsProvider | None = None):
         self._model = model
         self._schema_service = schema_service
         self._max_attempts = max_attempts
         self._skills = skills
+        self._secrets = secrets
 
     async def plan(
         self,
@@ -75,6 +79,8 @@ class Planner:
         provider: DataProvider,
         extra_prompt: str | None = None,
     ) -> PlanResult:
+        if self._secrets is not None:
+            connection = await _resolve_secrets(connection, self._secrets)
         catalog = await self._schema_service.get_catalog(ctx, connection, provider)
         tables = self._schema_service.tables(catalog)
         columns = self._schema_service.columns(catalog)

@@ -6,10 +6,12 @@ from unittest import mock
 import httpx
 
 from datahek.contracts.connections import Connection
+from datahek.contracts.models import ModelResponse
 from datahek.contracts.providers import ConnectorCapabilities, DataProvider, ProviderKind
 from datahek.contracts.secrets import SecretRef, SecretValue
 from datahek.engine.executor import Engine, ProviderRegistry, _resolve_secrets
 from datahek.engine.plan import LogicalPlan, ReadNode
+from datahek.engine.schema import ColumnMeta, SchemaCatalog, SchemaService, TableMeta
 from datahek.kernel.context import RequestContext
 
 
@@ -162,3 +164,66 @@ class TestResolveSecrets(unittest.TestCase):
 
         self.assertIsNot(provider.connected_with, conn)
         self.assertEqual(provider.connected_with.settings["password"], "sup3r")
+
+
+_PLAN = """{"nodes": [{"type": "ReadNode", "source": "traces", "columns": ["service"], "limit": 5}]}"""
+
+
+class _PlannerModel:
+    async def complete(self, request):
+        return ModelResponse(content=_PLAN)
+
+    async def stream(self, request):
+        yield _PLAN
+
+
+class _IntrospectRecordingProvider:
+    provider_id = "fake"
+    capabilities = ConnectorCapabilities(kind=ProviderKind.SQL, dialect="fake", max_result_rows=10)
+
+    def __init__(self):
+        self.introspected_with: Connection | None = None
+
+    async def introspect(self, ctx, connection, source):
+        self.introspected_with = connection
+        return SchemaCatalog(source=source, tables=[
+            TableMeta(name="traces", columns=[ColumnMeta(name="service", data_type="String")])])
+
+
+class TestPlannerSecretResolution(unittest.TestCase):
+    def test_plan_resolves_secret_settings_before_schema_discovery(self):
+        from datahek.engine.planner import Planner
+
+        secrets = _FakeSecrets(value="sup3r")
+        provider = _IntrospectRecordingProvider()
+        planner = Planner(model=_PlannerModel(), schema_service=SchemaService(), secrets=secrets)
+        conn = Connection(
+            id="c1", name="pg", provider="postgres", org_id="o", project_id="p",
+            host="localhost", database="postgres",
+            settings={"username": "postgres", "password": "secret://infisical/creds/pg_password"},
+        )
+
+        result = asyncio.run(planner.plan("top service?", RequestContext(source="api"), conn, provider))
+
+        self.assertIsNotNone(result.plan)
+        self.assertEqual(result.plan.nodes[0].source, "traces")
+        self.assertIsNotNone(provider.introspected_with)
+        self.assertEqual(provider.introspected_with.settings["password"], "sup3r")
+        self.assertEqual(provider.introspected_with.settings["username"], "postgres")
+        self.assertEqual(secrets.refs, [SecretRef(provider="infisical", name="creds/pg_password")])
+        self.assertEqual(conn.settings["password"], "secret://infisical/creds/pg_password")
+
+    def test_plan_without_secrets_introspects_raw_connection(self):
+        from datahek.engine.planner import Planner
+
+        provider = _IntrospectRecordingProvider()
+        planner = Planner(model=_PlannerModel(), schema_service=SchemaService())
+        conn = Connection(
+            id="c1", name="pg", provider="postgres", org_id="o", project_id="p",
+            settings={"password": "plain"},
+        )
+
+        asyncio.run(planner.plan("q", RequestContext(source="api"), conn, provider))
+
+        self.assertIs(provider.introspected_with, conn)
+        self.assertEqual(provider.introspected_with.settings["password"], "plain")
