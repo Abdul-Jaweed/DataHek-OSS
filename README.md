@@ -65,7 +65,7 @@ cp .env.example .env        # then edit LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
 docker compose up -d --build
 
 # 4. open the app
-open http://localhost:8000            # web UI + API docs at /docs
+# API docs: http://localhost:8000/docs · web app: cd apps/web && npm install && npm run dev → http://localhost:5173
 ```
 
 | Service | Port | Purpose |
