@@ -4,12 +4,12 @@ Talks to any OpenAI-compatible /chat/completions endpoint (opencode, Groq,
 local LLMs). Uses httpx (optional dependency: ``datahek-core[llm]``).
 HTTP failures surface as typed ``ModelProviderError`` — never raw driver text.
 """
-import asyncio
 import logging
 from typing import Any
 
 from datahek.contracts.models import ModelProvider, ModelProviderError, ModelRequest, ModelResponse
 from datahek.contracts.secrets import SecretRef, SecretsProvider
+from datahek.defaults.async_util import run_sync
 from datahek.kernel.config import Config, config_from_env
 
 _LLM_SECRET_FIELDS = (
@@ -17,16 +17,6 @@ _LLM_SECRET_FIELDS = (
     ("llm_api_key", "api_key"),
     ("llm_model", "model"),
 )
-
-
-def _run(coro):
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-    import concurrent.futures
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result()
 
 
 class ModelConfig(Config):
@@ -70,7 +60,7 @@ class OpenAICompatibleModelProvider(ModelProvider):
                 overrides["base_url"] = overrides["base_url"].rstrip("/")
             return replace(cfg, **overrides)
 
-        return cls(config=_run(_resolve()))
+        return cls(config=run_sync(_resolve()))
 
     async def configure(self, base_url: str | None = None, api_key: str | None = None,
                         model: str | None = None) -> None:

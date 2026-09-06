@@ -2,23 +2,13 @@
 
 Production/Enterprise replace this via the AuthProvider contract (SSO/OIDC/SAML).
 """
-import asyncio
 import json
 import logging
 
 from datahek.contracts.auth import AuthProvider, AuthenticatedIdentity
 from datahek.contracts.secrets import SecretRef, SecretsProvider
+from datahek.defaults.async_util import run_sync
 from datahek.kernel.config import Config, config_from_env
-
-
-def _run(coro):
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-    import concurrent.futures
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result()
 
 
 class AuthConfig(Config):
@@ -85,7 +75,7 @@ class LocalAuthProvider(AuthProvider):
             return cls(users=users)
 
         try:
-            return _run(_load())
+            return run_sync(_load())
         except Exception as exc:
             logging.getLogger(__name__).warning(
                 "Auth users unavailable from Infisical (%s); falling back to env/local users", exc)
