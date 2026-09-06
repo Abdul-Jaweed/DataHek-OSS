@@ -1,5 +1,6 @@
 """DataHek OSS API — health, connections, ask, conversations, evaluations, web UI."""
 import time
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -19,6 +20,11 @@ from datahek.kernel.capabilities import OSS_CAPABILITIES
 from datahek.kernel.context import RequestContext
 from datahek.kernel.entitlements import EntitlementProvider
 from datahek.kernel.errors import DatahekError, ErrorCode
+
+try:
+    from datahek.defaults.pg import PgMetadata
+except ImportError:  # optional extra; metadata absent → PG wiring disabled
+    PgMetadata = None
 
 try:
     from datahek.defaults.redis_llm import RedisLlmSettingsStore
@@ -160,7 +166,19 @@ def create_app(container=None) -> FastAPI:
             "conversation_id": req.conversation_id,
         }
 
-    app = FastAPI(title="DataHek OSS", version=__version__)
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if PgMetadata is not None and c.has(PgMetadata):
+            pg = c.resolve(PgMetadata)
+            if pg is not None and getattr(pg, "_url", None):
+                await pg.init_schema()
+        if RedisLlmSettingsStore is not None and c.has(RedisLlmSettingsStore):
+            reload = getattr(model_provider, "reload_from_store", None)
+            if reload is not None:
+                await reload()
+        yield
+
+    app = FastAPI(title="DataHek OSS", version=__version__, lifespan=lifespan)
     conn_mgr: ConnectionManager = c.resolve(ConnectionManager)
     registry: ProviderRegistry = c.resolve(ProviderRegistry)
     planner: Planner = c.resolve(Planner)

@@ -151,6 +151,35 @@ python -m datahek.mcp_server    # streamable HTTP on :8001
 | `DATAHEK_AUDIT_PATH` | `datahek-audit.jsonl` | Audit trail (JSONL) |
 | `DATAHEK_AUTH_MODE` | `none` | `none` or `local` (enforce API keys) |
 | `DATAHEK_AUTH_LOCAL_USERS` | `{"datahek":"datahek"}` | JSON `{"user":"password"}` for local auth |
+| `DATAHEK_METADATA_URL` | *(empty)* | PostgreSQL URL for durable connections/conversations/prompts/evaluations (empty → SQLite/in-memory defaults) |
+| `DATAHEK_METADATA_REDIS_URL` | *(empty)* | Redis URL for LLM settings persistence across restarts (empty → runtime settings only) |
+| `DATAHEK_ENCRYPTION_KEY` | *(empty)* | Optional: encrypt connection settings at rest in PostgreSQL |
+| `INFISICAL_HOST` / `INFISICAL_CLIENT_ID` / `INFISICAL_CLIENT_SECRET` / `INFISICAL_PROJECT_ID` | *(empty)* | Optional: fetch secrets from Infisical (see below) |
+
+### Persistent metadata (optional)
+
+By default DataHek keeps state in local SQLite (`DATAHEK_DB_PATH`) and in-memory
+structures. For durable, restart-proof metadata set `DATAHEK_METADATA_URL` (and
+optionally `DATAHEK_METADATA_REDIS_URL`):
+
+- **PostgreSQL** — when `DATAHEK_METADATA_URL` is set, connections,
+  conversations, prompt templates, and evaluation runs are stored in
+  PostgreSQL. The schema is created automatically at API startup.
+  `DATAHEK_ENCRYPTION_KEY` encrypts stored connection settings at rest
+  (any non-empty string); without it, settings are stored as plain JSON.
+- **Redis** — when `DATAHEK_METADATA_REDIS_URL` is set, LLM settings saved via
+  the UI/API (`/settings/llm`) persist across API restarts and are re-applied on
+  startup.
+- **Infisical** — with `INFISICAL_HOST` / `INFISICAL_CLIENT_ID` /
+  `INFISICAL_CLIENT_SECRET` / `INFISICAL_PROJECT_ID` set, secrets are fetched
+  from Infisical: database credentials referenced as
+  `secret://infisical/<folder>/<key>` in connection settings, auth users at the
+  `/auth` folder (`datahek_users`), and LLM configuration at `/llm`.
+
+The Docker quick start already wires all of this up: `docker compose up -d
+--build` starts `postgres` (port `5433`) and `redis` (port `6380`) alongside
+the `api` and `mcp` services, so metadata is persistent by default in the
+compose stack. Leave the URLs unset to keep the zero-dependency SQLite defaults.
 
 ---
 
