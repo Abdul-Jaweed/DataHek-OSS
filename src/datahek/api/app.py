@@ -20,6 +20,11 @@ from datahek.kernel.context import RequestContext
 from datahek.kernel.entitlements import EntitlementProvider
 from datahek.kernel.errors import DatahekError, ErrorCode
 
+try:
+    from datahek.defaults.redis_llm import RedisLlmSettingsStore
+except ImportError:  # optional extra; store absent → behavior unchanged
+    RedisLlmSettingsStore = None
+
 _STATUS_BY_CODE = {
     ErrorCode.NOT_FOUND: 404,
     ErrorCode.CONNECTION_NOT_FOUND: 404,
@@ -229,11 +234,16 @@ def create_app(container=None) -> FastAPI:
 
     @app.get("/settings/llm")
     async def get_llm_settings(_identity=Depends(_require_auth)):
+        if RedisLlmSettingsStore is not None and c.has(RedisLlmSettingsStore) \
+                and hasattr(model_provider, "reload_from_store"):
+            await model_provider.reload_from_store()
         return await model_provider.describe()
 
     @app.post("/settings/llm")
     async def set_llm_settings(req: LlmSettingsRequest, _identity=Depends(_require_auth)):
         await model_provider.configure(**req.model_dump(exclude_none=True))
+        if RedisLlmSettingsStore is not None and c.has(RedisLlmSettingsStore):
+            await c.resolve(RedisLlmSettingsStore).save(req.model_dump(exclude_none=True))
         return await model_provider.describe()
 
     @app.post("/connections", status_code=201)

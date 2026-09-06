@@ -18,8 +18,10 @@ class ModelConfig(Config):
 
 
 class OpenAICompatibleModelProvider(ModelProvider):
-    def __init__(self, config: ModelConfig | None = None):
+    def __init__(self, config: ModelConfig | None = None,
+                 settings_store: "RedisLlmSettingsStore | None" = None):
         self._config = config or config_from_env(ModelConfig, prefix="LLM_")
+        self._settings_store = settings_store
 
     async def configure(self, base_url: str | None = None, api_key: str | None = None,
                         model: str | None = None) -> None:
@@ -30,6 +32,25 @@ class OpenAICompatibleModelProvider(ModelProvider):
             api_key=self._config.api_key if api_key is None else api_key,
             model=model or self._config.model,
         )
+
+    async def reload_from_store(self) -> None:
+        """Apply persisted Redis settings as overrides on top of env config."""
+        if self._settings_store is None:
+            return
+        stored = await self._settings_store.load()
+        if not stored:
+            return
+        overrides = {k: v for k, v in stored.items()
+                     if k in ("base_url", "api_key", "model") and v is not None}
+        if not overrides:
+            return
+        from dataclasses import replace
+        if overrides.get("base_url"):
+            overrides["base_url"] = overrides["base_url"].rstrip("/")
+        self._config = replace(self._config, **overrides)
+
+    def model_id(self) -> str:
+        return self._config.model
 
     async def describe(self) -> dict:
         return {
