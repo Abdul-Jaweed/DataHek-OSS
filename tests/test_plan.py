@@ -122,3 +122,40 @@ class TestAggregateColumnValidation(unittest.TestCase):
             aggregates=[Aggregate(function="avg", column="duration_ms", alias="avg_duration")],
         )])
         validate_plan(plan, tables={"traces"}, columns={"traces": {"service", "duration_ms"}})
+
+
+class TestDialectFunctionValidation(unittest.TestCase):
+    def _plan(self, function, column="duration_ms"):
+        from datahek.engine.plan import Aggregate
+        return LogicalPlan(nodes=[ReadNode(
+            source="traces", columns=["service"],
+            group_by=["service"],
+            aggregates=[Aggregate(function=function, column=column, alias="agg")],
+        )])
+
+    def test_clickhouse_uniq_allowed(self):
+        from datahek.engine.plan import Aggregate
+        validate_plan(self._plan("uniq"), tables={"traces"},
+                      columns={"traces": {"service", "duration_ms"}}, dialect="clickhouse")
+
+    def test_postgres_uniq_rejected(self):
+        from datahek.engine.plan import Aggregate
+        with self.assertRaises(DatahekError) as cm:
+            validate_plan(self._plan("uniq"), tables={"traces"},
+                          columns={"traces": {"service", "duration_ms"}}, dialect="postgres")
+        self.assertEqual(cm.exception.code, ErrorCode.PLAN_INVALID)
+
+    def test_postgres_count_distinct_allowed(self):
+        validate_plan(self._plan("count_distinct", "service"), tables={"traces"},
+                      columns={"traces": {"service", "duration_ms"}}, dialect="postgres")
+
+    def test_count_distinct_star_rejected(self):
+        from datahek.engine.plan import Aggregate
+        with self.assertRaises(DatahekError):
+            validate_plan(self._plan("count_distinct", "*"), tables={"traces"},
+                          columns={"traces": {"service", "duration_ms"}}, dialect="postgres")
+
+    def test_unknown_function_rejected(self):
+        with self.assertRaises(DatahekError):
+            validate_plan(self._plan("median"), tables={"traces"},
+                          columns={"traces": {"service", "duration_ms"}}, dialect="postgres")

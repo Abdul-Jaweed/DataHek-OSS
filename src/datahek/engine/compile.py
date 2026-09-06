@@ -22,7 +22,10 @@ def compile_sql(plan: LogicalPlan) -> str:
         grouped = set(node.group_by)
         select_cols = [c for c in select_cols if c in grouped]
     for agg in node.aggregates:
-        select_cols.append(f"{agg.function}({agg.column}) AS {agg.alias}")
+        if agg.function == "count_distinct":
+            select_cols.append(f"COUNT(DISTINCT {agg.column}) AS {agg.alias}")
+        else:
+            select_cols.append(f"{agg.function}({agg.column}) AS {agg.alias}")
 
     sql = f"SELECT {', '.join(select_cols)} FROM {node.source}"
     if node.filter:

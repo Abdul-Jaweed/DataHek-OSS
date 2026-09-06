@@ -93,12 +93,25 @@ class LogicalPlan:
         return cls(version=data.get("version", PLAN_VERSION), nodes=nodes)
 
 
+# Aggregate functions allowed per SQL dialect (planner vocabulary).
+# "count_distinct" renders as COUNT(DISTINCT col) — the portable distinct count.
+_AGGREGATE_FUNCTIONS = {
+    "clickhouse": frozenset({"count", "count_distinct", "sum", "avg", "min", "max", "uniq"}),
+    "postgres": frozenset({"count", "count_distinct", "sum", "avg", "min", "max"}),
+    "mysql": frozenset({"count", "count_distinct", "sum", "avg", "min", "max"}),
+    "sqlite": frozenset({"count", "count_distinct", "sum", "avg", "min", "max"}),
+}
+_DEFAULT_FUNCTIONS = frozenset().union(*_AGGREGATE_FUNCTIONS.values())
+
+
 def validate_plan(
     plan: LogicalPlan,
     tables: set[str],
     columns: dict[str, set[str]],
+    dialect: str | None = None,
 ) -> None:
     """Validate the plan against a schema catalog. Raises PLAN_INVALID."""
+    allowed_functions = _AGGREGATE_FUNCTIONS.get(dialect, _DEFAULT_FUNCTIONS)
     for node in plan.nodes:
         if isinstance(node, WriteNode):
             continue
@@ -125,6 +138,18 @@ def validate_plan(
                     f"GROUP BY column '{col}' must be in SELECT columns",
                 )
         for agg in node.aggregates:
+            if agg.function not in allowed_functions:
+                raise DatahekError(
+                    ErrorCode.PLAN_INVALID,
+                    f"Aggregate function '{agg.function}' is not supported on dialect '{dialect or 'any'}'",
+                    details={"function": agg.function, "dialect": dialect},
+                )
+            if agg.function == "count_distinct" and agg.column == "*":
+                raise DatahekError(
+                    ErrorCode.PLAN_INVALID,
+                    "count_distinct requires a real column, not '*'",
+                    details={"function": agg.function},
+                )
             if agg.column == "*":
                 continue  # count(*)
             if agg.column not in known:

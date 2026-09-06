@@ -111,7 +111,8 @@ class Engine:
 
         if self.schema_service is not None:
             catalog = await self.schema_service.get_catalog(ctx, connection, provider)
-            validate_plan(plan, self.schema_service.tables(catalog), self.schema_service.columns(catalog))
+            validate_plan(plan, self.schema_service.tables(catalog), self.schema_service.columns(catalog),
+                          dialect=provider.capabilities.dialect)
 
         payload: dict[str, Any] = {"plan": plan, "capabilities": provider.capabilities}
         decision: GuardrailResult = await self.guardrails.run(ctx, payload)

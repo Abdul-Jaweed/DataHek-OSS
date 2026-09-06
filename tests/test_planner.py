@@ -68,6 +68,9 @@ def _service():
 class _FakeProvider:
     provider_id = "clickhouse"
 
+    class capabilities:
+        dialect = "clickhouse"
+
 
 class TestBuildSchemaSummary(unittest.TestCase):
     def test_summary_contains_tables_and_columns(self):

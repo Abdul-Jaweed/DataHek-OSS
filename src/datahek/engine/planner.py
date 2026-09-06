@@ -32,16 +32,27 @@ Plan format:
 {"nodes": [
   {"type": "ReadNode", "source": "<table>", "columns": [...],
    "filter": "<optional SQL predicate>", "group_by": [...],
-   "aggregates": [{"function": "count|sum|avg|min|max|uniq", "column": "*", "alias": "<name>"}],
+   "aggregates": [{"function": "<allowed function>", "column": "<column or *>", "alias": "<name>"}],
    "order_by": [...], "limit": <int>}
 ]}
 
 Rules:
 - Read-only only. Never produce WriteNode.
 - Only use tables and columns present in the schema.
+- Only use aggregate functions allowed for the target database dialect (given below).
+- Use "count_distinct" for distinct counting on SQL dialects (renders COUNT(DISTINCT col)).
 - If the question is ambiguous or no table matches, return
   {"nodes": [], "clarification": "<question for the user>"}.
 """
+
+
+def _dialect_prompt(dialect: str | None) -> str:
+    from datahek.engine.plan import _AGGREGATE_FUNCTIONS
+
+    if dialect in _AGGREGATE_FUNCTIONS:
+        allowed = "|".join(sorted(_AGGREGATE_FUNCTIONS[dialect]))
+        return f"\nTarget database dialect: {dialect}.\nAllowed aggregate functions: {allowed}"
+    return ""
 
 
 @dataclass(frozen=True)
@@ -107,7 +118,8 @@ class Planner:
             if parsed is None:
                 return PlanResult(plan=None, clarification="I could not interpret the request into a data plan.", confidence=0.2)
             try:
-                validate_plan(parsed, tables, columns)
+                validate_plan(parsed, tables, columns,
+                              dialect=getattr(provider.capabilities, "dialect", None))
                 sources = [n.source for n in parsed.nodes if hasattr(n, "source")]
                 return PlanResult(plan=parsed, confidence=0.8, sources_used=sources)
             except Exception as e:
@@ -122,7 +134,9 @@ class Planner:
 
     @staticmethod
     def _build_request(question: str, schema_summary: str, feedback: str | None,
-                       skill_prompt: str = "", extra_prompt: str | None = None) -> ModelRequest:
+                       skill_prompt: str = "", extra_prompt: str | None = None,
+                       dialect: str | None = None) -> ModelRequest:
+        system = _PLAN_SYSTEM_PROMPT + _dialect_prompt(dialect)
         user = f"Question: {question}\n\nSchema:\n{schema_summary}"
         if skill_prompt:
             user += f"\n\n{skill_prompt}"
@@ -132,7 +146,7 @@ class Planner:
             user += f"\n\nFeedback: {feedback}"
         return {
             "messages": [
-                {"role": "system", "content": _PLAN_SYSTEM_PROMPT},
+                {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
             "temperature": 0.1,
