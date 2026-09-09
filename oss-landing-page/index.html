@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="DataHek OSS — the open-source conversational data platform. Ask your data anything in natural language. Self-hosted, read-only by construction, Apache-2.0." />
+<title>DataHek OSS — Ask your data anything</title>
+<link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" rel="stylesheet" />
+<link href="assets/css/oss.css" rel="stylesheet" />
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="mast">
+  <div class="shell mast-inner">
+    <a class="wordmark" href="index.html" aria-label="DataHek OSS home">
+      <span class="mark"><svg width="15" height="15" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true"><path d="M15.5 2.5 5 19h8l-1.5 10.5L27 13h-9l1.5-10.5z"/></svg></span>
+      DataHek <span class="ed">OSS</span>
+    </a>
+    <nav class="nav" id="nav" aria-label="Main">
+      <a href="#features"><span class="n">01</span>Features</a>
+      <a href="#how"><span class="n">02</span>How it works</a>
+      <a href="#quickstart"><span class="n">03</span>Quick start</a>
+      <a href="#stack"><span class="n">04</span>Stack</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="nav-gh" href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener">
+        <i class="ph ph-github-logo" style="font-size:16px"></i>GitHub
+      </a>
+      <a class="btn" href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener">Get the code</a>
+      <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- 00 · Hero -->
+  <section class="hero">
+    <div class="shell hero-grid">
+      <div>
+        <div class="hero-kicker"><span class="rule"></span><span class="txt">Open-source conversational data platform</span></div>
+        <h1>Ask your data anything.<br /><span class="hl">Self-hosted.</span></h1>
+        <p class="lede">DataHek turns natural language into safe, read-only data operations — schema discovery, validated plans, guardrails, audit, and streamed answers. One engine, your infrastructure.</p>
+        <div class="hero-cta">
+          <a class="btn btn-solid btn-lg" href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener">
+            Get DataHek OSS <i class="ph ph-arrow-up-right" style="font-size:14px"></i>
+          </a>
+          <a class="btn btn-lg" href="#quickstart">Quick start</a>
+        </div>
+        <div class="hero-meta">
+          <div><span class="k">Release</span><span class="v">v0.2.0</span></div>
+          <div><span class="k">License</span><span class="v">Apache-2.0</span></div>
+          <div><span class="k">Tests</span><span class="v">332 passing</span></div>
+          <div><span class="k">Connectors</span><span class="v">04</span></div>
+        </div>
+      </div>
+
+      <div class="console reveal" aria-label="Example session">
+        <div class="bar">
+          <span class="dot"></span><span class="dot on"></span><span class="dot"></span>
+          <span class="path">datahek · :5173/chat</span>
+        </div>
+        <pre><span class="c"># a real session, no staging</span>
+<span class="y">you</span>        How many traces are there?
+<span class="y">datahek</span>    <span class="w">There are 8 traces in the dataset.</span>
+
+<span class="y">you</span>        average duration by service?
+<span class="g">service        avg_duration</span>
+<span class="w">auth-service    675.0
+order-service   487.5
+payment-api     176.0
+inventory        57.5</span>
+<span class="c">4 rows · read-only · audited</span></pre>
+        <div class="cap"><span>streamed via SSE · progress events</span><span class="live">connected</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 01 · Why -->
+  <section class="section" id="why">
+    <div class="shell">
+      <div class="sec-head"><span class="idx">01</span><span class="name">Why self-hosted</span><span class="rule"></span></div>
+      <h2 class="sec-title">A data platform you can actually read.</h2>
+      <div class="manifesto" style="margin-top:44px">
+        <div class="st reveal"><span class="num">I.</span><h3>Read-only by construction</h3><p>Write operations are denied at the plan layer — before any SQL exists. The guardrail is structural, not a setting.</p></div>
+        <div class="st reveal"><span class="num">II.</span><h3>Trust nothing, verify</h3><p>The model proposes a plan; deterministic validation disposes. Columns, tables, and dialect functions are checked against the real schema.</p></div>
+        <div class="st reveal"><span class="num">III.</span><h3>No lock-in, no telemetry</h3><p>One command to deploy, everything on your machine. Fork it, audit it, change it — the license allows all of it.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 · How it works -->
+  <section class="section" id="how">
+    <div class="shell">
+      <div class="sec-head"><span class="idx">02</span><span class="name">How it works</span><span class="rule"></span></div>
+      <h2 class="sec-title">One deterministic pipeline, from question to streamed answer.</h2>
+      <div class="flow reveal" style="margin-top:40px">
+        <div class="flow-row">
+          <span class="cell">Question<span class="sub">natural language</span></span><span class="arr">→</span>
+          <span class="cell">Schema discovery<span class="sub">per provider</span></span><span class="arr">→</span>
+          <span class="cell hot">Logical plan<span class="sub">LLM proposes</span></span><span class="arr">→</span>
+          <span class="cell hot">Validation<span class="sub">schema · dialect · retry</span></span><span class="arr">→</span>
+          <span class="cell">Guardrails<span class="sub">ALLOW / DENY / MASK</span></span><span class="arr">→</span>
+          <span class="cell">Execute<span class="sub">compile → run</span></span><span class="arr">→</span>
+          <span class="cell">Mask<span class="sub">PII before reasoning</span></span><span class="arr">→</span>
+          <span class="cell hot">Streamed answer<span class="sub">SSE tokens → rows</span></span>
+        </div>
+        <div class="flow-mobile">
+          <span class="cell"><span class="idx">01</span>Question → schema discovery</span>
+          <span class="cell"><span class="idx">02</span>Logical plan (LLM) → validation</span>
+          <span class="cell"><span class="idx">03</span>Guardrails → execute → mask</span>
+          <span class="cell"><span class="idx">04</span>Streamed answer (SSE)</span>
+        </div>
+      </div>
+      <p class="flow-note">The planner gets <b>one retry loop</b> when validation fails — then it asks a clarifying question instead of guessing. Every decision lands in the audit trail, refusals included.</p>
+    </div>
+  </section>
+
+  <!-- 03 · Features -->
+  <section class="section" id="features">
+    <div class="shell">
+      <div class="sec-head"><span class="idx">03</span><span class="name">Features</span><span class="rule"></span></div>
+      <h2 class="sec-title">Everything here runs on your own hardware.</h2>
+      <div class="idx-list reveal" style="margin-top:40px">
+        <div class="idx-row"><span class="n">01</span><h3>Universal engine</h3><span class="d">One provider-agnostic Logical Query Plan, compiled per connector — no provider logic in the core.</span><span class="x">core</span></div>
+        <div class="idx-row"><span class="n">02</span><h3>Guardrails that bite</h3><span class="d">Read-only enforcement, SQL AST validation, injection detection, dialect-aware function checks.</span><span class="x">structural</span></div>
+        <div class="idx-row"><span class="n">03</span><h3>Four connectors</h3><span class="d">ClickHouse, PostgreSQL, MySQL, SQLite — live-verified on the same pipeline.</span><span class="x"><b>04</b> dialects</span></div>
+        <div class="idx-row"><span class="n">04</span><h3>Audited by default</h3><span class="d">Who asked, which connection, which SQL, which decision — replayable end to end.</span><span class="x">jsonl</span></div>
+        <div class="idx-row"><span class="n">05</span><h3>Streaming + progress</h3><span class="d">Tokens stream while a live progress bar shows each pipeline stage — no dead air.</span><span class="x">sse</span></div>
+        <div class="idx-row"><span class="n">06</span><h3>Evaluated regressions</h3><span class="d">A curated dataset scores validity, safety, execution, and latency on every change.</span><span class="x"><b>332</b> tests</span></div>
+        <div class="idx-row"><span class="n">07</span><h3>Persistent by choice</h3><span class="d">PostgreSQL + Redis metadata with Fernet-encrypted credentials — or zero-config SQLite defaults.</span><span class="x">opt-in</span></div>
+        <div class="idx-row"><span class="n">08</span><h3>Secrets where you keep them</h3><span class="d">DB credentials, login users, and LLM keys resolve from Infisical at runtime — never baked in.</span><span class="x">infisical</span></div>
+      </div>
+      <div class="chips">
+        <span class="chip"><span class="st"></span>ClickHouse</span>
+        <span class="chip"><span class="st"></span>PostgreSQL</span>
+        <span class="chip"><span class="st"></span>MySQL</span>
+        <span class="chip"><span class="st"></span>SQLite</span>
+        <span class="chip"><span class="st"></span>REST API</span>
+        <span class="chip"><span class="st"></span>CLI</span>
+        <span class="chip"><span class="st"></span>MCP server</span>
+        <span class="chip"><span class="st"></span>Web UI</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 · Quick start -->
+  <section class="section" id="quickstart">
+    <div class="shell">
+      <div class="sec-head"><span class="idx">04</span><span class="name">Quick start</span><span class="rule"></span></div>
+      <h2 class="sec-title">Running in minutes, not days.</h2>
+      <div class="term-grid">
+        <div class="term reveal">
+          <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="t">docker — recommended</span></div>
+          <pre><span class="c"># web · api · mcp · postgres · redis</span>
+$ git clone https://github.com/Abdul-Jaweed/DataHek-OSS.git
+$ cd DataHek-OSS
+$ cp .env.example .env
+$ docker compose up -d --build
+<span class="g">✓ web ui → :5173 · api → :8000/docs</span></pre>
+          <div class="cap">one command, everything included</div>
+        </div>
+        <div class="term reveal">
+          <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="t">from source</span></div>
+          <pre>$ python -m venv .venv && source .venv/bin/activate
+$ pip install -e ".[all]"
+$ uvicorn datahek.api.app:create_app --factory --port 8000
+<span class="c"># configure your LLM endpoint in the web UI → Settings</span></pre>
+          <div class="cap">no package published yet — install from source</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 · Stack -->
+  <section class="section" id="stack">
+    <div class="shell">
+      <div class="sec-head"><span class="idx">05</span><span class="name">Stack</span><span class="rule"></span></div>
+      <h2 class="sec-title">Transparent dependencies.</h2>
+      <table class="stack reveal">
+        <tr><td>Backend</td><td><div class="pkg"><span>Python 3.12</span><span>FastAPI</span><span>uvicorn</span><span>pydantic v2</span><span>httpx</span><span>sqlglot</span><span>fastmcp</span></div></td></tr>
+        <tr><td>Connectors</td><td><div class="pkg"><span>clickhouse-connect</span><span>psycopg</span><span>pymysql</span><span>sqlite3</span></div></td></tr>
+        <tr><td>Stores</td><td><div class="pkg"><span>redis</span><span>cryptography (Fernet)</span></div></td></tr>
+        <tr><td>Frontend</td><td><div class="pkg"><span>React 19</span><span>TypeScript</span><span>Vite 6</span><span>Tailwind v4</span><span>Zustand</span><span>Phosphor icons</span></div></td></tr>
+        <tr><td>Infra</td><td><div class="pkg"><span>Docker Compose</span><span>postgres 16</span><span>redis 7</span><span>node 20</span><span>Infisical (optional)</span></div></td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 06 · Close -->
+  <section class="section close">
+    <div class="shell">
+      <span class="sec-name" style="font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3)">Open source</span>
+      <p class="big reveal" style="margin-top:24px">Your data, your infrastructure, <span class="hl">your rules.</span></p>
+      <div class="cta-row">
+        <a class="btn btn-solid btn-lg" href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener">
+          <i class="ph ph-github-logo" style="font-size:15px"></i> Star &amp; clone on GitHub
+        </a>
+        <a class="btn btn-lg" href="https://github.com/Abdul-Jaweed/DataHek-OSS#readme" target="_blank" rel="noopener">Read the docs</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="shell footer-inner">
+    <span class="copy">© <span class="js-year">2026</span> DataHek · <a href="https://github.com/Abdul-Jaweed/DataHek-OSS/blob/main/LICENSE" target="_blank" rel="noopener">Apache-2.0</a></span>
+    <span class="copy" style="color:var(--ink-3)">332 tests · 0 telemetry · no license keys</span>
+    <span class="links">
+      <a href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/Abdul-Jaweed/DataHek-OSS#readme" target="_blank" rel="noopener">Docs</a>
+    </span>
+  </div>
+</footer>
+
+<script src="assets/js/oss.js"></script>
+</body>
+</html>
