@@ -1,225 +1,450 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="description" content="DataHek OSS — the open-source conversational data platform. Ask your data anything in natural language. Self-hosted, read-only by construction, Apache-2.0." />
-<title>DataHek OSS — Ask your data anything</title>
-<link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
-<link href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" rel="stylesheet" />
-<link href="assets/css/oss.css" rel="stylesheet" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="DataHek OSS — the open-source conversational data platform. Ask your data anything in natural language. Self-hosted, read-only by construction, Apache-2.0." />
+  <title>DataHek OSS — Ask your data anything</title>
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    :root {
+      --editorial-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --background: #faf9f7;
+      --foreground: #1a1917;
+      --card: #ffffff;
+      --muted-foreground: #6d6860;
+      --border: #e6e2da;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --background: #141312;
+        --foreground: #efede9;
+        --card: #1c1b19;
+        --muted-foreground: #a19c92;
+        --border: #2d2b27;
+        color-scheme: dark;
+      }
+    }
+    .font-mono-custom {
+      font-family: var(--editorial-mono);
+    }
+    body {
+      transition: background-color .25s ease, color .25s ease;
+    }
+    :focus-visible { outline: 2px solid #f59e0b; outline-offset: 3px; border-radius: 4px; }
+    ::selection { background: rgba(245, 158, 11, .25); }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+    .reveal { opacity: 0; transform: translateY(14px); transition: opacity .5s ease, transform .5s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; } }
+  </style>
 </head>
-<body>
-<a class="skip-link" href="#main">Skip to content</a>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased p-4 md:p-8 space-y-10">
 
-<header class="mast">
-  <div class="shell mast-inner">
-    <a class="wordmark" href="index.html" aria-label="DataHek OSS home">
-      <span class="mark"><svg width="15" height="15" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true"><path d="M15.5 2.5 5 19h8l-1.5 10.5L27 13h-9l1.5-10.5z"/></svg></span>
-      DataHek <span class="ed">OSS</span>
-    </a>
-    <nav class="nav" id="nav" aria-label="Main">
-      <a href="#features"><span class="n">01</span>Features</a>
-      <a href="#how"><span class="n">02</span>How it works</a>
-      <a href="#quickstart"><span class="n">03</span>Quick start</a>
-      <a href="#stack"><span class="n">04</span>Stack</a>
-    </nav>
-    <div class="nav-cta">
-      <a class="nav-gh" href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener">
-        <i class="ph ph-github-logo" style="font-size:16px"></i>GitHub
-      </a>
-      <a class="btn" href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener">Get the code</a>
-      <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-      </button>
-    </div>
-  </div>
-</header>
-
-<main id="main">
-
-  <!-- 00 · Hero -->
-  <section class="hero">
-    <div class="shell hero-grid">
+  <!-- Header Banner -->
+  <header class="border-b border-[var(--border)] pb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded bg-[var(--foreground)] text-[var(--background)] grid place-items-center font-bold">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      </div>
       <div>
-        <div class="hero-kicker"><span class="rule"></span><span class="txt">Open-source conversational data platform</span></div>
-        <h1>Ask your data anything.<br /><span class="hl">Self-hosted.</span></h1>
-        <p class="lede">DataHek turns natural language into safe, read-only data operations — schema discovery, validated plans, guardrails, audit, and streamed answers. One engine, your infrastructure.</p>
-        <div class="hero-cta">
-          <a class="btn btn-solid btn-lg" href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener">
-            Get DataHek OSS <i class="ph ph-arrow-up-right" style="font-size:14px"></i>
-          </a>
-          <a class="btn btn-lg" href="#quickstart">Quick start</a>
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-lg tracking-tight">DataHek</span>
+          <span class="text-[10px] font-mono-custom uppercase tracking-wider px-1.5 py-0.5 border border-[var(--border)] rounded text-[var(--muted-foreground)]">OSS v0.2.0</span>
         </div>
-        <div class="hero-meta">
-          <div><span class="k">Release</span><span class="v">v0.2.0</span></div>
-          <div><span class="k">License</span><span class="v">Apache-2.0</span></div>
-          <div><span class="k">Tests</span><span class="v">332 passing</span></div>
-          <div><span class="k">Connectors</span><span class="v">04</span></div>
-        </div>
-      </div>
-
-      <div class="console reveal" aria-label="Example session">
-        <div class="bar">
-          <span class="dot"></span><span class="dot on"></span><span class="dot"></span>
-          <span class="path">datahek · :5173/chat</span>
-        </div>
-        <pre><span class="c"># a real session, no staging</span>
-<span class="y">you</span>        How many traces are there?
-<span class="y">datahek</span>    <span class="w">There are 8 traces in the dataset.</span>
-
-<span class="y">you</span>        average duration by service?
-<span class="g">service        avg_duration</span>
-<span class="w">auth-service    675.0
-order-service   487.5
-payment-api     176.0
-inventory        57.5</span>
-<span class="c">4 rows · read-only · audited</span></pre>
-        <div class="cap"><span>streamed via SSE · progress events</span><span class="live">connected</span></div>
+        <p class="text-xs text-[var(--muted-foreground)]">Self-hosted conversational data platform · Apache-2.0</p>
       </div>
     </div>
-  </section>
-
-  <!-- 01 · Why -->
-  <section class="section" id="why">
-    <div class="shell">
-      <div class="sec-head"><span class="idx">01</span><span class="name">Why self-hosted</span><span class="rule"></span></div>
-      <h2 class="sec-title">A data platform you can actually read.</h2>
-      <div class="manifesto" style="margin-top:44px">
-        <div class="st reveal"><span class="num">I.</span><h3>Read-only by construction</h3><p>Write operations are denied at the plan layer — before any SQL exists. The guardrail is structural, not a setting.</p></div>
-        <div class="st reveal"><span class="num">II.</span><h3>Trust nothing, verify</h3><p>The model proposes a plan; deterministic validation disposes. Columns, tables, and dialect functions are checked against the real schema.</p></div>
-        <div class="st reveal"><span class="num">III.</span><h3>No lock-in, no telemetry</h3><p>One command to deploy, everything on your machine. Fork it, audit it, change it — the license allows all of it.</p></div>
-      </div>
+    <div class="flex items-center gap-2">
+      <span class="inline-flex items-center gap-1.5 text-xs font-mono-custom px-2.5 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)]">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span> 332 tests passing
+      </span>
+      <a href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener" class="inline-flex items-center text-xs font-mono-custom px-2.5 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:border-amber-500 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" class="mr-1.5"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"/></svg>
+        GitHub
+      </a>
     </div>
-  </section>
+  </header>
 
-  <!-- 02 · How it works -->
-  <section class="section" id="how">
-    <div class="shell">
-      <div class="sec-head"><span class="idx">02</span><span class="name">How it works</span><span class="rule"></span></div>
-      <h2 class="sec-title">One deterministic pipeline, from question to streamed answer.</h2>
-      <div class="flow reveal" style="margin-top:40px">
-        <div class="flow-row">
-          <span class="cell">Question<span class="sub">natural language</span></span><span class="arr">→</span>
-          <span class="cell">Schema discovery<span class="sub">per provider</span></span><span class="arr">→</span>
-          <span class="cell hot">Logical plan<span class="sub">LLM proposes</span></span><span class="arr">→</span>
-          <span class="cell hot">Validation<span class="sub">schema · dialect · retry</span></span><span class="arr">→</span>
-          <span class="cell">Guardrails<span class="sub">ALLOW / DENY / MASK</span></span><span class="arr">→</span>
-          <span class="cell">Execute<span class="sub">compile → run</span></span><span class="arr">→</span>
-          <span class="cell">Mask<span class="sub">PII before reasoning</span></span><span class="arr">→</span>
-          <span class="cell hot">Streamed answer<span class="sub">SSE tokens → rows</span></span>
-        </div>
-        <div class="flow-mobile">
-          <span class="cell"><span class="idx">01</span>Question → schema discovery</span>
-          <span class="cell"><span class="idx">02</span>Logical plan (LLM) → validation</span>
-          <span class="cell"><span class="idx">03</span>Guardrails → execute → mask</span>
-          <span class="cell"><span class="idx">04</span>Streamed answer (SSE)</span>
-        </div>
+  <!-- Hero Section -->
+  <section class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+    <div class="lg:col-span-6 space-y-5">
+      <div class="inline-flex items-center gap-2 text-xs font-mono-custom uppercase tracking-widest text-amber-600 dark:text-amber-400 font-semibold">
+        <span class="w-3 h-0.5 bg-amber-500"></span> Deterministic Data Platform
       </div>
-      <p class="flow-note">The planner gets <b>one retry loop</b> when validation fails — then it asks a clarifying question instead of guessing. Every decision lands in the audit trail, refusals included.</p>
-    </div>
-  </section>
-
-  <!-- 03 · Features -->
-  <section class="section" id="features">
-    <div class="shell">
-      <div class="sec-head"><span class="idx">03</span><span class="name">Features</span><span class="rule"></span></div>
-      <h2 class="sec-title">Everything here runs on your own hardware.</h2>
-      <div class="idx-list reveal" style="margin-top:40px">
-        <div class="idx-row"><span class="n">01</span><h3>Universal engine</h3><span class="d">One provider-agnostic Logical Query Plan, compiled per connector — no provider logic in the core.</span><span class="x">core</span></div>
-        <div class="idx-row"><span class="n">02</span><h3>Guardrails that bite</h3><span class="d">Read-only enforcement, SQL AST validation, injection detection, dialect-aware function checks.</span><span class="x">structural</span></div>
-        <div class="idx-row"><span class="n">03</span><h3>Four connectors</h3><span class="d">ClickHouse, PostgreSQL, MySQL, SQLite — live-verified on the same pipeline.</span><span class="x"><b>04</b> dialects</span></div>
-        <div class="idx-row"><span class="n">04</span><h3>Audited by default</h3><span class="d">Who asked, which connection, which SQL, which decision — replayable end to end.</span><span class="x">jsonl</span></div>
-        <div class="idx-row"><span class="n">05</span><h3>Streaming + progress</h3><span class="d">Tokens stream while a live progress bar shows each pipeline stage — no dead air.</span><span class="x">sse</span></div>
-        <div class="idx-row"><span class="n">06</span><h3>Evaluated regressions</h3><span class="d">A curated dataset scores validity, safety, execution, and latency on every change.</span><span class="x"><b>332</b> tests</span></div>
-        <div class="idx-row"><span class="n">07</span><h3>Persistent by choice</h3><span class="d">PostgreSQL + Redis metadata with Fernet-encrypted credentials — or zero-config SQLite defaults.</span><span class="x">opt-in</span></div>
-        <div class="idx-row"><span class="n">08</span><h3>Secrets where you keep them</h3><span class="d">DB credentials, login users, and LLM keys resolve from Infisical at runtime — never baked in.</span><span class="x">infisical</span></div>
-      </div>
-      <div class="chips">
-        <span class="chip"><span class="st"></span>ClickHouse</span>
-        <span class="chip"><span class="st"></span>PostgreSQL</span>
-        <span class="chip"><span class="st"></span>MySQL</span>
-        <span class="chip"><span class="st"></span>SQLite</span>
-        <span class="chip"><span class="st"></span>REST API</span>
-        <span class="chip"><span class="st"></span>CLI</span>
-        <span class="chip"><span class="st"></span>MCP server</span>
-        <span class="chip"><span class="st"></span>Web UI</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- 04 · Quick start -->
-  <section class="section" id="quickstart">
-    <div class="shell">
-      <div class="sec-head"><span class="idx">04</span><span class="name">Quick start</span><span class="rule"></span></div>
-      <h2 class="sec-title">Running in minutes, not days.</h2>
-      <div class="term-grid">
-        <div class="term reveal">
-          <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="t">docker — recommended</span></div>
-          <pre><span class="c"># web · api · mcp · postgres · redis</span>
-$ git clone https://github.com/Abdul-Jaweed/DataHek-OSS.git
-$ cd DataHek-OSS
-$ cp .env.example .env
-$ docker compose up -d --build
-<span class="g">✓ web ui → :5173 · api → :8000/docs</span></pre>
-          <div class="cap">one command, everything included</div>
-        </div>
-        <div class="term reveal">
-          <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="t">from source</span></div>
-          <pre>$ python -m venv .venv && source .venv/bin/activate
-$ pip install -e ".[all]"
-$ uvicorn datahek.api.app:create_app --factory --port 8000
-<span class="c"># configure your LLM endpoint in the web UI → Settings</span></pre>
-          <div class="cap">no package published yet — install from source</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 05 · Stack -->
-  <section class="section" id="stack">
-    <div class="shell">
-      <div class="sec-head"><span class="idx">05</span><span class="name">Stack</span><span class="rule"></span></div>
-      <h2 class="sec-title">Transparent dependencies.</h2>
-      <table class="stack reveal">
-        <tr><td>Backend</td><td><div class="pkg"><span>Python 3.12</span><span>FastAPI</span><span>uvicorn</span><span>pydantic v2</span><span>httpx</span><span>sqlglot</span><span>fastmcp</span></div></td></tr>
-        <tr><td>Connectors</td><td><div class="pkg"><span>clickhouse-connect</span><span>psycopg</span><span>pymysql</span><span>sqlite3</span></div></td></tr>
-        <tr><td>Stores</td><td><div class="pkg"><span>redis</span><span>cryptography (Fernet)</span></div></td></tr>
-        <tr><td>Frontend</td><td><div class="pkg"><span>React 19</span><span>TypeScript</span><span>Vite 6</span><span>Tailwind v4</span><span>Zustand</span><span>Phosphor icons</span></div></td></tr>
-        <tr><td>Infra</td><td><div class="pkg"><span>Docker Compose</span><span>postgres 16</span><span>redis 7</span><span>node 20</span><span>Infisical (optional)</span></div></td></tr>
-      </table>
-    </div>
-  </section>
-
-  <!-- 06 · Close -->
-  <section class="section close">
-    <div class="shell">
-      <span class="sec-name" style="font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3)">Open source</span>
-      <p class="big reveal" style="margin-top:24px">Your data, your infrastructure, <span class="hl">your rules.</span></p>
-      <div class="cta-row">
-        <a class="btn btn-solid btn-lg" href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener">
-          <i class="ph ph-github-logo" style="font-size:15px"></i> Star &amp; clone on GitHub
+      <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
+        Ask your data anything.<br/>
+        <span class="text-amber-600 dark:text-amber-400">Self-hosted.</span>
+      </h1>
+      <p class="text-sm sm:text-base text-[var(--muted-foreground)] leading-relaxed">
+        DataHek compiles natural language questions into safe, deterministic data operations — automated schema discovery, validated query plans, zero write-access guardrails, and SSE streamed responses. One engine, zero telemetry, on your own hardware.
+      </p>
+      <div class="flex flex-wrap gap-3 pt-2">
+        <a href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener" class="px-5 py-2.5 rounded text-xs font-mono-custom font-semibold bg-[var(--foreground)] text-[var(--background)] hover:bg-amber-600 hover:text-white transition-colors inline-flex items-center gap-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"/></svg>
+          Clone on GitHub
         </a>
-        <a class="btn btn-lg" href="https://github.com/Abdul-Jaweed/DataHek-OSS#readme" target="_blank" rel="noopener">Read the docs</a>
+        <a href="#quickstart" class="px-5 py-2.5 rounded text-xs font-mono-custom font-semibold border border-[var(--border)] text-[var(--foreground)] bg-[var(--card)] inline-flex items-center gap-2 hover:border-amber-500 transition-colors">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+          Quick Start: Docker
+        </a>
+      </div>
+
+      <div class="grid grid-cols-4 gap-3 pt-6 border-t border-[var(--border)]">
+        <div>
+          <div class="text-[10px] font-mono-custom uppercase tracking-wider text-[var(--muted-foreground)]">Release</div>
+          <div class="text-xs font-mono-custom font-bold">v0.2.0</div>
+        </div>
+        <div>
+          <div class="text-[10px] font-mono-custom uppercase tracking-wider text-[var(--muted-foreground)]">License</div>
+          <div class="text-xs font-mono-custom font-bold">Apache-2.0</div>
+        </div>
+        <div>
+          <div class="text-[10px] font-mono-custom uppercase tracking-wider text-[var(--muted-foreground)]">Verification</div>
+          <div class="text-xs font-mono-custom font-bold text-emerald-500">332 Passing</div>
+        </div>
+        <div>
+          <div class="text-[10px] font-mono-custom uppercase tracking-wider text-[var(--muted-foreground)]">Dialects</div>
+          <div class="text-xs font-mono-custom font-bold">04 Engines</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Hero Session Console -->
+    <div class="lg:col-span-6 bg-[#0e1012] border border-[#25282d] rounded-lg text-[#f3f3f0] font-mono-custom overflow-hidden shadow-2xl">
+      <div class="bg-[#16181b] border-b border-[#25282d] px-4 py-2.5 flex items-center justify-between text-xs text-[#838792]">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-[#3a3d45]"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-[#f59e0b]"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-[#3a3d45]"></span>
+          <span class="ml-2 text-[11px]">datahek-core :5173/chat</span>
+        </div>
+        <div class="flex items-center gap-1 text-emerald-400 text-[11px]">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          live stream
+        </div>
+      </div>
+
+      <!-- Scenarios Selector -->
+      <div class="flex border-b border-[#25282d] bg-[#090a0c] text-xs">
+        <button id="btn-demo-traces" class="px-3.5 py-2 text-amber-400 font-semibold border-b-2 border-amber-400 bg-[#16181b]">
+          Traces Latency
+        </button>
+        <button id="btn-demo-cohorts" class="px-3.5 py-2 text-[#838792] hover:text-[#f3f3f0] transition-colors border-b-2 border-transparent">
+          User Cohorts
+        </button>
+        <button id="btn-demo-security" class="px-3.5 py-2 text-[#838792] hover:text-[#f3f3f0] transition-colors border-b-2 border-transparent">
+          Auth Audit
+        </button>
+      </div>
+
+      <div class="p-4 space-y-3.5 text-xs">
+        <div class="flex items-baseline gap-2">
+          <span class="text-amber-400 font-bold uppercase text-[10px] px-1.5 py-0.5 rounded bg-amber-400/10">Input</span>
+          <span id="demo-prompt-text" class="text-white font-medium">Average trace duration by service over the last 6 hours?</span>
+        </div>
+
+        <div id="demo-steps-container" class="flex flex-wrap gap-1.5 pb-2 border-b border-[#25282d] text-[10px]">
+          <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">✓ 1. ClickHouse Schema Introspected</span>
+          <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">✓ 2. Logical Plan: Aggregation (Avg)</span>
+          <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">✓ 3. AST Read-Only Verified</span>
+          <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">✓ 4. SSE Stream Started</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr id="demo-table-head" class="text-amber-400 border-b border-[#25282d]">
+                <th class="pb-1 px-2">service</th>
+                <th class="pb-1 px-2">count</th>
+                <th class="pb-1 px-2">avg_duration_ms</th>
+                <th class="pb-1 px-2">p95_ms</th>
+              </tr>
+            </thead>
+            <tbody id="demo-table-body" class="divide-y divide-white/5">
+              <tr><td class="py-1 px-2">auth-service</td><td class="py-1 px-2">14,208</td><td class="py-1 px-2">42.3 ms</td><td class="py-1 px-2">128.0 ms</td></tr>
+              <tr><td class="py-1 px-2">order-api</td><td class="py-1 px-2">8,941</td><td class="py-1 px-2">185.6 ms</td><td class="py-1 px-2">410.2 ms</td></tr>
+              <tr><td class="py-1 px-2">payment-worker</td><td class="py-1 px-2">3,410</td><td class="py-1 px-2">312.0 ms</td><td class="py-1 px-2">890.5 ms</td></tr>
+              <tr><td class="py-1 px-2">inventory-db</td><td class="py-1 px-2">22,504</td><td class="py-1 px-2">14.8 ms</td><td class="py-1 px-2">38.2 ms</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pt-2 border-t border-[#25282d] flex justify-between text-[11px] text-[#545761]">
+          <span>4 rows compiled · read-only AST · zero PII leakage</span>
+          <span class="text-emerald-400">Streamed via SSE in 24ms</span>
+        </div>
       </div>
     </div>
   </section>
-</main>
 
-<footer class="footer">
-  <div class="shell footer-inner">
-    <span class="copy">© <span class="js-year">2026</span> DataHek · <a href="https://github.com/Abdul-Jaweed/DataHek-OSS/blob/main/LICENSE" target="_blank" rel="noopener">Apache-2.0</a></span>
-    <span class="copy" style="color:var(--ink-3)">332 tests · 0 telemetry · no license keys</span>
-    <span class="links">
-      <a href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://github.com/Abdul-Jaweed/DataHek-OSS#readme" target="_blank" rel="noopener">Docs</a>
-    </span>
-  </div>
-</footer>
+  <!-- 3 Principles Section -->
+  <section class="space-y-4">
+    <div class="flex items-center gap-2">
+      <span class="text-xs font-mono-custom text-amber-600 dark:text-amber-400 font-bold">01 // PRINCIPLES</span>
+      <div class="h-px flex-1 bg-[var(--border)]"></div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="p-5 rounded border border-[var(--border)] bg-[var(--card)] space-y-3">
+        <span class="text-xs font-mono-custom font-bold text-amber-600 dark:text-amber-400">I.</span>
+        <h3 class="font-bold text-base">Read-Only by Construction</h3>
+        <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+          Write operations are rejected at the plan AST layer before any SQL is generated. The read-only guarantee is structural, not a configuration toggle.
+        </p>
+        <div class="pt-3 border-t border-[var(--border)] text-[10px] font-mono-custom text-[var(--muted-foreground)] uppercase">
+          Structural Guardrail
+        </div>
+      </div>
 
-<script src="assets/js/oss.js"></script>
+      <div class="p-5 rounded border border-[var(--border)] bg-[var(--card)] space-y-3">
+        <span class="text-xs font-mono-custom font-bold text-amber-600 dark:text-amber-400">II.</span>
+        <h3 class="font-bold text-base">Deterministic Verification</h3>
+        <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+          The LLM proposes a logical plan; deterministic schema validation checks tables, columns, dialect operators, and injection vectors against the real catalog.
+        </p>
+        <div class="pt-3 border-t border-[var(--border)] text-[10px] font-mono-custom text-[var(--muted-foreground)] uppercase">
+          Dialect AST Checks
+        </div>
+      </div>
+
+      <div class="p-5 rounded border border-[var(--border)] bg-[var(--card)] space-y-3">
+        <span class="text-xs font-mono-custom font-bold text-amber-600 dark:text-amber-400">III.</span>
+        <h3 class="font-bold text-base">Zero Telemetry & Sovereignty</h3>
+        <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+          Deploy via Docker or Python on your own private network. No phone-home pings, no cloud telemetry, no analytics beacons, and no vendor lock-in.
+        </p>
+        <div class="pt-3 border-t border-[var(--border)] text-[10px] font-mono-custom text-[var(--muted-foreground)] uppercase">
+          Air-Gapped Ready
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7-Stage Pipeline Diagram -->
+  <section class="space-y-4">
+    <div class="flex items-center gap-2">
+      <span class="text-xs font-mono-custom text-amber-600 dark:text-amber-400 font-bold">02 // PIPELINE ARCHITECTURE</span>
+      <div class="h-px flex-1 bg-[var(--border)]"></div>
+    </div>
+    <div class="p-5 rounded border border-[var(--border)] bg-[var(--card)] space-y-4">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div class="p-3 rounded border border-[var(--border)] bg-[var(--background)]">
+          <div class="text-[10px] font-mono-custom text-amber-500 font-bold">01</div>
+          <div class="font-bold mt-1">Question</div>
+          <div class="text-[11px] text-[var(--muted-foreground)] mt-0.5">Natural language query</div>
+        </div>
+        <div class="p-3 rounded border border-[var(--border)] bg-[var(--background)]">
+          <div class="text-[10px] font-mono-custom text-amber-500 font-bold">02</div>
+          <div class="font-bold mt-1">Schema Discovery</div>
+          <div class="text-[11px] text-[var(--muted-foreground)] mt-0.5">Target catalog introspection</div>
+        </div>
+        <div class="p-3 rounded border border-[var(--border)] bg-[var(--background)]">
+          <div class="text-[10px] font-mono-custom text-amber-500 font-bold">03</div>
+          <div class="font-bold mt-1">Logical Plan</div>
+          <div class="text-[11px] text-[var(--muted-foreground)] mt-0.5">Abstract relational AST</div>
+        </div>
+        <div class="p-3 rounded border border-amber-500/50 bg-amber-500/10">
+          <div class="text-[10px] font-mono-custom text-amber-500 font-bold">04 · GATE</div>
+          <div class="font-bold mt-1 text-amber-600 dark:text-amber-400">AST Guardrails</div>
+          <div class="text-[11px] text-[var(--muted-foreground)] mt-0.5">Allow / Deny / Validate</div>
+        </div>
+        <div class="p-3 rounded border border-[var(--border)] bg-[var(--background)]">
+          <div class="text-[10px] font-mono-custom text-amber-500 font-bold">05</div>
+          <div class="font-bold mt-1">Dialect Compile</div>
+          <div class="text-[11px] text-[var(--muted-foreground)] mt-0.5">sqlglot per connector</div>
+        </div>
+        <div class="p-3 rounded border border-[var(--border)] bg-[var(--background)]">
+          <div class="text-[10px] font-mono-custom text-amber-500 font-bold">06</div>
+          <div class="font-bold mt-1">PII Masking</div>
+          <div class="text-[11px] text-[var(--muted-foreground)] mt-0.5">Sanitize before LLM</div>
+        </div>
+        <div class="p-3 rounded border border-[var(--border)] bg-[var(--background)]">
+          <div class="text-[10px] font-mono-custom text-amber-500 font-bold">07</div>
+          <div class="font-bold mt-1">Streamed Answer</div>
+          <div class="text-[11px] text-[var(--muted-foreground)] mt-0.5">SSE tokens + progress</div>
+        </div>
+        <div class="p-3 rounded border border-[var(--border)] bg-[var(--background)]">
+          <div class="text-[10px] font-mono-custom text-amber-500 font-bold">08</div>
+          <div class="font-bold mt-1">JSONL Audit</div>
+          <div class="text-[11px] text-[var(--muted-foreground)] mt-0.5">Immutable record</div>
+        </div>
+      </div>
+      <div class="p-3 rounded bg-amber-500/5 border-l-2 border-amber-500 text-xs text-[var(--muted-foreground)]">
+        <strong>Deterministic Retry Gate:</strong> The planner is given exactly one retry loop if validation fails, then surfaces an explicit refusal rather than executing an unverified guess.
+      </div>
+    </div>
+  </section>
+
+  <!-- Connectors Matrix -->
+  <section class="space-y-4">
+    <div class="flex items-center gap-2">
+      <span class="text-xs font-mono-custom text-amber-600 dark:text-amber-400 font-bold">03 // VERIFIED CONNECTORS</span>
+      <div class="h-px flex-1 bg-[var(--border)]"></div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+      <div class="p-4 rounded border border-[var(--border)] bg-[var(--card)] space-y-1">
+        <div class="flex justify-between items-center">
+          <span class="font-bold text-sm">ClickHouse</span>
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        </div>
+        <p class="text-[11px] text-[var(--muted-foreground)]">OLAP columnar aggregations & vector lookups.</p>
+        <span class="inline-block text-[10px] font-mono-custom text-[var(--muted-foreground)] px-1.5 py-0.5 bg-[var(--background)] rounded mt-1">clickhouse-connect</span>
+      </div>
+      <div class="p-4 rounded border border-[var(--border)] bg-[var(--card)] space-y-1">
+        <div class="flex justify-between items-center">
+          <span class="font-bold text-sm">PostgreSQL</span>
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        </div>
+        <p class="text-[11px] text-[var(--muted-foreground)]">Relational, JSONB, CTEs, Window Functions.</p>
+        <span class="inline-block text-[10px] font-mono-custom text-[var(--muted-foreground)] px-1.5 py-0.5 bg-[var(--background)] rounded mt-1">psycopg v3</span>
+      </div>
+      <div class="p-4 rounded border border-[var(--border)] bg-[var(--card)] space-y-1">
+        <div class="flex justify-between items-center">
+          <span class="font-bold text-sm">MySQL</span>
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        </div>
+        <p class="text-[11px] text-[var(--muted-foreground)]">Standard relational workloads & ACID schemas.</p>
+        <span class="inline-block text-[10px] font-mono-custom text-[var(--muted-foreground)] px-1.5 py-0.5 bg-[var(--background)] rounded mt-1">pymysql</span>
+      </div>
+      <div class="p-4 rounded border border-[var(--border)] bg-[var(--card)] space-y-1">
+        <div class="flex justify-between items-center">
+          <span class="font-bold text-sm">SQLite</span>
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        </div>
+        <p class="text-[11px] text-[var(--muted-foreground)]">Zero-config embedded local analytics.</p>
+        <span class="inline-block text-[10px] font-mono-custom text-[var(--muted-foreground)] px-1.5 py-0.5 bg-[var(--background)] rounded mt-1">sqlite3 native</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quick Start -->
+  <section id="quickstart" class="space-y-4">
+    <div class="flex items-center gap-2">
+      <span class="text-xs font-mono-custom text-amber-600 dark:text-amber-400 font-bold">04 // QUICK START</span>
+      <div class="h-px flex-1 bg-[var(--border)]"></div>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="bg-[#0e1012] border border-[#25282d] rounded-lg text-[#f3f3f0] font-mono-custom overflow-hidden">
+        <div class="bg-[#16181b] border-b border-[#25282d] px-4 py-2.5 flex items-center gap-1.5 text-xs text-[#838792]">
+          <span class="w-2.5 h-2.5 rounded-full bg-[#3a3d45]"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-[#3a3d45]"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-[#3a3d45]"></span>
+          <span class="ml-2 text-[11px]">docker · recommended</span>
+        </div>
+        <pre class="p-4 text-xs leading-relaxed overflow-x-auto"><span class="text-[#545761]"># web · api · mcp · postgres · redis</span>
+<span class="text-[#f59e0b]">$</span> git clone https://github.com/Abdul-Jaweed/DataHek-OSS.git
+<span class="text-[#f59e0b]">$</span> cd DataHek-OSS && cp .env.example .env
+<span class="text-[#f59e0b]">$</span> docker compose up -d --build
+<span class="text-emerald-400">✓ web ui → :5173 · api → :8000/docs</span></pre>
+        <div class="px-4 py-2 border-t border-[#25282d] text-[11px] text-[#545761]">one command · everything included</div>
+      </div>
+      <div class="bg-[#0e1012] border border-[#25282d] rounded-lg text-[#f3f3f0] font-mono-custom overflow-hidden">
+        <div class="bg-[#16181b] border-b border-[#25282d] px-4 py-2.5 flex items-center gap-1.5 text-xs text-[#838792]">
+          <span class="w-2.5 h-2.5 rounded-full bg-[#3a3d45]"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-[#3a3d45]"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-[#3a3d45]"></span>
+          <span class="ml-2 text-[11px]">python · from source</span>
+        </div>
+        <pre class="p-4 text-xs leading-relaxed overflow-x-auto"><span class="text-[#f59e0b]">$</span> python -m venv .venv && source .venv/bin/activate
+<span class="text-[#f59e0b]">$</span> pip install -e ".[all]"
+<span class="text-[#f59e0b]">$</span> uvicorn datahek.api.app:create_app --factory --port 8000
+<span class="text-[#545761]"># LLM endpoint → web UI → Settings</span></pre>
+        <div class="px-4 py-2 border-t border-[#25282d] text-[11px] text-[#545761]">no package published yet · install from source</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Closing -->
+  <section class="space-y-6 pt-4">
+    <div class="flex items-center gap-2">
+      <span class="text-xs font-mono-custom text-amber-600 dark:text-amber-400 font-bold">05 // OPEN SOURCE</span>
+      <div class="h-px flex-1 bg-[var(--border)]"></div>
+    </div>
+    <h2 class="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight">
+      Your data, your infrastructure,<br/><span class="text-amber-600 dark:text-amber-400">your rules.</span>
+    </h2>
+    <p class="text-sm sm:text-base text-[var(--muted-foreground)] leading-relaxed max-w-xl">
+      Read the code, fork it, deploy it. Apache-2.0 — no license keys, no telemetry, no lock-in.
+    </p>
+    <a href="https://github.com/Abdul-Jaweed/DataHek-OSS" target="_blank" rel="noopener" class="inline-flex px-5 py-2.5 rounded text-xs font-mono-custom font-semibold bg-[var(--foreground)] text-[var(--background)] hover:bg-amber-600 hover:text-white transition-colors items-center gap-2">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"/></svg>
+      Star &amp; clone on GitHub
+    </a>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-[var(--border)] pt-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs font-mono-custom text-[var(--muted-foreground)]">
+    <span>© <span class="js-year">2026</span> DataHek · <a href="https://github.com/Abdul-Jaweed/DataHek-OSS/blob/main/LICENSE" target="_blank" rel="noopener" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Apache-2.0</a></span>
+    <span>332 tests · 0 telemetry · no license keys</span>
+    <a href="https://github.com/Abdul-Jaweed/DataHek-OSS#readme" target="_blank" rel="noopener" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Documentation ↗</a>
+  </footer>
+
+  <!-- Interactive Demo Script -->
+  <script>
+    const scenarios = {
+      traces: {
+        prompt: "Average trace duration by service over the last 6 hours?",
+        steps: ["✓ 1. ClickHouse Schema Introspected", "✓ 2. Logical Plan: Aggregation (Avg)", "✓ 3. AST Read-Only Verified", "✓ 4. SSE Stream Started"],
+        head: ["service", "count", "avg_duration_ms", "p95_ms"],
+        rows: [
+          ["auth-service", "14,208", "42.3 ms", "128.0 ms"],
+          ["order-api", "8,941", "185.6 ms", "410.2 ms"],
+          ["payment-worker", "3,410", "312.0 ms", "890.5 ms"],
+          ["inventory-db", "22,504", "14.8 ms", "38.2 ms"]
+        ]
+      },
+      cohorts: {
+        prompt: "Monthly user retention and churn cohort for Q1 2026?",
+        steps: ["✓ 1. PostgreSQL Catalog Resolved", "✓ 2. CTE Plan Constructed", "✓ 3. Read-Only Guardrail Passed", "✓ 4. Executed in 18ms"],
+        head: ["cohort_month", "new_users", "retained_30d", "retention_rate"],
+        rows: [
+          ["2026-01", "1,840", "1,418", "77.1 %"],
+          ["2026-02", "2,190", "1,752", "80.0 %"],
+          ["2026-03", "2,605", "2,136", "82.0 %"]
+        ]
+      },
+      security: {
+        prompt: "Identify accounts with more than 5 failed logins today",
+        steps: ["✓ 1. MySQL User Audit Table Mapped", "✓ 2. Guardrail: PII Masking Applied", "✓ 3. AST Verified: SELECT Only", "✓ 4. Result Sanitized"],
+        head: ["account_masked", "failed_attempts", "last_ip_masked", "status"],
+        rows: [
+          ["usr_****382", "9", "192.168.***.***", "flagged"],
+          ["usr_****914", "7", "10.0.***.***", "flagged"],
+          ["usr_****102", "6", "172.16.***.***", "reviewing"]
+        ]
+      }
+    };
+
+    function setScenario(key, activeBtn) {
+      ['btn-demo-traces', 'btn-demo-cohorts', 'btn-demo-security'].forEach(id => {
+        const b = document.getElementById(id);
+        b.className = 'px-3.5 py-2 text-[#838792] hover:text-[#f3f3f0] transition-colors border-b-2 border-transparent';
+      });
+      activeBtn.className = 'px-3.5 py-2 text-amber-400 font-semibold border-b-2 border-amber-400 bg-[#16181b]';
+
+      const s = scenarios[key];
+      document.getElementById('demo-prompt-text').textContent = s.prompt;
+      document.getElementById('demo-steps-container').innerHTML = s.steps.map(step =>
+        `<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">${step}</span>`
+      ).join('');
+      document.getElementById('demo-table-head').innerHTML = s.head.map(h => `<th class="pb-1 px-2">${h}</th>`).join('');
+      document.getElementById('demo-table-body').innerHTML = s.rows.map(row =>
+        `<tr>${row.map(col => `<td class="py-1 px-2">${col}</td>`).join('')}</tr>`
+      ).join('');
+    }
+
+    document.getElementById('btn-demo-traces').addEventListener('click', function() { setScenario('traces', this); });
+    document.getElementById('btn-demo-cohorts').addEventListener('click', function() { setScenario('cohorts', this); });
+    document.getElementById('btn-demo-security').addEventListener('click', function() { setScenario('security', this); });
+
+    // footer year
+    document.querySelectorAll('.js-year').forEach(function (el) {
+      el.textContent = String(new Date().getFullYear());
+    });
+  </script>
 </body>
 </html>
