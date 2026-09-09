@@ -24,3 +24,6 @@ docs/frontend/
 
 # vite cache
 .vite/
+
+# local-only (not pushed)
+docs/
