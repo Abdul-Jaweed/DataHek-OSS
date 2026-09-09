@@ -88,6 +88,24 @@ class PromptRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=4_000)
 
 
+def _json_safe(value: Any) -> Any:
+    """Coerce driver values (datetime, date, Decimal, bytes) to JSON-safe types."""
+    import datetime as _dt
+    from decimal import Decimal
+
+    if isinstance(value, (_dt.datetime, _dt.date, _dt.time)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    return value
+
+
 def create_app(container=None) -> FastAPI:
     """Build the FastAPI app. ``container`` injectable for tests/Enterprise."""
     from datahek.defaults.container import build_app_container
@@ -153,7 +171,7 @@ def create_app(container=None) -> FastAPI:
 
         result = await engine.execute(ctx, plan_result.plan, conn)
         columns = [c["name"] for c in result.columns]
-        rows = [dict(zip(columns, row)) for row in result.rows]
+        rows = [dict(zip(columns, [_json_safe(v) for v in row])) for row in result.rows]
         explanation = redact_pii(await reasoner.explain(req.question, result, plan_result.plan, ctx))
         await _record_turn(conversations, ctx, req, explanation, "result")
         return {
@@ -409,7 +427,7 @@ def create_app(container=None) -> FastAPI:
                 return
 
             columns = [c["name"] for c in result.columns]
-            rows = [dict(zip(columns, row)) for row in result.rows]
+            rows = [dict(zip(columns, [_json_safe(v) for v in row])) for row in result.rows]
 
             yield ev({"type": "start", "conversation_id": req.conversation_id, "columns": columns, "row_count": result.row_count})
             yield ev({"type": "progress", "stage": "explaining", "message": "Generating answer…"})

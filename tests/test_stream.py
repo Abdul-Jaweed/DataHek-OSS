@@ -213,3 +213,52 @@ class TestStreamingReasoner(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestDatetimeRows(unittest.TestCase):
+    def test_datetime_values_serialize_in_stream_rows(self):
+        import datetime
+        from datahek.contracts.models import ModelProvider
+        from datahek.engine.executor import ProviderRegistry
+
+        class DateTimeProvider(_FakeProvider):
+            async def compile_and_execute(self, client, plan, ctx):
+                return {"columns": [{"name": "ts", "type": "DateTime"}],
+                        "rows": [(datetime.datetime(2026, 9, 1, 10, 0, 0),)]}
+
+        c = build_app_container()
+        c.override(ModelProvider, _FakePlannerModel())
+        registry = ProviderRegistry()
+        registry.register(DateTimeProvider())
+        c.override(ProviderRegistry, registry)
+        c.override(ConnectionManager, LocalConnectionManager([
+            Connection(id="conn_1", name="ch1", provider="clickhouse", org_id="default", project_id="default"),
+        ]))
+        client = TestClient(create_app(c))
+        r = client.post("/ask/stream", json={"question": "when?", "connection_id": "conn_1"})
+        self.assertEqual(r.status_code, 200, r.text)
+        events = _events(r.text)
+        rows_evt = next(e for e in events if e["type"] == "rows")
+        self.assertEqual(rows_evt["rows"], [{"ts": "2026-09-01T10:00:00"}])
+
+    def test_datetime_values_serialize_in_ask(self):
+        import datetime
+        from datahek.contracts.models import ModelProvider
+        from datahek.engine.executor import ProviderRegistry
+
+        class DateTimeProvider(_FakeProvider):
+            async def compile_and_execute(self, client, plan, ctx):
+                return {"columns": [{"name": "ts", "type": "DateTime"}],
+                        "rows": [(datetime.datetime(2026, 9, 1, 10, 0, 0),)]}
+
+        c = build_app_container()
+        c.override(ModelProvider, _FakePlannerModel())
+        registry = ProviderRegistry()
+        registry.register(DateTimeProvider())
+        c.override(ProviderRegistry, registry)
+        c.override(ConnectionManager, LocalConnectionManager([
+            Connection(id="conn_1", name="ch1", provider="clickhouse", org_id="default", project_id="default"),
+        ]))
+        client = TestClient(create_app(c))
+        r = client.post("/ask", json={"question": "when?", "connection_id": "conn_1"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["rows"], [{"ts": "2026-09-01T10:00:00"}])

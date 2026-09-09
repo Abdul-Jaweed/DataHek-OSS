@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DataHek — How the Chat Agent Works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #fafafa; --surface: #ffffff; --surface-2: #f4f4f5;
+    --border: #e4e4e7; --border-strong: #d4d4d8;
+    --text: #18181b; --text-2: #52525b; --text-3: #71717a;
+    --brand: #eab308; --brand-hover: #ca8a04; --brand-soft: #fefce8;
+    --brand-strong: #a16207; --brand-contrast: #1c1917;
+    --info: #0369a1; --info-soft: #f0f9ff;
+    --success: #16a34a; --success-soft: #f0fdf4;
+    --danger: #dc2626; --danger-soft: #fef2f2;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Inter", system-ui, sans-serif; background: var(--bg); color: var(--text);
+    overflow: hidden; -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--brand-soft); }
+  .deck { height: 100vh; display: flex; flex-direction: column; }
+  .stage { flex: 1; position: relative; }
+  .slide {
+    position: absolute; inset: 0; padding: 48px 64px;
+    display: none; flex-direction: column;
+    opacity: 0; transform: translateY(14px);
+  }
+  .slide.active { display: flex; animation: rise .45s ease forwards; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .slide { animation: none; opacity: 1; transform: none; } }
+
+  .kicker {
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--brand-strong);
+    margin-bottom: 10px;
+  }
+  h1 { font-size: clamp(30px, 4vw, 44px); font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
+  h1 .accent { color: var(--brand-strong); }
+  h2 { font-size: clamp(22px, 2.6vw, 30px); font-weight: 800; letter-spacing: -.02em; }
+  p.lede { margin-top: 12px; color: var(--text-2); font-size: 15.5px; max-width: 720px; line-height: 1.6; }
+  .mono { font-family: var(--mono); }
+
+  /* layout helpers */
+  .center { justify-content: center; align-items: flex-start; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 28px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 22px; box-shadow: 0 1px 2px rgba(24,24,27,.05);
+  }
+  .card h3 { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card p { margin-top: 8px; font-size: 13.5px; color: var(--text-2); line-height: 1.55; }
+  .card .step-num {
+    font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--brand-strong);
+    background: var(--brand-soft); border-radius: 6px; padding: 2px 8px;
+  }
+  .card .tag { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: auto; }
+  .tag-green { background: var(--success-soft); color: var(--success); }
+  .tag-blue { background: var(--info-soft); color: var(--info); }
+  .tag-amber { background: var(--brand-soft); color: var(--brand-strong); }
+  .tag-red { background: var(--danger-soft); color: var(--danger); }
+
+  /* architecture diagram */
+  .arch { margin-top: 30px; display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .plane {
+    width: 100%; max-width: 760px; border: 2px solid var(--border-strong); border-radius: 14px;
+    padding: 14px 20px; text-align: center; background: var(--surface);
+  }
+  .plane .title { font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); }
+  .plane .chips { display: flex; justify-content: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+  .chip { font-size: 13px; font-weight: 600; background: var(--surface-2); border: 1px solid var(--border); padding: 4px 12px; border-radius: 8px; }
+  .chip.hot { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-strong); }
+  .arrow { width: 2px; height: 26px; background: var(--border-strong); position: relative; }
+  .arrow::after {
+    content: ""; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: var(--border-strong);
+  }
+  .connector-row { display: flex; justify-content: space-around; margin-top: 14px; max-width: 760px; width: 100%; }
+  .connector { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--text-2); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; }
+
+  /* pipeline diagram */
+  .pipeline { margin-top: 30px; display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; }
+  .pipe {
+    flex: 1; min-width: 110px; border: 1.5px solid var(--border-strong); border-radius: 10px;
+    padding: 12px; text-align: center; background: var(--surface);
+  }
+  .pipe .n { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--brand-strong); }
+  .pipe .l { font-size: 13px; font-weight: 700; margin-top: 3px; }
+  .pipe .d { font-size: 11px; color: var(--text-3); margin-top: 4px; line-height: 1.4; }
+  .pipe-arrow { align-self: center; color: var(--text-3); font-weight: 700; }
+  .pipe.active { border-color: var(--brand); background: var(--brand-soft); }
+  .pipe.active .l { color: var(--brand-strong); }
+
+  /* terminal */
+  .term {
+    background: #131316; border-radius: 14px; padding: 18px 20px;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.7;
+    color: #a1a1aa; box-shadow: 0 6px 20px rgba(0,0,0,.25);
+    margin-top: 24px; overflow-x: auto;
+  }
+  .term .dotbar { display: flex; gap: 6px; margin-bottom: 12px; }
+  .term .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .term .ev { color: #e4e4e7; }
+  .term .k { color: #facc15; font-weight: 600; }
+  .term .s { color: #4ade80; }
+  .term .cmt { color: #71717a; }
+
+  /* sequence diagram */
+  .seq { margin-top: 26px; font-family: var(--mono); font-size: 12.5px; }
+  .seq-row { display: flex; align-items: center; min-height: 44px; }
+  .seq-row .who { width: 160px; font-weight: 700; font-size: 12px; color: var(--text-2); padding-right: 14px; text-align: right; flex-shrink: 0; }
+  .seq-lane { flex: 1; position: relative; border-left: 1.5px dashed var(--border-strong); height: 100%; }
+  .seq-msg {
+    position: absolute; top: 50%; transform: translateY(-50%); left: 14px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 12px; font-size: 12px; white-space: nowrap;
+  }
+  .seq-msg.b { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-strong); font-weight: 600; }
+
+  /* progress stages visual */
+  .stages { display: flex; gap: 10px; margin-top: 28px; flex-wrap: wrap; }
+  .stg {
+    display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600;
+    padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--border);
+    background: var(--surface); color: var(--text-3);
+  }
+  .stg.done { border-color: var(--success); background: var(--success-soft); color: var(--success); }
+  .stg.now { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-strong); }
+  .stg .spinner { width: 12px; height: 12px; border-radius: 50%; border: 2px solid currentColor; border-top-color: transparent; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* decision flow */
+  .decision { margin-top: 26px; display: flex; flex-direction: column; gap: 10px; }
+  .dec-row { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 13px; }
+  .dec-row .q { flex: 1; color: var(--text-2); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; }
+  .dec-row .ans { font-weight: 700; padding: 6px 14px; border-radius: 8px; }
+
+  /* graph (LangGraph-style flow) */
+  .graph { margin-top: 26px; display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .gnode {
+    min-width: 200px; text-align: center; padding: 10px 18px; border-radius: 10px;
+    border: 1.5px solid var(--border-strong); background: var(--surface); font-size: 13.5px; font-weight: 700;
+  }
+  .gnode .gt { display: block; font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); margin-bottom: 2px; }
+  .gnode.start, .gnode.end { border-radius: 999px; border-style: solid; }
+  .gnode.llm { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-strong); }
+  .gnode.gate { border-style: dashed; }
+  .gline { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-family: var(--mono); font-size: 11px; }
+  .gline .lbl { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; }
+  .gline .edge { flex: 0 0 22px; text-align: center; }
+  .gloop { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--danger); }
+  .gloop .edge { font-weight: 700; }
+
+  /* inventory cards */
+  .inv-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 26px; }
+  @media (max-width: 900px) { .inv-grid { grid-template-columns: repeat(2, 1fr); } }
+  .inv {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px;
+    text-align: center;
+  }
+  .inv .num { font-size: 34px; font-weight: 800; letter-spacing: -.03em; color: var(--brand-strong); }
+  .inv .lbl { font-size: 13px; font-weight: 700; margin-top: 2px; }
+  .inv .sub { font-family: var(--mono); font-size: 10.5px; color: var(--text-3); margin-top: 4px; line-height: 1.5; }
+  .inv-list { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .inv-chip {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px;
+  }
+  .inv-chip.hot { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-strong); }
+
+  /* feature matrix */
+  .matrix { margin-top: 24px; width: 100%; border-collapse: collapse; font-size: 13px; background: var(--surface); border-radius: 12px; overflow: hidden; }
+  .matrix th { text-align: left; padding: 10px 14px; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); border-bottom: 1px solid var(--border); }
+  .matrix td { padding: 9px 14px; border-bottom: 1px solid var(--border); }
+  .matrix tr:last-child td { border-bottom: none; }
+  .matrix td.yes { color: var(--success); font-weight: 700; }
+  .matrix td.no { color: var(--text-3); }
+  .matrix td.pending { color: var(--brand-strong); font-weight: 700; }
+
+  /* dependency chips */
+  .dep-group { margin-top: 14px; }
+  .dep-group .dg-lbl { font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); margin-bottom: 8px; }
+  .deps { display: flex; flex-wrap: wrap; gap: 8px; }
+  .dep {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px;
+  }
+  .dep.core { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-strong); }
+
+  /* footer bar */
+  .bar { display: flex; align-items: center; gap: 16px; padding: 14px 64px; border-top: 1px solid var(--border); background: var(--surface); }
+  .bar .brand { font-weight: 800; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .bar .mark { width: 22px; height: 22px; border-radius: 6px; background: var(--brand); color: var(--brand-contrast); display: grid; place-items: center; font-size: 11px; }
+  .bar .hint { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+  .dots { display: flex; gap: 6px; }
+  .dotnav { width: 8px; height: 8px; border-radius: 50%; background: var(--border-strong); cursor: pointer; transition: background .15s, transform .15s; }
+  .dotnav.on { background: var(--brand); transform: scale(1.25); }
+  .count { font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+  .arrow-btn {
+    width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 15px; cursor: pointer;
+    display: grid; place-items: center;
+  }
+  .arrow-btn:hover { border-color: var(--border-strong); background: var(--surface-2); }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <div class="stage" id="stage">
+
+    <!-- 1 · Title -->
+    <section class="slide center active">
+      <span class="kicker">DataHek OSS · Architecture Deep-Dive</span>
+      <h1>How the Chat Agent Works<br /><span class="accent">Orchestration &amp; Workflow</span></h1>
+      <p class="lede">From natural language to a validated, read-only, streamed answer — the full journey of one question through the DataHek engine, across every surface (Web UI · REST API · CLI · MCP).</p>
+      <div class="arch">
+        <div class="plane">
+          <div class="title">Experience plane — one pipeline, four surfaces</div>
+          <div class="chips">
+            <span class="chip hot">Web UI</span><span class="chip">REST API</span><span class="chip">CLI</span><span class="chip">MCP</span>
+          </div>
+        </div>
+        <div class="arrow"></div>
+        <div class="plane" style="border-color: var(--brand)">
+          <div class="title">Engine — RequestContext in, streamed answer out</div>
+          <div class="chips">
+            <span class="chip hot">schema → plan → guardrails → audit → execute → mask → explain</span>
+          </div>
+        </div>
+        <div class="arrow"></div>
+        <div class="connector-row">
+          <span class="connector">ClickHouse</span>
+          <span class="connector">PostgreSQL</span>
+          <span class="connector">MySQL</span>
+          <span class="connector">SQLite</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 · The question lifecycle -->
+    <section class="slide">
+      <span class="kicker">Orchestration</span>
+      <h2>One question → seven pipeline stages</h2>
+      <p class="lede">Every ask flows through the same deterministic pipeline. Each stage is a typed, auditable step — the pipeline never branches into ad-hoc logic.</p>
+      <div class="pipeline" id="pipeline">
+        <div class="pipe" data-i="0"><div class="n">01</div><div class="l">Connect</div><div class="d">resolve connection · secrets · schema discovery</div></div>
+        <span class="pipe-arrow">→</span>
+        <div class="pipe" data-i="1"><div class="n">02</div><div class="l">Plan</div><div class="d">LLM proposes a LogicalPlan from the schema</div></div>
+        <span class="pipe-arrow">→</span>
+        <div class="pipe" data-i="2"><div class="n">03</div><div class="l">Validate</div><div class="d">tables · columns · dialect functions · retry loop</div></div>
+        <span class="pipe-arrow">→</span>
+        <div class="pipe" data-i="3"><div class="n">04</div><div class="l">Guardrails</div><div class="d">ALLOW / DENY / MASK / RATE_LIMIT decision</div></div>
+        <span class="pipe-arrow">→</span>
+        <div class="pipe" data-i="4"><div class="n">05</div><div class="l">Execute</div><div class="d">compile to dialect SQL · run · audit result</div></div>
+        <span class="pipe-arrow">→</span>
+        <div class="pipe" data-i="5"><div class="n">06</div><div class="l">Mask</div><div class="d">PII / sensitive columns before reasoning</div></div>
+        <span class="pipe-arrow">→</span>
+        <div class="pipe" data-i="6"><div class="n">07</div><div class="l">Explain</div><div class="d">stream the answer token by token</div></div>
+      </div>
+      <p class="lede" style="margin-top:18px; font-size:13px; color: var(--text-3)">Stages 01–05 run before the stream opens; the explanation (07) streams live as SSE <span class="mono">token</span> events — that's why the progress bar exists: you always know where the pipeline is.</p>
+    </section>
+
+    <!-- 3 · Planner in detail -->
+    <section class="slide">
+      <span class="kicker">Stage 02–03 · The Planner</span>
+      <h2>The planner thinks, the validator decides</h2>
+      <p class="lede">The planner is an LLM with a strict contract: return JSON for the LogicalPlan — nothing else. The engine never trusts the model; every plan is validated against the real schema.</p>
+      <div class="grid2">
+        <div class="card">
+          <h3><span class="step-num">PROMPT</span> Schema-aware context <span class="tag tag-amber">LLM</span></h3>
+          <p class="mono" style="font-size:12px; line-height:1.9; margin-top:10px">
+            question + schema summary<br />
+            + target <b>dialect</b> (postgres → allowed functions)<br />
+            + skills / custom prompt templates<br />
+            + feedback loop on invalid attempts
+          </p>
+        </div>
+        <div class="card">
+          <h3><span class="step-num">VALIDATE</span> Typed checks <span class="tag tag-green">deterministic</span></h3>
+          <p style="font-size:12.5px; line-height:1.9; margin-top:10px" class="mono">
+            source ∈ tables<br />
+            column ∈ schema columns<br />
+            aggregate fn ∈ dialect allowlist<br />
+            group_by ⊆ select · read-only only
+          </p>
+        </div>
+      </div>
+      <div class="term">
+        <div class="dotbar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span></div>
+        <div><span class="k">attempt 1</span> <span class="ev">→ "uniq(event_id)" on postgres</span> <span class="s">✗ PLAN_INVALID</span></div>
+        <div><span class="k">feedback</span> <span class="ev">→ "aggregate function 'uniq' is not supported on dialect 'postgres'. Fix the plan."</span></div>
+        <div><span class="k">attempt 2</span> <span class="ev">→ "count_distinct(event_id)"</span> <span class="s">✓ VALID</span></div>
+        <div><span class="cmt"># max 2 retries, then a clarifying question instead of guessing</span></div>
+      </div>
+    </section>
+
+    <!-- 4 · Guardrails -->
+    <section class="slide">
+      <span class="kicker">Stage 04 · The Guardrail Pipeline</span>
+      <h2>Typed decisions, not if-statements</h2>
+      <p class="lede">The middleware pipeline evaluates the request and returns one typed decision. Everything downstream — audit, masking, approval — reacts to that decision.</p>
+      <div class="decision">
+        <div class="dec-row"><span class="q">Is the plan read-only?</span><span class="ans" style="background:var(--success-soft);color:var(--success)">ALLOW</span></div>
+        <div class="dec-row"><span class="q">Does it contain a WriteNode / DELETE / DROP?</span><span class="ans" style="background:var(--danger-soft);color:var(--danger)">DENY</span></div>
+        <div class="dec-row"><span class="q">Does it touch sensitive columns (PII tags)?</span><span class="ans" style="background:var(--brand-soft);color:var(--brand-strong)">MASK</span></div>
+        <div class="dec-row"><span class="q">Entitlement limits exceeded (connections ≤ 5, prompts ≤ 3)?</span><span class="ans" style="background:var(--danger-soft);color:var(--danger)">RATE_LIMIT</span></div>
+        <div class="dec-row"><span class="q">Query complexity / timeout bounds exceeded?</span><span class="ans" style="background:var(--danger-soft);color:var(--danger)">DENY</span></div>
+      </div>
+      <p class="lede" style="margin-top:18px; font-size:13px">Every decision is recorded to the audit trail with actor, tenant, plan sources and policy version — including refusals. The same pipeline guards API, CLI, UI and MCP; MCP is never a privileged bypass.</p>
+    </section>
+
+    <!-- 5 · Execution & masking -->
+    <section class="slide">
+      <span class="kicker">Stage 05–06 · Execute → Mask</span>
+      <h2>Compile once, execute safely, mask before reasoning</h2>
+      <div class="grid2">
+        <div class="card">
+          <h3><span class="step-num">COMPILE</span> LogicalPlan → dialect SQL <span class="tag tag-amber">per provider</span></h3>
+          <p class="mono" style="font-size:12px; line-height:2; margin-top:10px">
+            ReadNode{traces, service, count(*) }<br />
+            &nbsp;&nbsp;→ <span style="color:var(--success)">SELECT service, count(*) AS n<br />
+            &nbsp;&nbsp;&nbsp;&nbsp;FROM traces WHERE status = 'error'<br />
+            &nbsp;&nbsp;&nbsp;&nbsp;GROUP BY service ORDER BY n DESC</span><br />
+            # the same plan compiles for 4 dialects
+          </p>
+        </div>
+        <div class="card">
+          <h3><span class="step-num">MASK</span> Before the model sees data <span class="tag tag-green">privacy</span></h3>
+          <p style="font-size:13px; margin-top:10px">
+            Sensitive columns (schema tags) are masked in the <b>result set</b> before the explanation model receives it — the answer generator never sees raw PII, and the row data sent to the client is redacted too.
+          </p>
+        </div>
+      </div>
+      <div class="grid3" style="margin-top:18px">
+        <div class="card" style="padding:14px"><h3 style="font-size:13px">Connection secrets</h3><p style="font-size:12px">settings may be <span class="mono">secret://infisical/…</span> — resolved once, before schema discovery, never logged.</p></div>
+        <div class="card" style="padding:14px"><h3 style="font-size:13px">Query errors</h3><p style="font-size:12px">driver errors mapped to typed codes: <span class="mono">QUERY_FAILED</span> vs <span class="mono">CONNECTION_FAILED</span> — honest 422s, not 502s.</p></div>
+        <div class="card" style="padding:14px"><h3 style="font-size:13px">Audit</h3><p style="font-size:12px">who asked · which connection · which SQL · which policy version · what came back.</p></div>
+      </div>
+    </section>
+
+    <!-- 6 · Streaming & progress -->
+    <section class="slide">
+      <span class="kicker">Stage 07 · Real-time UX</span>
+      <h2>The stream: progress + tokens + rows</h2>
+      <p class="lede">The UI shows the live pipeline state while the answer streams in — no dead air, no spinners-only.</p>
+      <div class="stages">
+        <span class="stg done">✓ Connecting</span>
+        <span class="stg done">✓ Planning</span>
+        <span class="stg done">✓ Executing</span>
+        <span class="stg now"><span class="spinner"></span> Explaining</span>
+      </div>
+      <div class="term">
+        <div class="dotbar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span></div>
+        <div><span class="k">event</span> <span class="ev">progress · connecting · "Resolving connection and schema…"</span></div>
+        <div><span class="k">event</span> <span class="ev">progress · planning · "Planning a validated query…"</span></div>
+        <div><span class="k">event</span> <span class="ev">progress · executing · "Executing validated query…"</span></div>
+        <div><span class="k">event</span> <span class="ev">start · columns=[service, n] · row_count=3</span></div>
+        <div><span class="k">event</span> <span class="ev">progress · explaining · "Generating answer…"</span></div>
+        <div><span class="k">event</span> <span class="ev">token · "3 rows returned: service, n"</span> <span class="s">…streamed…</span></div>
+        <div><span class="k">event</span> <span class="ev">rows · [{service: auth-service, n: 1}, …]</span></div>
+        <div><span class="k">event</span> <span class="ev">done</span></div>
+      </div>
+    </section>
+
+    <!-- 7 · Sequence -->
+    <section class="slide">
+      <span class="kicker">End-to-end</span>
+      <h2>The full sequence</h2>
+      <div class="seq">
+        <div class="seq-row"><div class="who">USER / UI</div><div class="seq-lane"><span class="seq-msg b">POST /ask/stream {question, connection_id}</span></div></div>
+        <div class="seq-row"><div class="who">API</div><div class="seq-lane"><span class="seq-msg">resolve connection · auth · entitlements</span></div></div>
+        <div class="seq-row"><div class="who">ENGINE</div><div class="seq-lane"><span class="seq-msg b">progress: connecting → planning</span></div></div>
+        <div class="seq-row"><div class="who">SCHEMA</div><div class="seq-lane"><span class="seq-msg">introspect catalog (per-provider)</span></div></div>
+        <div class="seq-row"><div class="who">PLANNER</div><div class="seq-lane"><span class="seq-msg">LLM plan → validate → retry loop</span></div></div>
+        <div class="seq-row"><div class="who">GUARDRAILS</div><div class="seq-lane"><span class="seq-msg">ALLOW → audit record</span></div></div>
+        <div class="seq-row"><div class="who">EXECUTOR</div><div class="seq-lane"><span class="seq-msg b">progress: executing → compile → run</span></div></div>
+        <div class="seq-row"><div class="who">MASK</div><div class="seq-lane"><span class="seq-msg">redact sensitive columns</span></div></div>
+        <div class="seq-row"><div class="who">REASONER</div><div class="seq-lane"><span class="seq-msg b">progress: explaining · stream tokens</span></div></div>
+        <div class="seq-row"><div class="who">API</div><div class="seq-lane"><span class="seq-msg">rows event · done event · persist conversation</span></div></div>
+        <div class="seq-row"><div class="who">USER / UI</div><div class="seq-lane"><span class="seq-msg b">render answer + table</span></div></div>
+      </div>
+    </section>
+
+    <!-- 8 · Principles -->
+    <section class="slide">
+      <span class="kicker">Design principles</span>
+      <h2>Why it's built this way</h2>
+      <div class="grid3">
+        <div class="card"><h3><span class="step-num">01</span> Read-only by construction</h3><p>Write plans are structurally impossible to execute — denied at the plan layer before any SQL is generated.</p></div>
+        <div class="card"><h3><span class="step-num">02</span> Trust nothing, verify</h3><p>The LLM proposes; deterministic validation, dialect allowlists and typed decisions dispose.</p></div>
+        <div class="card"><h3><span class="step-num">03</span> One pipeline everywhere</h3><p>UI, API, CLI and MCP share RequestContext → guardrails → audit. MCP is never a bypass.</p></div>
+        <div class="card"><h3><span class="step-num">04</span> Contracts, not forks</h3><p>Providers, stores and secrets are contract-bound — Enterprise swaps implementations, never the engine.</p></div>
+        <div class="card"><h3><span class="step-num">05</span> Progress is UX</h3><p>Real-time pipeline stages + streaming tokens keep users oriented instead of staring at spinners.</p></div>
+        <div class="card"><h3><span class="step-num">06</span> Audit everything</h3><p>Every decision — including refusals — is recorded with actor, tenant, plan and policy version.</p></div>
+      </div>
+    </section>
+
+    <!-- 9 · Inventory: agents, tools, MCPs, skills -->
+    <section class="slide">
+      <span class="kicker">Platform inventory</span>
+      <h2>Agents, tools, MCPs, skills &amp; plugins</h2>
+      <div class="inv-grid">
+        <div class="inv"><div class="num">1</div><div class="lbl">Agent pipeline</div><div class="sub">Direct agent · 3 LLM roles</div></div>
+        <div class="inv"><div class="num">3</div><div class="lbl">MCP tools</div><div class="sub">list_tables · table_schema · ask</div></div>
+        <div class="inv"><div class="num">4</div><div class="lbl">Skills</div><div class="sub">planner guidance, keyword-triggered</div></div>
+        <div class="inv"><div class="num">4</div><div class="lbl">Connectors</div><div class="sub">ClickHouse · PG · MySQL · SQLite</div></div>
+      </div>
+      <div class="inv-list">
+        <span class="inv-chip hot">Planner — LLM proposes LogicalPlan</span>
+        <span class="inv-chip hot">Reasoner — LLM explains results</span>
+        <span class="inv-chip">Direct Agent — orchestrates all roles</span>
+        <span class="inv-chip">Supervisor / specialist agents — Enterprise (pending)</span>
+        <span class="inv-chip">data.list_tables</span>
+        <span class="inv-chip">data.table_schema</span>
+        <span class="inv-chip">data.ask</span>
+        <span class="inv-chip hot">analytics</span>
+        <span class="inv-chip hot">timeseries</span>
+        <span class="inv-chip hot">debugging</span>
+        <span class="inv-chip hot">data_exploration</span>
+      </div>
+      <p class="lede" style="margin-top:16px; font-size:13px">Plugins: no ad-hoc plugin system — extensibility is contractual. New capabilities plug in via <span class="mono">ProviderRegistry</span> (connectors), <span class="mono">SkillRegistry</span> (guidance) and the DI container (stores, secrets, auth, audit). MCP tools share the exact same guardrail pipeline as the API — never a bypass.</p>
+    </section>
+
+    <!-- 10 · LangGraph-style flow graph -->
+    <section class="slide">
+      <span class="kicker">Orchestration graph</span>
+      <h2>The flow, LangGraph-style</h2>
+      <div class="graph">
+        <div class="gnode start"><span class="gt">start</span>User question</div>
+        <div class="gline"><span class="edge">↓</span><span class="lbl">POST /ask/stream · RequestContext</span></div>
+        <div class="gnode gate"><span class="gt">node</span>Connect · schema discovery</div>
+        <div class="gline"><span class="edge">↓</span><span class="lbl">catalog</span></div>
+        <div class="gnode llm"><span class="gt">llm node</span>Planner → LogicalPlan</div>
+        <div class="gline"><span class="edge">↓</span><span class="lbl">JSON plan</span></div>
+        <div class="gnode gate"><span class="gt">conditional</span>Validate (schema · dialect · read-only)</div>
+        <div class="gline"><span class="edge">↓</span><span class="lbl">invalid (≤2 retries)</span></div>
+        <div class="gloop"><span class="edge">↺</span> feedback → back to Planner</div>
+        <div class="gline"><span class="edge">↓</span><span class="lbl">valid</span></div>
+        <div class="gnode gate"><span class="gt">node</span>Guardrails → ALLOW / DENY / MASK</div>
+        <div class="gline"><span class="edge">↓</span><span class="lbl">allowed · audited</span></div>
+        <div class="gnode"><span class="gt">node</span>Execute → compile → run</div>
+        <div class="gline"><span class="edge">↓</span><span class="lbl">rows</span></div>
+        <div class="gnode"><span class="gt">node</span>Mask sensitive columns</div>
+        <div class="gline"><span class="edge">↓</span><span class="lbl">safe result</span></div>
+        <div class="gnode llm"><span class="gt">llm node</span>Reasoner → streamed explanation</div>
+        <div class="gline"><span class="edge">↓</span><span class="lbl">SSE tokens → rows → done</span></div>
+        <div class="gnode end"><span class="gt">end</span>Answer + audit record</div>
+      </div>
+      <p class="lede" style="margin-top:16px; font-size:13px">Branches: <b>clarification</b> (ambiguous or 2 invalid attempts → ask the user, no query runs) · <b>DENY</b> (guarded query → refusal recorded, stream ends with a typed error event).</p>
+    </section>
+
+    <!-- 11 · OSS features: implemented vs pending -->
+    <section class="slide">
+      <span class="kicker">Edition matrix · OSS</span>
+      <h2>DataHek OSS — implemented vs pending</h2>
+      <table class="matrix">
+        <thead><tr><th>Capability</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Direct agent pipeline (plan → validate → guardrails → execute → mask → explain)</td><td class="yes">implemented</td></tr>
+          <tr><td>Connectors — ClickHouse, PostgreSQL, MySQL, SQLite (live-verified)</td><td class="yes">implemented</td></tr>
+          <tr><td>Surfaces — REST API, CLI, MCP server, React web UI</td><td class="yes">implemented</td></tr>
+          <tr><td>Streaming + real-time progress events</td><td class="yes">implemented</td></tr>
+          <tr><td>Guardrails — read-only, AST validation, injection, dialect allowlists</td><td class="yes">implemented</td></tr>
+          <tr><td>Audit trail (JSONL) · masking (PII) · conversations (SQLite/PG)</td><td class="yes">implemented</td></tr>
+          <tr><td>Evaluation framework + regression datasets</td><td class="yes">implemented</td></tr>
+          <tr><td>Local auth (datahek/datahek) + login page + auth gate</td><td class="yes">implemented</td></tr>
+          <tr><td>Persistent metadata — PostgreSQL + Redis (opt-in) · encrypted at rest</td><td class="yes">implemented</td></tr>
+          <tr><td>Infisical secrets — DB creds · login users · LLM config</td><td class="yes">implemented (needs live instance)</td></tr>
+          <tr><td>Docker compose — web · api · mcp · postgres · redis</td><td class="yes">implemented</td></tr>
+          <tr><td>Skills (4) · prompt templates (≤3) · entitlements</td><td class="yes">implemented</td></tr>
+          <tr><td>CI pipeline · semantic layer · visualization engine</td><td class="pending">pending</td></tr>
+          <tr><td>Scheduled queries · exports · approval inbox (basic)</td><td class="pending">pending</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 12 · Enterprise: implemented vs pending -->
+    <section class="slide">
+      <span class="kicker">Edition matrix · Enterprise</span>
+      <h2>DataHek Enterprise — implemented vs pending</h2>
+      <table class="matrix">
+        <thead><tr><th>Capability</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Enterprise repository (commercial layer)</td><td class="pending">pending</td></tr>
+          <tr><td>SSO / SAML / OIDC · SCIM provisioning</td><td class="pending">pending</td></tr>
+          <tr><td>Advanced RBAC / ABAC · group &amp; per-connection permissions</td><td class="pending">pending</td></tr>
+          <tr><td>Multi-tenancy (orgs · workspaces · quotas · isolation)</td><td class="pending">pending</td></tr>
+          <tr><td>Central policy engine (policy-as-code · versioning · approvals)</td><td class="pending">pending</td></tr>
+          <tr><td>Centralized audit platform (search · retention · reports)</td><td class="pending">pending</td></tr>
+          <tr><td>Admin console · usage analytics · model routing</td><td class="pending">pending</td></tr>
+          <tr><td>High availability · Redis queues · object storage · SLAs</td><td class="pending">pending</td></tr>
+          <tr><td>External secrets manager (Infisical/Vault) as the identity source</td><td class="yes">contracts ready (OSS side)</td></tr>
+          <tr><td>Contracts &amp; extension points (auth, policy, audit, secrets, tenancy)</td><td class="yes">contracts ready (OSS side)</td></tr>
+        </tbody>
+      </table>
+      <p class="lede" style="margin-top:16px; font-size:13px">Enterprise is an extension layer over the OSS contracts — never a fork. The same engine code runs in both editions.</p>
+    </section>
+
+    <!-- 13 · Dependencies -->
+    <section class="slide">
+      <span class="kicker">Stack &amp; dependencies</span>
+      <h2>What the platform is built on</h2>
+      <div class="dep-group">
+        <div class="dg-lbl">Backend core</div>
+        <div class="deps">
+          <span class="dep core">python 3.12</span><span class="dep core">fastapi + uvicorn</span><span class="dep core">pydantic v2</span>
+          <span class="dep core">httpx</span><span class="dep core">sqlglot</span><span class="dep core">fastmcp</span>
+        </div>
+      </div>
+      <div class="dep-group">
+        <div class="dg-lbl">Connectors &amp; stores</div>
+        <div class="deps">
+          <span class="dep">clickhouse-connect</span><span class="dep">psycopg[binary]</span><span class="dep">pymysql</span><span class="dep">sqlite3 (stdlib)</span>
+          <span class="dep">redis</span><span class="dep">cryptography (Fernet)</span>
+        </div>
+      </div>
+      <div class="dep-group">
+        <div class="dg-lbl">Frontend (apps/web)</div>
+        <div class="deps">
+          <span class="dep">react 19</span><span class="dep">typescript</span><span class="dep">vite 6</span><span class="dep">tailwind v4</span>
+          <span class="dep">zustand</span><span class="dep">radix-ui + cva</span><span class="dep">phosphor icons</span><span class="dep">react-router 7</span>
+        </div>
+      </div>
+      <div class="dep-group">
+        <div class="dg-lbl">Runtime infrastructure (docker compose)</div>
+        <div class="deps">
+          <span class="dep core">postgres 16</span><span class="dep core">redis 7</span><span class="dep">node 20 (web)</span>
+          <span class="dep">ClickHouse (external demo)</span><span class="dep">Infisical (optional secrets)</span>
+        </div>
+      </div>
+      <p class="lede" style="margin-top:16px; font-size:13px">Kernel is stdlib-only by design — connectors, API, LLM and MCP are optional extras (<span class="mono">datahek-core[all]</span>).</p>
+    </section>
+  </div>
+
+  <div class="bar">
+    <span class="brand"><span class="mark">⚡</span> DataHek · How the Chat Agent Works</span>
+    <div class="dots" id="dots"></div>
+    <span class="count" id="count"></span>
+    <span class="hint">← → navigate · click dots · F = fullscreen</span>
+    <button class="arrow-btn" id="prev" aria-label="Previous">←</button>
+    <button class="arrow-btn" id="next" aria-label="Next">→</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var dotsEl = document.getElementById('dots');
+  var countEl = document.getElementById('count');
+  var idx = 0;
+
+  slides.forEach(function (_, i) {
+    var d = document.createElement('span');
+    d.className = 'dotnav' + (i === 0 ? ' on' : '');
+    d.addEventListener('click', function () { go(i); });
+    dotsEl.appendChild(d);
+  });
+  var dots = Array.prototype.slice.call(dotsEl.children);
+
+  function go(i) {
+    idx = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach(function (s, j) { s.classList.toggle('active', j === idx); });
+    dots.forEach(function (d, j) { d.classList.toggle('on', j === idx); });
+    countEl.textContent = (idx + 1) + ' / ' + slides.length;
+    if (window.innerWidth >= 768) window.scrollTo(0, 0);
+  }
+  function next() { go(idx + 1); }
+  function prev() { go(idx - 1); }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); next(); }
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev(); }
+    if (e.key === 'Home') go(0);
+    if (e.key === 'End') go(slides.length - 1);
+    if (e.key.toLowerCase() === 'f') toggleFullscreen();
+  });
+  document.getElementById('next').addEventListener('click', next);
+  document.getElementById('prev').addEventListener('click', prev);
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(function () {});
+  }
+
+  go(0);
+})();
+</script>
+</body>
+</html>

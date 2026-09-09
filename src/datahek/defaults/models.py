@@ -102,13 +102,21 @@ class OpenAICompatibleModelProvider(ModelProvider):
     def model(self) -> str:
         return self._config.model
 
+    def _headers(self) -> dict:
+        """Request headers — some OpenAI-compatible gateways require a session id."""
+        import uuid
+
+        return {
+            "Authorization": f"Bearer {self._config.api_key}",
+            "x-opencode-session": str(uuid.uuid4()),
+        }
+
     async def _post(self, payload: dict) -> dict:
         import httpx
 
-        headers = {"Authorization": f"Bearer {self._config.api_key}"}
         url = f"{self._config.base_url.rstrip('/')}/chat/completions"
         async with httpx.AsyncClient(timeout=self._config.timeout_s) as client:
-            resp = await client.post(url, json=payload, headers=headers)
+            resp = await client.post(url, json=payload, headers=self._headers())
             resp.raise_for_status()
             return resp.json()
 
