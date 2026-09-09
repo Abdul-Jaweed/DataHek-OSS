@@ -9,8 +9,9 @@ This branch's repository root **is** the OSS landing page (GitHub Pages–deploy
 ## Deploy to GitHub Pages
 
 1. Repo → **Settings → Pages** → Source: **Deploy from a branch**
-2. Branch: `oss-landing-page` → folder: `/ (root)`
+2. Branch: `oss-landing-page` → folder: **`/oss-landing-page`**
 
-Pure static HTML — no build step. Or serve locally: `python -m http.server 8080`.
+Pure static HTML — no build step. Or serve locally:
+`python -m http.server 8080 --directory oss-landing-page`
 
 > This is the **open-source** landing page. The hosted-product site lives on `feature/landing-page`; the application itself on `main`.
