@@ -37,7 +37,7 @@ class ClickHouseProvider(DataProvider):
             password=connection.settings.get("password", ""),
             database=connection.database or "default",
             connect_timeout=10,
-            readonly=1,  # Physical read-only enforcement: ClickHouse rejects writes.
+            settings={"readonly": 1},  # Physical read-only enforcement: ClickHouse rejects writes.
         )
 
     async def ping(self, client: Any) -> dict:

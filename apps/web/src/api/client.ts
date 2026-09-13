@@ -54,6 +54,14 @@ export const api = {
   saveLlmSettings: (body: { base_url?: string; api_key?: string; model?: string }) =>
     request<{ base_url: string; model: string; api_key_set: boolean }>('/settings/llm', { method: 'POST', body: JSON.stringify(body) }),
 
+  listApprovals: () =>
+    request<{ id: string; status: string; reason: string; requester: string; resource_ref: string }[]>('/approvals'),
+  decideApproval: (id: string, decision: 'approve' | 'reject', actor = 'ui') =>
+    request<{ approval_id: string; status: string }>(`/approvals/${id}/decide`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, actor }),
+    }),
+
   listPrompts: () => request<Prompt[]>('/prompts'),
   createPrompt: (name: string, content: string) => request<Prompt>('/prompts', { method: 'POST', body: JSON.stringify({ name, content }) }),
   deletePrompt: (id: string) => request<void>(`/prompts/${id}`, { method: 'DELETE' }),

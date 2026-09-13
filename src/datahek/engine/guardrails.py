@@ -56,3 +56,25 @@ class PlanComplexityGuardrail(Guardrail):
             if limit is None or limit > max_rows:
                 object.__setattr__(node, "limit", max_rows)
         return GuardrailResult(decision="ALLOW", reason="limit capped")
+
+class PolicyGuardrail(Guardrail):
+    """Delegates to the PolicyEngine — table allowlists, approval gating."""
+
+    name = "policy"
+    stage = "plan"
+    enabled = True
+
+    def __init__(self, policy) -> None:
+        self._policy = policy
+
+    async def run(self, ctx: RequestContext, payload: dict) -> GuardrailResult:
+        plan = payload.get("plan")
+        context = {
+            "plan": plan,
+            "table": getattr(plan.nodes[0], "source", None) if plan and plan.nodes else None,
+        }
+        decision = await self._policy.evaluate(context)
+        action = decision.get("action", "ALLOW")
+        if action == "ALLOW":
+            return GuardrailResult(decision="ALLOW", reason=decision.get("reason", "ok"))
+        return GuardrailResult(decision=action, reason=decision.get("reason", action), score=1.0)

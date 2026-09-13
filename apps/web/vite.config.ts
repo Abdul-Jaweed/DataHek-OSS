@@ -18,6 +18,7 @@ export default defineConfig({
       '/conversations': apiTarget,
       '/prompts': apiTarget,
       '/evaluations': apiTarget,
+      '/approvals': apiTarget,
     },
   },
   build: { outDir: 'dist' },

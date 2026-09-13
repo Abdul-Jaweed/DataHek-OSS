@@ -20,6 +20,8 @@ from datahek.connectors.clickhouse import ClickHouseProvider
 from datahek.connectors.mysql import MySQLProvider
 from datahek.connectors.postgres import PostgresProvider
 from datahek.connectors.sqlite import SQLiteProvider
+from datahek.contracts.misc import ApprovalService
+from datahek.defaults.approvals import LocalApprovalService
 from datahek.defaults.audit import JsonlAuditSink
 from datahek.defaults.auth import AuthConfig, LocalAuthProvider
 from datahek.defaults.connections import LocalConnectionManager
@@ -62,6 +64,7 @@ def build_default_container() -> Container:
     c.register(TenantContext, SingleTenantContext(), singleton=True)
     c.register(AuditSink, JsonlAuditSink(), singleton=True)
     c.register(PolicyEngine, LocalPolicyEngine(), singleton=True)
+    c.register(ApprovalService, LocalApprovalService(), singleton=True)
     pg = PgMetadata()
     if pg._url:
         c.register(PgMetadata, pg, singleton=True)
@@ -123,5 +126,7 @@ def build_app_container() -> Container:
         evaluation_hook=LocalEvaluator(c.resolve(EvaluationStore)),
         masking_policy=TagBasedMaskingPolicy(),
         secrets=c.resolve(SecretsProvider),
+        policy=c.resolve(PolicyEngine),
+        approvals=c.resolve(ApprovalService),
     ), singleton=True)
     return c

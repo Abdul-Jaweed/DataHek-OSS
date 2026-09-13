@@ -7,6 +7,7 @@ import { ChatPage } from './features/ChatPage';
 import { ConnectionsPage } from './features/ConnectionsPage';
 import { ConversationsPage } from './features/ConversationsPage';
 import { PromptsPage } from './features/PromptsPage';
+import { ApprovalsPage } from './features/ApprovalsPage';
 import { EvaluationsPage } from './features/EvaluationsPage';
 import { SettingsPage } from './features/SettingsPage';
 import { LandingPage } from './features/LandingPage';
@@ -31,6 +32,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/connections" element={<AppPage><ConnectionsPage /></AppPage>} />
         <Route path="/conversations" element={<AppPage><ConversationsPage /></AppPage>} />
         <Route path="/prompts" element={<AppPage><PromptsPage /></AppPage>} />
+        <Route path="/approvals" element={<AppPage><ApprovalsPage /></AppPage>} />
         <Route path="/evaluations" element={<AppPage><EvaluationsPage /></AppPage>} />
         <Route path="/settings" element={<AppPage><SettingsPage /></AppPage>} />
         <Route path="*" element={<Navigate to="/" replace />} />

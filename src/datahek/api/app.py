@@ -39,6 +39,7 @@ _STATUS_BY_CODE = {
     ErrorCode.UNAUTHORIZED: 401,
     ErrorCode.FORBIDDEN: 403,
     ErrorCode.QUERY_DENIED: 422,
+    ErrorCode.APPROVAL_REQUIRED: 202,
     ErrorCode.PLAN_INVALID: 422,
     ErrorCode.VALIDATION: 422,
     ErrorCode.CONNECTION_EXISTS: 409,
@@ -81,6 +82,12 @@ class AskRequest(BaseModel):
     user_id: str = "anonymous"
     conversation_id: str | None = None
     prompt_id: str | None = None
+    approval_id: str | None = None
+
+
+class ApprovalDecisionRequest(BaseModel):
+    decision: str = Field(..., pattern="^(approve|reject)$")
+    actor: str = Field("anonymous", max_length=128)
 
 
 class PromptRequest(BaseModel):
@@ -137,7 +144,7 @@ def create_app(container=None) -> FastAPI:
         from datahek.contracts.prompts import PromptStore
         from datahek.defaults.guardrails import redact_pii
 
-        ctx = RequestContext(source="api", user_id=req.user_id)
+        ctx = RequestContext(source="api", user_id=req.user_id, approval_id=req.approval_id)
         conn = await conn_mgr.get_connection(ctx, req.connection_id)
         provider = registry.get(conn.provider)
 
@@ -377,6 +384,26 @@ def create_app(container=None) -> FastAPI:
         ctx = RequestContext(source="api")
         await conn_mgr.remove(ctx, connection_id)
 
+    @app.get("/approvals")
+    async def list_approvals(_identity=Depends(_require_auth)):
+        from datahek.contracts.misc import ApprovalService
+
+        if not c.has(ApprovalService):
+            return []
+        service = c.resolve(ApprovalService)
+        lister = getattr(service, "list_all", None)
+        return lister() if lister is not None else []
+
+    @app.post("/approvals/{approval_id}/decide")
+    async def decide_approval(approval_id: str, req: ApprovalDecisionRequest,
+                              _identity=Depends(_require_auth)):
+        from datahek.contracts.misc import ApprovalService
+
+        service = c.resolve(ApprovalService)
+        mapped = "approved" if req.decision == "approve" else "rejected"
+        await service.decide(approval_id, mapped, req.actor)
+        return {"approval_id": approval_id, "status": await service.status(approval_id)}
+
     @app.post("/ask")
     async def ask(req: AskRequest, _identity=Depends(_require_auth)):
         answer = await _ask_pipeline(req, c, conn_mgr, registry, planner, engine, reasoner, entitlements)
@@ -388,7 +415,7 @@ def create_app(container=None) -> FastAPI:
         from fastapi.responses import StreamingResponse
         import json as _json
 
-        ctx = RequestContext(source="api", user_id=req.user_id)
+        ctx = RequestContext(source="api", user_id=req.user_id, approval_id=req.approval_id)
         conn = await conn_mgr.get_connection(ctx, req.connection_id)
         provider = registry.get(conn.provider)
 

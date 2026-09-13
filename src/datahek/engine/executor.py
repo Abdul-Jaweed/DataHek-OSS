@@ -9,7 +9,9 @@ from datahek.contracts.connections import Connection
 from datahek.contracts.guardrails import GuardrailResult
 from datahek.contracts.providers import DataProvider
 from datahek.contracts.secrets import SecretRef, SecretsProvider
-from datahek.engine.guardrails import GuardrailPipeline, PlanComplexityGuardrail, PlanReadOnlyGuardrail
+from datahek.engine.guardrails import GuardrailPipeline, PlanComplexityGuardrail, PlanReadOnlyGuardrail, PolicyGuardrail
+from datahek.contracts.misc import ApprovalRequest, ApprovalService
+from datahek.contracts.policy import PolicyEngine
 from datahek.engine.plan import LogicalPlan, validate_plan
 from datahek.kernel.context import RequestContext
 from datahek.kernel.errors import DatahekError, ErrorCode
@@ -84,17 +86,20 @@ class Engine:
         evaluation_hook=None,
         masking_policy=None,
         secrets: SecretsProvider | None = None,
+        policy: PolicyEngine | None = None,
+        approvals: ApprovalService | None = None,
     ):
         self.registry = registry
-        self.guardrails = guardrails or GuardrailPipeline([
-            PlanReadOnlyGuardrail(),
-            PlanComplexityGuardrail(),
-        ])
+        self.guardrails = guardrails or GuardrailPipeline(
+            ([PolicyGuardrail(policy)] if policy is not None else [])
+            + [PlanReadOnlyGuardrail(), PlanComplexityGuardrail()]
+        )
         self.schema_service = schema_service
         self.audit_sink = audit_sink
         self.evaluation_hook = evaluation_hook
         self.masking_policy = masking_policy
         self.secrets = secrets
+        self.approvals = approvals
 
     async def _audit(self, ctx: RequestContext, event: AuditEvent) -> None:
         if self.audit_sink is not None:
@@ -127,7 +132,40 @@ class Engine:
             tenant={"org": ctx.organization_id, "project": ctx.project_id},
             payload={"guardrail": decision.reason, "plan_sources": [n.source for n in plan.nodes if hasattr(n, "source")]},
         ))
-        if decision.decision != "ALLOW":
+        approved = False
+        if decision.decision == "REQUIRE_APPROVAL":
+            if self.approvals is not None and ctx.approval_id:
+                from datahek.defaults.approvals import LocalApprovalService  # noqa: F401 (documents expected impl surface)
+
+                status = await self.approvals.status(ctx.approval_id)
+                if status == "approved":
+                    consume = getattr(self.approvals, "consume", None)
+                    if consume is not None:
+                        await consume(ctx.approval_id)
+                    approved = True
+                elif status == "rejected":
+                    raise DatahekError(ErrorCode.QUERY_DENIED, "Approval was rejected",
+                                       details={"approval_id": ctx.approval_id})
+            if not approved:
+                approval_id = None
+                if self.approvals is not None:
+                    from datahek.kernel.ids import entity_id
+
+                    approval_id = await self.approvals.request_approval(ctx, ApprovalRequest(
+                        id=entity_id("approval"),
+                        org_id=ctx.organization_id,
+                        project_id=ctx.project_id,
+                        resource_ref=connection.id,
+                        requester=ctx.user_id,
+                        reason=decision.reason,
+                    ))
+                raise DatahekError(
+                    ErrorCode.APPROVAL_REQUIRED,
+                    decision.reason,
+                    details={"decision": decision.decision, "approval_id": approval_id},
+                )
+
+        if decision.decision != "ALLOW" and not approved:
             if self.evaluation_hook is not None:
                 await self.evaluation_hook.on_execution_completed(
                     ctx, plan=plan, result=None, duration_ms=0, decision=decision.decision)

@@ -77,7 +77,7 @@ class TestClickHousePhysicalReadOnly(unittest.TestCase):
         with mock.patch.dict(sys.modules, {"clickhouse_connect": fake_mod}):
             asyncio.run(ClickHouseProvider().connect(_conn("clickhouse", port=8123)))
         kwargs = fake_mod.get_client.call_args.kwargs
-        self.assertEqual(kwargs.get("readonly"), 1)
+        self.assertEqual(kwargs.get("settings", {}).get("readonly"), 1)
 
 
 if __name__ == "__main__":

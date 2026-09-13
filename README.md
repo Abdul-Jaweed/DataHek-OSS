@@ -30,6 +30,8 @@ question → schema discovery → logical plan → validation → guardrails
 - **Typed guardrail decisions** — `ALLOW / DENY / REDACT / MASK / REQUIRE_APPROVAL / RATE_LIMIT` across input → plan → SQL → output
 - **Masking before reasoning** — sensitive columns are masked before the explanation model sees results
 - **Full audit** — every guardrail decision and execution recorded with actor, tenant, and decision
+- **Dual-layer read-only** — AST validation plus *physical* enforcement: PG `default_transaction_read_only`, SQLite `mode=ro`, MySQL read-only sessions, ClickHouse `readonly=1`
+- **Human-in-the-loop approvals** — large exports, unbounded scans, and sensitive tables pause for approval (`/approvals`, UI inbox) before executing
 - **Four surfaces, one pipeline** — REST API, CLI, MCP server, and web UI share the same guardrails (MCP is never a privileged bypass)
 - **Conversational memory** — multi-turn conversations persisted in SQLite with streaming answers
 - **Local authentication** — `POST /auth/login` (default user `datahek`/`datahek`), enforced via `X-API-Key`
@@ -151,6 +153,8 @@ python -m datahek.mcp_server    # streamable HTTP on :8001
 | `DATAHEK_AUDIT_PATH` | `datahek-audit.jsonl` | Audit trail (JSONL) |
 | `DATAHEK_AUTH_MODE` | `none` | `none` or `local` (enforce API keys) |
 | `DATAHEK_AUTH_LOCAL_USERS` | `{"datahek":"datahek"}` | JSON `{"user":"password"}` for local auth |
+| `DATAHEK_APPROVAL_ROW_LIMIT` | `1000` | Row limit (or unbounded scan) that requires human approval |
+| `DATAHEK_APPROVAL_SENSITIVE_TABLES` | credential/password/pii patterns | Comma-separated table-name patterns that require approval |
 | `DATAHEK_METADATA_URL` | *(empty)* | PostgreSQL URL for durable connections/conversations/prompts/evaluations (empty → SQLite/in-memory defaults) |
 | `DATAHEK_METADATA_REDIS_URL` | *(empty)* | Redis URL for LLM settings persistence across restarts (empty → runtime settings only) |
 | `DATAHEK_ENCRYPTION_KEY` | *(empty)* | Optional: encrypt connection settings at rest in PostgreSQL |
