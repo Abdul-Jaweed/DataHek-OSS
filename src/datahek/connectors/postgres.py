@@ -40,7 +40,7 @@ class PostgresProvider(DataProvider):
     )
 
     async def connect(self, connection: Connection) -> Any:
-        return psycopg.connect(
+        client = psycopg.connect(
             host=connection.host or "localhost",
             port=connection.port or 5432,
             dbname=connection.database or "postgres",
@@ -49,6 +49,9 @@ class PostgresProvider(DataProvider):
             connect_timeout=10,
             sslmode=connection.settings.get("sslmode", "prefer"),
         )
+        # Physical read-only enforcement: the server itself rejects writes.
+        client.execute("SET default_transaction_read_only = on")
+        return client
 
     async def ping(self, client: Any) -> dict:
         client.execute("SELECT 1")

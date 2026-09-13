@@ -38,7 +38,7 @@ class MySQLProvider(DataProvider):
     )
 
     async def connect(self, connection: Connection) -> Any:
-        return pymysql.connect(
+        client = pymysql.connect(
             host=connection.host or "localhost",
             port=connection.port or 3306,
             user=connection.settings.get("username", "root"),
@@ -46,6 +46,11 @@ class MySQLProvider(DataProvider):
             database=connection.database or "",
             connect_timeout=10,
         )
+        # Physical read-only enforcement: the server itself rejects writes.
+        cursor = client.cursor()
+        cursor.execute("SET SESSION TRANSACTION READ ONLY")
+        cursor.close()
+        return client
 
     async def ping(self, client: Any) -> dict:
         cur = client.cursor()

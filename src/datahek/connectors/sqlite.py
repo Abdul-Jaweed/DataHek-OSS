@@ -31,7 +31,11 @@ class SQLiteProvider(DataProvider):
     )
 
     async def connect(self, connection: Connection) -> Any:
-        return sqlite3.connect(connection.host or ":memory:")
+        target = connection.host or ":memory:"
+        if target == ":memory:" or target.startswith("file:"):
+            return sqlite3.connect(target, uri=target.startswith("file:"))
+        # Physical read-only enforcement: the SQLite engine rejects writes.
+        return sqlite3.connect(f"file:{target}?mode=ro", uri=True)
 
     async def ping(self, client: Any) -> dict:
         client.execute("SELECT 1")

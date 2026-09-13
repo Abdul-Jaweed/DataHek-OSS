@@ -47,7 +47,8 @@ class TestSQLiteClient(unittest.TestCase):
             conn = _conn(path)
             with mock.patch("datahek.connectors.sqlite.sqlite3.connect") as m:
                 asyncio.run(p.connect(conn))
-            m.assert_called_once_with(path)
+            # Physical read-only enforcement: file DBs open via the read-only URI.
+            m.assert_called_once_with(f"file:{path}?mode=ro", uri=True)
 
     def test_introspect(self):
         import tempfile
