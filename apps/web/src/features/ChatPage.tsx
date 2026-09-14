@@ -22,6 +22,8 @@ function applyEvent(ev: StreamEvent, message: Message): Partial<Message> {
       return { verified: { ok: ev.ok, note: ev.note } };
     case 'redactions':
       return { redactions: ev.categories };
+    case 'steps':
+      return { steps: ev.steps };
     case 'done':
       return { streaming: false };
     default:

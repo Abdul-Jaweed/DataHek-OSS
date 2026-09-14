@@ -1,5 +1,6 @@
 """DataHek OSS API — health, connections, ask, conversations, evaluations, web UI."""
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 from typing import Any
@@ -9,11 +10,14 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+import logging
+
 from datahek import __version__
 from datahek.contracts.auth import AuthProvider
 from datahek.contracts.connections import ConnectionManager
 from datahek.contracts.reasoner import Reasoner
 from datahek.contracts.verifier import Verifier
+from datahek.engine.analyst import MultiStepAnalyst
 from datahek.defaults.guardrails import sanitize_output
 from datahek.contracts.models import ModelProvider
 from datahek.engine.executor import Engine, ProviderRegistry
@@ -33,6 +37,8 @@ try:
     from datahek.defaults.redis_llm import RedisLlmSettingsStore
 except ImportError:  # optional extra; store absent → behavior unchanged
     RedisLlmSettingsStore = None
+
+logger = logging.getLogger("datahek.api")
 
 _STATUS_BY_CODE = {
     ErrorCode.NOT_FOUND: 404,
@@ -162,6 +168,12 @@ async def _audit_output_redactions(c, ctx, connection, categories: list[str]) ->
         logging.getLogger("datahek.api").warning("Output redaction audit failed: %s", exc)
 
 
+def _analyst_enabled() -> bool:
+    import os
+
+    return os.environ.get("DATAHEK_ANALYST", "on").lower() not in ("off", "0", "false")
+
+
 def _verifier_enabled() -> bool:
     import os
 
@@ -219,6 +231,39 @@ def create_app(container=None) -> FastAPI:
             if tpl is None:
                 raise DatahekError(ErrorCode.NOT_FOUND, f"Prompt '{req.prompt_id}' not found")
             extra_prompt = tpl["content"]
+
+        analyst = c.resolve(MultiStepAnalyst) if c.has(MultiStepAnalyst) else None
+        if (analyst is not None and _analyst_enabled()
+                and MultiStepAnalyst.looks_complex(req.question)):
+            try:
+                multi = await analyst.run(req.question, ctx, conn, provider)
+            except DatahekError:
+                raise
+            except Exception as exc:
+                logger.warning("Multi-step analysis failed; falling back to single step: %s", exc)
+                multi = None
+            if multi is not None:
+                step_results, synthesis = multi
+                synthesis, step_redactions = sanitize_output(synthesis)
+                if step_redactions:
+                    await _audit_output_redactions(c, ctx, conn, step_redactions)
+                await _record_turn(conversations, ctx, req, synthesis, "result")
+                verification = None
+                if _verifier_enabled() and c.has(Verifier):
+                    verification = {"ok": True, "note": "multi-step analysis; per-step results attached"}
+                return {
+                    "clarification": None,
+                    "answer": synthesis,
+                    "rows": step_results[0].get("rows") if step_results else None,
+                    "columns": step_results[0].get("columns") if step_results else None,
+                    "row_count": sum(r.get("row_count") or 0 for r in step_results),
+                    "truncated": False,
+                    "plan_sources": [],
+                    "conversation_id": req.conversation_id,
+                    "steps": step_results,
+                    "verification": verification,
+                    "redactions": step_redactions or None,
+                }
 
         plan_result = await planner.plan(req.question, ctx, conn, provider, extra_prompt=extra_prompt)
         if plan_result.clarification:
@@ -554,6 +599,37 @@ def create_app(container=None) -> FastAPI:
             yield ev({"type": "progress", "stage": "connecting", "message": "Resolving connection and schema…"})
             yield ev({"type": "progress", "stage": "planning", "message": "Planning a validated query…"})
             try:
+                if (c.has(MultiStepAnalyst) and _analyst_enabled()
+                        and MultiStepAnalyst.looks_complex(req.question)):
+                    analyst = c.resolve(MultiStepAnalyst)
+                    yield ev({"type": "progress", "stage": "planning",
+                              "message": "Decomposing into sub-questions…"})
+                    multi = await analyst.run(req.question, ctx, conn, provider)
+                    if multi is not None:
+                        step_results, synthesis = multi
+                        synthesis, stream_redactions = sanitize_output(synthesis)
+                        first = step_results[0] if step_results else {}
+                        steps_meta = [{"question": r["question"], "row_count": r.get("row_count"),
+                                       "sql": r.get("sql")} for r in step_results]
+                        await _record_turn(conversations, ctx, req, synthesis, "result")
+                        yield ev({"type": "start", "conversation_id": req.conversation_id,
+                                  "columns": first.get("columns") or [], "row_count": len(step_results)})
+                        yield ev({"type": "progress", "stage": "explaining", "message": "Generating answer…"})
+                        yield ev({"type": "steps", "steps": steps_meta})
+                        yield ev({"type": "token", "content": synthesis})
+                        yield ev({"type": "rows", "rows": first.get("rows") or [],
+                                  "columns": first.get("columns") or [], "row_count": first.get("row_count") or 0,
+                                  "truncated": False})
+                        if stream_redactions:
+                            await _audit_output_redactions(c, ctx, conn, stream_redactions)
+                            yield ev({"type": "redactions", "categories": stream_redactions})
+                        if _verifier_enabled() and c.has(Verifier):
+                            yield ev({"type": "verification", "ok": True,
+                                      "note": "multi-step analysis; per-step results attached"})
+                        yield ev({"type": "progress", "stage": "done", "message": "Complete"})
+                        yield ev({"type": "done"})
+                        return
+
                 plan_result = await planner.plan(req.question, ctx, conn, provider,
                                                  extra_prompt=await _prompt_content(req))
                 if plan_result.clarification:

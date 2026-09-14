@@ -15,6 +15,7 @@ export interface Message {
   clarification?: boolean;
   verified?: { ok: boolean; note: string };
   redactions?: string[];
+  steps?: { question: string; row_count: number | null; sql: string | null }[];
 }
 
 export interface MessageBubbleProps {
@@ -79,6 +80,23 @@ export function MessageBubble({ message, actions }: MessageBubbleProps) {
           >
             {message.verified.ok ? '✓' : '⚠'} verified
             {message.verified.note ? ` · ${message.verified.note}` : ''}
+          </div>
+        )}
+
+        {message.steps && message.steps.length > 0 && (
+          <div className="mt-3 border-t border-border pt-2">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
+              multi-step analysis · {message.steps.length} queries
+            </div>
+            <ol className="mt-1.5 space-y-1">
+              {message.steps.map((step, i) => (
+                <li key={i} className="flex items-baseline gap-2 font-mono text-[11px] text-muted">
+                  <span className="text-brand-strong">{i + 1}.</span>
+                  <span className="truncate">{step.question}</span>
+                  {step.row_count !== null && <span className="text-faint">({step.row_count} rows)</span>}
+                </li>
+              ))}
+            </ol>
           </div>
         )}
 

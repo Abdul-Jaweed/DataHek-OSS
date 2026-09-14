@@ -44,6 +44,7 @@ from datahek.defaults.secrets import EnvSecretsProvider
 from datahek.defaults.tenancy import SingleTenantContext
 from datahek.engine.executor import Engine, ProviderRegistry
 from datahek.engine.planner import Planner
+from datahek.engine.analyst import MultiStepAnalyst
 from datahek.engine.reasoner import ModelReasoner
 from datahek.engine.verifier import ModelVerifier
 from datahek.engine.schema import SchemaService
@@ -124,6 +125,12 @@ def build_app_container() -> Container:
     ), singleton=True)
     c.register(Reasoner, lambda: ModelReasoner(model=c.resolve(ModelProvider)), singleton=True)
     c.register(Verifier, lambda: ModelVerifier(c.resolve(ModelProvider)), singleton=True)
+    c.register(MultiStepAnalyst, lambda: MultiStepAnalyst(
+        model=c.resolve(ModelProvider),
+        planner=c.resolve(Planner),
+        engine=c.resolve(Engine),
+        reasoner=c.resolve(Reasoner),
+    ), singleton=True)
     c.register(Engine, lambda: Engine(
         registry=c.resolve(ProviderRegistry),
         schema_service=c.resolve(SchemaService),

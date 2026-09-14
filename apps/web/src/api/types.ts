@@ -87,6 +87,7 @@ export type StreamEvent =
   | { type: 'progress'; stage: string; message: string }
   | { type: 'verification'; ok: boolean; note: string }
   | { type: 'redactions'; categories: string[] }
+  | { type: 'steps'; steps: { question: string; row_count: number | null; sql: string | null }[] }
   | { type: 'error'; code?: string; message: string }
   | { type: 'clarification'; text: string }
   | { type: 'done' };
