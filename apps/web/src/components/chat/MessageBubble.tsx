@@ -13,6 +13,7 @@ export interface Message {
   truncated?: boolean;
   error?: boolean;
   clarification?: boolean;
+  verified?: { ok: boolean; note: string };
 }
 
 export interface MessageBubbleProps {
@@ -66,6 +67,17 @@ export function MessageBubble({ message, actions }: MessageBubbleProps) {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {message.verified && (
+          <div
+            className={`mt-2 flex items-center gap-1.5 font-mono text-[11px] ${
+              message.verified.ok ? 'text-success' : 'text-warning'
+            }`}
+          >
+            {message.verified.ok ? '✓' : '⚠'} verified
+            {message.verified.note ? ` · ${message.verified.note}` : ''}
           </div>
         )}
 

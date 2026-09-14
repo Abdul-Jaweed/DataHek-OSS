@@ -32,6 +32,9 @@ question → schema discovery → logical plan → validation → guardrails
 - **Full audit** — every guardrail decision and execution recorded with actor, tenant, and decision
 - **Dual-layer read-only** — AST validation plus *physical* enforcement: PG `default_transaction_read_only`, SQLite `mode=ro`, MySQL read-only sessions, ClickHouse `readonly=1`
 - **Human-in-the-loop approvals** — large exports, unbounded scans, and sensitive tables pause for approval (`/approvals`, UI inbox) before executing
+- **Checkpoints & replay** — every run is stored (`/checkpoints`); replay re-executes a stored plan deterministically, no LLM involved
+- **Independent verification** — a verifier model checks the result answers the question, without seeing the planner's reasoning
+- **Rate limiting** — per-user sliding-window limiter protects the LLM budget
 - **Four surfaces, one pipeline** — REST API, CLI, MCP server, and web UI share the same guardrails (MCP is never a privileged bypass)
 - **Conversational memory** — multi-turn conversations persisted in SQLite with streaming answers
 - **Local authentication** — `POST /auth/login` (default user `datahek`/`datahek`), enforced via `X-API-Key`
@@ -155,6 +158,8 @@ python -m datahek.mcp_server    # streamable HTTP on :8001
 | `DATAHEK_AUTH_LOCAL_USERS` | `{"datahek":"datahek"}` | JSON `{"user":"password"}` for local auth |
 | `DATAHEK_APPROVAL_ROW_LIMIT` | `1000` | Row limit (or unbounded scan) that requires human approval |
 | `DATAHEK_APPROVAL_SENSITIVE_TABLES` | credential/password/pii patterns | Comma-separated table-name patterns that require approval |
+| `DATAHEK_RATE_LIMIT_PER_MINUTE` | `120` | Per-user request limit (sliding window) |
+| `DATAHEK_VERIFIER` | `on` | Independent post-execution answer verification (`off` to disable) |
 | `DATAHEK_METADATA_URL` | *(empty)* | PostgreSQL URL for durable connections/conversations/prompts/evaluations (empty → SQLite/in-memory defaults) |
 | `DATAHEK_METADATA_REDIS_URL` | *(empty)* | Redis URL for LLM settings persistence across restarts (empty → runtime settings only) |
 | `DATAHEK_ENCRYPTION_KEY` | *(empty)* | Optional: encrypt connection settings at rest in PostgreSQL |

@@ -13,6 +13,7 @@ from datahek import __version__
 from datahek.contracts.auth import AuthProvider
 from datahek.contracts.connections import ConnectionManager
 from datahek.contracts.reasoner import Reasoner
+from datahek.contracts.verifier import Verifier
 from datahek.contracts.models import ModelProvider
 from datahek.engine.executor import Engine, ProviderRegistry
 from datahek.engine.planner import Planner
@@ -113,6 +114,37 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
+async def _save_checkpoint(c, ctx, req, plan, result, decision="ALLOW") -> None:
+    """Persist a per-run checkpoint for inspection/replay (best-effort)."""
+    from datahek.contracts.misc import CheckpointStore
+
+    if not c.has(CheckpointStore):
+        return
+    try:
+        from datahek.engine.compile import compile_sql
+
+        store = c.resolve(CheckpointStore)
+        await store.save(ctx, {
+            "question": req.question,
+            "connection_id": req.connection_id,
+            "conversation_id": req.conversation_id,
+            "plan": plan.to_dict(),
+            "sql": compile_sql(plan),
+            "row_count": getattr(result, "row_count", None),
+            "decision": decision,
+        })
+    except Exception as exc:  # never fail a request because a checkpoint write failed
+        import logging
+
+        logging.getLogger("datahek.api").warning("Checkpoint save failed: %s", exc)
+
+
+def _verifier_enabled() -> bool:
+    import os
+
+    return os.environ.get("DATAHEK_VERIFIER", "on").lower() not in ("off", "0", "false")
+
+
 def create_app(container=None) -> FastAPI:
     """Build the FastAPI app. ``container`` injectable for tests/Enterprise."""
     from datahek.defaults.container import build_app_container
@@ -179,9 +211,14 @@ def create_app(container=None) -> FastAPI:
         result = await engine.execute(ctx, plan_result.plan, conn)
         columns = [c["name"] for c in result.columns]
         rows = [dict(zip(columns, [_json_safe(v) for v in row])) for row in result.rows]
+        await _save_checkpoint(c, ctx, req, plan_result.plan, result)
         explanation = redact_pii(await reasoner.explain(req.question, result, plan_result.plan, ctx))
         await _record_turn(conversations, ctx, req, explanation, "result")
+        verification = None
+        if _verifier_enabled() and c.has(Verifier):
+            verification = await c.resolve(Verifier).verify(req.question, result, ctx)
         return {
+            "verification": verification,
             "clarification": None,
             "answer": explanation,
             "columns": columns,
@@ -404,6 +441,60 @@ def create_app(container=None) -> FastAPI:
         await service.decide(approval_id, mapped, req.actor)
         return {"approval_id": approval_id, "status": await service.status(approval_id)}
 
+    @app.get("/checkpoints")
+    async def list_checkpoints(limit: int = 20, _identity=Depends(_require_auth)):
+        from datahek.contracts.misc import CheckpointStore
+
+        store = c.resolve(CheckpointStore)
+        items = await store.list(RequestContext(source="api"), limit=min(limit, 100))
+        return [{k: v for k, v in item.items() if k != "plan"} for item in items]
+
+    @app.get("/checkpoints/{checkpoint_id}")
+    async def get_checkpoint(checkpoint_id: str, _identity=Depends(_require_auth)):
+        from datahek.contracts.misc import CheckpointStore
+
+        store = c.resolve(CheckpointStore)
+        item = await store.get(RequestContext(source="api"), checkpoint_id)
+        if item is None:
+            raise DatahekError(ErrorCode.NOT_FOUND, f"Checkpoint '{checkpoint_id}' not found")
+        return item
+
+    @app.post("/checkpoints/{checkpoint_id}/replay")
+    async def replay_checkpoint(checkpoint_id: str, _identity=Depends(_require_auth)):
+        """Deterministically re-execute a stored plan — no LLM involved."""
+        from datahek.contracts.misc import CheckpointStore
+        from datahek.engine.plan import LogicalPlan
+
+        ctx = RequestContext(source="api")
+        store = c.resolve(CheckpointStore)
+        item = await store.get(ctx, checkpoint_id)
+        if item is None:
+            raise DatahekError(ErrorCode.NOT_FOUND, f"Checkpoint '{checkpoint_id}' not found")
+
+        plan = LogicalPlan.from_dict(item["plan"])
+        if not plan.read_only:
+            raise DatahekError(ErrorCode.QUERY_DENIED, "Replay blocked: stored plan is not read-only")
+
+        conn = await conn_mgr.get_connection(ctx, item["connection_id"])
+        provider = registry.get(conn.provider)
+        client = await provider.connect(conn)
+        try:
+            raw = await provider.compile_and_execute(client, plan, ctx)
+        finally:
+            close = getattr(provider, "close", None)
+            if close is not None:
+                try:
+                    await close(client)
+                except Exception:
+                    pass
+        columns = [c["name"] for c in raw["columns"]]
+        rows = [dict(zip(columns, [_json_safe(v) for v in row])) for row in raw["rows"]]
+        return {
+            "checkpoint_id": checkpoint_id, "replayed": True,
+            "question": item["question"], "sql": item["sql"],
+            "columns": columns, "rows": rows, "row_count": len(rows),
+        }
+
     @app.post("/ask")
     async def ask(req: AskRequest, _identity=Depends(_require_auth)):
         answer = await _ask_pipeline(req, c, conn_mgr, registry, planner, engine, reasoner, entitlements)
@@ -456,11 +547,15 @@ def create_app(container=None) -> FastAPI:
             columns = [c["name"] for c in result.columns]
             rows = [dict(zip(columns, [_json_safe(v) for v in row])) for row in result.rows]
 
+            await _save_checkpoint(c, ctx, req, plan_result.plan, result)
             yield ev({"type": "start", "conversation_id": req.conversation_id, "columns": columns, "row_count": result.row_count})
             yield ev({"type": "progress", "stage": "explaining", "message": "Generating answer…"})
             async for chunk in reasoner.stream_explanation(req.question, result, plan_result.plan, ctx):
                 yield ev({"type": "token", "content": chunk})
             yield ev({"type": "rows", "rows": rows, "columns": columns, "row_count": result.row_count, "truncated": result.truncated})
+            if _verifier_enabled() and c.has(Verifier):
+                verdict = await c.resolve(Verifier).verify(req.question, result, ctx)
+                yield ev({"type": "verification", "ok": verdict["ok"], "note": verdict["note"]})
             yield ev({"type": "progress", "stage": "done", "message": "Complete"})
             yield ev({"type": "done"})
 

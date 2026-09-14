@@ -9,7 +9,8 @@ from datahek.contracts.connections import Connection
 from datahek.contracts.guardrails import GuardrailResult
 from datahek.contracts.providers import DataProvider
 from datahek.contracts.secrets import SecretRef, SecretsProvider
-from datahek.engine.guardrails import GuardrailPipeline, PlanComplexityGuardrail, PlanReadOnlyGuardrail, PolicyGuardrail
+from datahek.engine.guardrails import (GuardrailPipeline, PlanComplexityGuardrail, PlanReadOnlyGuardrail,
+                                        PolicyGuardrail, RateLimitGuardrail)
 from datahek.contracts.misc import ApprovalRequest, ApprovalService
 from datahek.contracts.policy import PolicyEngine
 from datahek.engine.plan import LogicalPlan, validate_plan
@@ -88,10 +89,17 @@ class Engine:
         secrets: SecretsProvider | None = None,
         policy: PolicyEngine | None = None,
         approvals: ApprovalService | None = None,
+        rate_limit: int | None = None,
     ):
         self.registry = registry
+        rate_guardrails = []
+        if rate_limit is not None:
+            from datahek.defaults.rate_limit import LocalRateLimiter
+
+            rate_guardrails = [RateLimitGuardrail(LocalRateLimiter(), limit=rate_limit)]
         self.guardrails = guardrails or GuardrailPipeline(
-            ([PolicyGuardrail(policy)] if policy is not None else [])
+            rate_guardrails
+            + ([PolicyGuardrail(policy)] if policy is not None else [])
             + [PlanReadOnlyGuardrail(), PlanComplexityGuardrail()]
         )
         self.schema_service = schema_service
@@ -169,6 +177,9 @@ class Engine:
             if self.evaluation_hook is not None:
                 await self.evaluation_hook.on_execution_completed(
                     ctx, plan=plan, result=None, duration_ms=0, decision=decision.decision)
+            if decision.decision == "RATE_LIMIT":
+                raise DatahekError(ErrorCode.RATE_LIMITED, decision.reason,
+                                   details={"decision": decision.decision})
             raise DatahekError(ErrorCode.QUERY_DENIED, decision.reason, details={"decision": decision.decision})
 
         client = await provider.connect(connection)

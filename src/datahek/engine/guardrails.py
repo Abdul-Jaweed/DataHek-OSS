@@ -78,3 +78,26 @@ class PolicyGuardrail(Guardrail):
         if action == "ALLOW":
             return GuardrailResult(decision="ALLOW", reason=decision.get("reason", "ok"))
         return GuardrailResult(decision=action, reason=decision.get("reason", action), score=1.0)
+
+
+class RateLimitGuardrail(Guardrail):
+    """Sliding-window request limiter keyed by user — protects the LLM budget."""
+
+    name = "rate_limit"
+    stage = "input"
+    enabled = True
+
+    def __init__(self, limiter, limit: int = 60, window_s: float = 60.0) -> None:
+        self._limiter = limiter
+        self._limit = limit
+        self._window_s = window_s
+
+    async def run(self, ctx: RequestContext, payload: dict) -> GuardrailResult:
+        key = getattr(ctx, "user_id", None) or "anonymous"
+        if self._limiter.allow(key, self._limit, self._window_s):
+            return GuardrailResult(decision="ALLOW", reason="ok")
+        return GuardrailResult(
+            decision="RATE_LIMIT",
+            reason=f"Rate limit exceeded ({self._limit} requests / {int(self._window_s)}s)",
+            score=1.0,
+        )

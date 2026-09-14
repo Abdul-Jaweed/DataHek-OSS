@@ -18,6 +18,8 @@ function applyEvent(ev: StreamEvent, message: Message): Partial<Message> {
       return { columns: ev.columns, rows: ev.rows, rowCount: ev.row_count, truncated: ev.truncated };
     case 'clarification':
       return { content: ev.text, clarification: true, streaming: false };
+    case 'verification':
+      return { verified: { ok: ev.ok, note: ev.note } };
     case 'done':
       return { streaming: false };
     default:

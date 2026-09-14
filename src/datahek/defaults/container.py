@@ -16,12 +16,14 @@ from datahek.contracts.prompts import PromptStore
 from datahek.contracts.reasoner import Reasoner
 from datahek.contracts.secrets import SecretsProvider
 from datahek.contracts.tenancy import TenantContext
+from datahek.contracts.verifier import Verifier
 from datahek.connectors.clickhouse import ClickHouseProvider
 from datahek.connectors.mysql import MySQLProvider
 from datahek.connectors.postgres import PostgresProvider
 from datahek.connectors.sqlite import SQLiteProvider
-from datahek.contracts.misc import ApprovalService
+from datahek.contracts.misc import ApprovalService, CheckpointStore
 from datahek.defaults.approvals import LocalApprovalService
+from datahek.defaults.checkpoints import SqliteCheckpointStore
 from datahek.defaults.audit import JsonlAuditSink
 from datahek.defaults.auth import AuthConfig, LocalAuthProvider
 from datahek.defaults.connections import LocalConnectionManager
@@ -43,6 +45,7 @@ from datahek.defaults.tenancy import SingleTenantContext
 from datahek.engine.executor import Engine, ProviderRegistry
 from datahek.engine.planner import Planner
 from datahek.engine.reasoner import ModelReasoner
+from datahek.engine.verifier import ModelVerifier
 from datahek.engine.schema import SchemaService
 from datahek.kernel.config import config_from_env
 from datahek.kernel.di import Container
@@ -65,6 +68,7 @@ def build_default_container() -> Container:
     c.register(AuditSink, JsonlAuditSink(), singleton=True)
     c.register(PolicyEngine, LocalPolicyEngine(), singleton=True)
     c.register(ApprovalService, LocalApprovalService(), singleton=True)
+    c.register(CheckpointStore, SqliteCheckpointStore(), singleton=True)
     pg = PgMetadata()
     if pg._url:
         c.register(PgMetadata, pg, singleton=True)
@@ -119,6 +123,7 @@ def build_app_container() -> Container:
         secrets=c.resolve(SecretsProvider),
     ), singleton=True)
     c.register(Reasoner, lambda: ModelReasoner(model=c.resolve(ModelProvider)), singleton=True)
+    c.register(Verifier, lambda: ModelVerifier(c.resolve(ModelProvider)), singleton=True)
     c.register(Engine, lambda: Engine(
         registry=c.resolve(ProviderRegistry),
         schema_service=c.resolve(SchemaService),
@@ -128,5 +133,6 @@ def build_app_container() -> Container:
         secrets=c.resolve(SecretsProvider),
         policy=c.resolve(PolicyEngine),
         approvals=c.resolve(ApprovalService),
+        rate_limit=int(os.environ.get("DATAHEK_RATE_LIMIT_PER_MINUTE", "120")),
     ), singleton=True)
     return c
