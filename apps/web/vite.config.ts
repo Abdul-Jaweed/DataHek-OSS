@@ -19,6 +19,7 @@ export default defineConfig({
       '/prompts': apiTarget,
       '/evaluations': apiTarget,
       '/approvals': apiTarget,
+      '/checkpoints': apiTarget,
     },
   },
   build: { outDir: 'dist' },
