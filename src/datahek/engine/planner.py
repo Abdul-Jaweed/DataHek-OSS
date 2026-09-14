@@ -30,15 +30,19 @@ Return ONLY valid JSON — no markdown, no commentary.
 
 Plan format:
 {"nodes": [
-  {"type": "ReadNode", "source": "<table>", "columns": [...],
+  {"type": "ReadNode", "source": "<base table>", "columns": [...],
    "filter": "<optional SQL predicate>", "group_by": [...],
    "aggregates": [{"function": "<allowed function>", "column": "<column or *>", "alias": "<name>"}],
-   "order_by": [...], "limit": <int>}
+   "order_by": [...], "limit": <int>,
+   "joins": [{"table": "<joined table>", "join_type": "inner|left",
+              "on_left": "<base table column>", "on_right": "<joined table column>"}]}
 ]}
 
 Rules:
 - Read-only only. Never produce WriteNode.
 - Only use tables and columns present in the schema.
+- Use joins ONLY when the question spans multiple related tables (max 2 joins).
+- When joining, reference joined-table columns as "table.column"; plain names target the base table.
 - Only use aggregate functions allowed for the target database dialect (given below).
 - Use "count_distinct" for distinct counting on SQL dialects (renders COUNT(DISTINCT col)).
 - If the question is ambiguous or no table matches, return
@@ -70,6 +74,42 @@ def build_schema_summary(catalog: SchemaCatalog) -> str:
         rows = f" (~{t.row_count} rows)" if t.row_count is not None else ""
         lines.append(f"- {t.name}{rows}: {cols}")
     return "\n".join(lines) or "(no tables found)"
+
+
+def _normalize_join_refs(plan, catalog_columns: dict[str, set[str]]):
+    """Qualify plain column refs that resolve only via a joined table.
+
+    The model often writes "tier" (joined table) in group_by while the select
+    list uses "service_meta.tier". Resolve those to the dotted form so
+    validation and compilation agree.
+    """
+    from dataclasses import replace
+
+    from datahek.engine.plan import ReadNode
+
+    def resolve(col: str, base: str, joins) -> str:
+        if "." in col or not joins:
+            return col
+        if col in catalog_columns.get(base, set()):
+            return col
+        matches = [j.table for j in joins if col in catalog_columns.get(j.table, set())]
+        if len(matches) == 1:
+            return f"{matches[0]}.{col}"
+        return col
+
+    nodes = []
+    for node in plan.nodes:
+        if not isinstance(node, ReadNode) or not node.joins:
+            nodes.append(node)
+            continue
+        nodes.append(replace(
+            node,
+            columns=[resolve(c, node.source, node.joins) for c in node.columns],
+            group_by=[resolve(c, node.source, node.joins) for c in node.group_by],
+            aggregates=[replace(a, column=resolve(a.column, node.source, node.joins))
+                        if a.column != "*" else a for a in node.aggregates],
+        ))
+    return plan.__class__(version=plan.version, nodes=nodes)
 
 
 class Planner:
@@ -126,9 +166,14 @@ class Planner:
             if parsed is None:
                 return PlanResult(plan=None, clarification="I could not interpret the request into a data plan.", confidence=0.2)
             try:
+                parsed = _normalize_join_refs(parsed, columns)
                 validate_plan(parsed, tables, columns,
                               dialect=getattr(provider.capabilities, "dialect", None))
-                sources = [n.source for n in parsed.nodes if hasattr(n, "source")]
+                sources: list[str] = []
+                for n in parsed.nodes:
+                    if hasattr(n, "source"):
+                        sources.append(n.source)
+                        sources.extend(j.table for j in getattr(n, "joins", []) or [])
                 return PlanResult(plan=parsed, confidence=0.8, sources_used=sources)
             except Exception as e:
                 feedback = f"The previous plan was invalid: {e}. Fix the plan."

@@ -26,6 +26,20 @@ class Aggregate:
 
 
 @dataclass(frozen=True)
+class Join:
+    """A single join against the node's base source.
+
+    Column references may be dotted ("table.column"); plain names resolve
+    against the base source (and the join's own table for on_right).
+    """
+
+    table: str
+    on_left: str
+    on_right: str | None = None
+    join_type: Literal["inner", "left"] = "inner"
+
+
+@dataclass(frozen=True)
 class ReadNode(PlanNode):
     source: str
     columns: list[str] = field(default_factory=list)
@@ -34,6 +48,7 @@ class ReadNode(PlanNode):
     aggregates: list[Aggregate] = field(default_factory=list)
     order_by: list[str] = field(default_factory=list)
     limit: int | None = None
+    joins: list[Join] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -73,6 +88,11 @@ class LogicalPlan:
                     {"function": a.function, "column": a.column, "alias": a.alias}
                     for a in n.aggregates
                 ]
+                d["joins"] = [
+                    {"table": j.table, "on_left": j.on_left, "on_right": j.on_right,
+                     "join_type": j.join_type}
+                    for j in n.joins
+                ]
             return d
 
         return {"version": self.version, "nodes": [node_dict(n) for n in self.nodes]}
@@ -85,6 +105,7 @@ class LogicalPlan:
             if kind == "ReadNode":
                 nd["aggregates"] = [Aggregate(**a) for a in nd.get("aggregates", [])]
                 nd["order_by"] = [_normalize_order(o) for o in nd.get("order_by", [])]
+                nd["joins"] = [Join(**j) for j in nd.get("joins", [])]
                 nodes.append(ReadNode(**nd))
             elif kind == "WriteNode":
                 nodes.append(WriteNode(**nd))
@@ -122,21 +143,60 @@ def validate_plan(
                 details={"source": node.source},
             )
         known = columns.get(node.source, set())
-        for col in node.columns:
+
+        def _resolve(col: str, default_table: str, context: str) -> None:
             if col == "*" and node.aggregates:
-                continue  # count(*)-style: dropped by the compiler when aggregating
-            if col not in known:
+                return  # count(*)-style: dropped by the compiler when aggregating
+            if "." in col:
+                table, _, bare = col.partition(".")
+                if table not in join_tables and table != node.source:
+                    raise DatahekError(
+                        ErrorCode.PLAN_INVALID,
+                        f"Unknown table '{table}' in column '{col}' ({context})",
+                        details={"column": col, "source": node.source},
+                    )
+                if bare not in columns.get(table, set()):
+                    raise DatahekError(
+                        ErrorCode.PLAN_INVALID,
+                        f"Unknown column '{bare}' on '{table}'",
+                        details={"column": bare, "source": table},
+                    )
+                return
+            if col not in columns.get(default_table, set()):
                 raise DatahekError(
                     ErrorCode.PLAN_INVALID,
-                    f"Unknown column '{col}' on '{node.source}'",
-                    details={"column": col, "source": node.source},
+                    f"Unknown column '{col}' on '{default_table}'",
+                    details={"column": col, "source": default_table},
                 )
+
+        # join tables must exist in the schema
+        join_tables = {j.table for j in node.joins}
+        for j in node.joins:
+            if j.table not in tables:
+                raise DatahekError(
+                    ErrorCode.PLAN_INVALID,
+                    f"Unknown join table '{j.table}'",
+                    details={"table": j.table, "source": node.source},
+                )
+            # on_left: base source (or dotted); on_right: joined table
+            _resolve(j.on_left, node.source, "join condition")
+            if j.on_right:
+                _resolve(j.on_right, j.table, "join condition")
+
+        for col in node.columns:
+            _resolve(col, node.source, "select")
+        def _bare(name: str) -> str:
+            return name.split(".")[-1]
+
         for col in node.group_by:
-            if col not in node.columns:
-                raise DatahekError(
-                    ErrorCode.PLAN_INVALID,
-                    f"GROUP BY column '{col}' must be in SELECT columns",
-                )
+            if col in node.columns:
+                continue
+            if any(_bare(col) == _bare(c) for c in node.columns):
+                continue
+            raise DatahekError(
+                ErrorCode.PLAN_INVALID,
+                f"GROUP BY column '{col}' must be in SELECT columns",
+            )
         for agg in node.aggregates:
             if agg.function not in allowed_functions:
                 raise DatahekError(
@@ -152,9 +212,4 @@ def validate_plan(
                 )
             if agg.column == "*":
                 continue  # count(*)
-            if agg.column not in known:
-                raise DatahekError(
-                    ErrorCode.PLAN_INVALID,
-                    f"Unknown column '{agg.column}' on '{node.source}' (aggregate)",
-                    details={"column": agg.column, "source": node.source},
-                )
+            _resolve(agg.column, node.source, "aggregate")

@@ -26,10 +26,12 @@ class LocalPolicyEngine(PolicyEngine):
         plan = context.get("plan")
         nodes = getattr(plan, "nodes", None) or []
         for node in nodes:
+            sources = [getattr(node, "source", "")] + [j.table for j in getattr(node, "joins", []) or []]
+            for source in sources:
+                lowered = str(source).lower()
+                if any(p in lowered for p in self._sensitive):
+                    return f"table '{source}' matches a sensitive-table policy"
             source = getattr(node, "source", "")
-            lowered = str(source).lower()
-            if any(p in lowered for p in self._sensitive):
-                return f"table '{source}' matches a sensitive-table policy"
             limit = getattr(node, "limit", None)
             if limit is not None and limit >= self._approval_row_limit:
                 return f"row limit {limit} exceeds the approval threshold ({self._approval_row_limit})"
@@ -38,9 +40,12 @@ class LocalPolicyEngine(PolicyEngine):
         return None
 
     async def evaluate(self, context: dict) -> PolicyDecision:
-        table = context.get("table")
-        if self._allowed and table is not None and table not in self._allowed:
-            return {"action": "DENY", "reason": f"table '{table}' not allowed", "policy_version": "oss:1"}
+        tables = context.get("tables") or ([context["table"]] if context.get("table") else [])
+        if self._allowed:
+            for table in tables:
+                if table not in self._allowed:
+                    return {"action": "DENY", "reason": f"table '{table}' not allowed",
+                            "policy_version": "oss:1"}
         approval_reason = self._requires_approval(context)
         if approval_reason is not None:
             return {"action": "REQUIRE_APPROVAL", "reason": approval_reason, "policy_version": "oss:1"}

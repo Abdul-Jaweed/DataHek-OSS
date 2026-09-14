@@ -25,7 +25,7 @@ question → schema discovery → logical plan → validation → guardrails
 
 ## ✨ Key features
 
-- **Universal data engine** — a provider-agnostic **Logical Query Plan** compiled per connector (ClickHouse, PostgreSQL, MySQL, SQLite); no provider-specific logic in the core
+- **Universal data engine** — a provider-agnostic **Logical Query Plan** with **multi-table JOINs** (AST-level join model, join tables validated and policy-checked), compiled per connector (ClickHouse, PostgreSQL, MySQL, SQLite)
 - **Read-only by construction** — write plans are structurally denied before any provider runs
 - **Typed guardrail decisions** — `ALLOW / DENY / REDACT / MASK / REQUIRE_APPROVAL / RATE_LIMIT` across input → plan → SQL → output
 - **Masking before reasoning** — sensitive columns are masked before the explanation model sees results
@@ -262,7 +262,7 @@ All contributions to OSS packages are licensed under Apache-2.0 (DCO).
 
 ## 🗺️ Roadmap
 
-- ✅ Platform kernel + contracts · vertical slice (ClickHouse) · API/CLI/MCP/web surfaces · streaming · conversations · reasoner · evaluation + datasets · masking · entitlements · connectors (ClickHouse, PostgreSQL, MySQL, SQLite, live-verified) · Docker · local auth + login · connection test/delete · React web UI · runtime LLM settings
+- ✅ Platform kernel + contracts · JOINs (AST join model · validation · policy coverage) · vertical slice (ClickHouse) · API/CLI/MCP/web surfaces · streaming · conversations · reasoner · evaluation + datasets · masking · entitlements · connectors (ClickHouse, PostgreSQL, MySQL, SQLite, live-verified) · Docker · local auth + login · connection test/delete · React web UI · runtime LLM settings
 - 🔜 CI · semantic layer · visualization engine · scheduled queries · enterprise operations
 - 🔒 **Enterprise** (separate repo): SSO/SCIM, multi-tenancy, policy engine, centralized audit, admin console — built as implementations of the OSS contracts
 

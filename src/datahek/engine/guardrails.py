@@ -70,9 +70,16 @@ class PolicyGuardrail(Guardrail):
 
     async def run(self, ctx: RequestContext, payload: dict) -> GuardrailResult:
         plan = payload.get("plan")
+        tables: list[str] = []
+        if plan and plan.nodes:
+            node = plan.nodes[0]
+            tables.append(getattr(node, "source", "") or "")
+            tables.extend(j.table for j in getattr(node, "joins", []) or [])
+        tables = [t for t in tables if t]
         context = {
             "plan": plan,
-            "table": getattr(plan.nodes[0], "source", None) if plan and plan.nodes else None,
+            "table": tables[0] if tables else None,
+            "tables": tables,
         }
         decision = await self._policy.evaluate(context)
         action = decision.get("action", "ALLOW")
