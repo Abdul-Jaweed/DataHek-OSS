@@ -381,3 +381,42 @@ class TestLlmSettings(unittest.TestCase):
         self.assertEqual(r.json()["model"], "test-model-42")
         again = self.client.get("/settings/llm").json()
         self.assertEqual(again["model"], "test-model-42")
+
+
+class TestConnectionUpdate(unittest.TestCase):
+    def setUp(self):
+        from datahek.api.app import create_app
+        from datahek.defaults.container import build_app_container
+        from fastapi.testclient import TestClient
+        self.client = TestClient(create_app(container=build_app_container()))
+
+    def _create(self, name="editme", **extra):
+        payload = {"name": name, "provider": "sqlite", "host": ":memory:", **extra}
+        r = self.client.post("/connections", json=payload)
+        assert r.status_code == 201, r.text
+        return r.json()["id"]
+
+    def test_update_fields(self):
+        cid = self._create()
+        r = self.client.put(f"/connections/{cid}", json={
+            "name": "renamed", "provider": "sqlite", "host": "/tmp/x.db", "database": "d1"})
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["name"], "renamed")
+        self.assertEqual(body["host"], "/tmp/x.db")
+
+    def test_update_requires_known_provider(self):
+        cid = self._create()
+        r = self.client.put(f"/connections/{cid}", json={"name": "x", "provider": "mongo"})
+        self.assertEqual(r.status_code, 400)
+
+    def test_update_missing_connection_404(self):
+        r = self.client.put("/connections/nope", json={"name": "x", "provider": "sqlite"})
+        self.assertEqual(r.status_code, 404)
+
+    def test_update_duplicate_name_409(self):
+        self._create(name="first")
+        cid2 = self._create(name="second")
+        r = self.client.put(f"/connections/{cid2}", json={"name": "first", "provider": "sqlite"})
+        self.assertEqual(r.status_code, 409, r.text)
+        self.assertEqual(r.json()["code"], "CONNECTION_EXISTS")

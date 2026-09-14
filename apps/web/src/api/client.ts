@@ -46,6 +46,8 @@ export const api = {
   createConnection: (body: ConnectionCreate) => request<Connection>('/connections', { method: 'POST', body: JSON.stringify(body) }),
   testConnection: (body: ConnectionCreate) => request<{ ok: boolean; latency_ms?: number; error?: string }>('/connections/test', { method: 'POST', body: JSON.stringify(body) }),
   deleteConnection: (id: string) => request<void>(`/connections/${id}`, { method: 'DELETE' }),
+  updateConnection: (id: string, body: ConnectionCreate) =>
+    request<Connection>(`/connections/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
 
   createConversation: (title?: string) => request<{ id: string; title: string | null }>('/conversations', { method: 'POST', body: JSON.stringify({ title: title ?? null }) }),
   getConversation: (id: string) => request<Conversation>(`/conversations/${id}`),

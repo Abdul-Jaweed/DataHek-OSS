@@ -504,6 +504,29 @@ def create_app(container=None) -> FastAPI:
                 "error": str(exc)[:500],
             }
 
+    @app.put("/connections/{connection_id}")
+    async def update_connection(connection_id: str, req: ConnectionRequest,
+                                _identity=Depends(_require_auth)):
+        ctx = RequestContext(source="api")
+        if req.provider not in registry.ids():
+            raise DatahekError(
+                ErrorCode.UNSUPPORTED_PROVIDER,
+                f"Provider '{req.provider}' is not supported",
+                details={"provider": req.provider},
+            )
+        patch = {
+            "name": req.name, "provider": req.provider,
+            "host": req.host, "port": req.port, "database": req.database,
+        }
+        if req.settings:
+            existing = await conn_mgr.get_connection(ctx, connection_id)
+            patch["settings"] = {**existing.settings, **req.settings}
+        updated = await conn_mgr.update(ctx, connection_id, patch)
+        return {
+            "id": updated.id, "name": updated.name, "provider": updated.provider,
+            "host": updated.host, "port": updated.port, "database": updated.database,
+        }
+
     @app.delete("/connections/{connection_id}", status_code=204)
     async def delete_connection(connection_id: str, _identity=Depends(_require_auth)):
         ctx = RequestContext(source="api")

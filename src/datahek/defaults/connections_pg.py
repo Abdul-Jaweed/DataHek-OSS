@@ -142,3 +142,44 @@ class PostgresConnectionManager:
             settings=self._decode_settings(row[8]),
             secret_ref=secret_ref,
         )
+
+    async def update(self, ctx: RequestContext, connection_id: str, patch: dict) -> Connection:
+        current = await self.get_connection(ctx, connection_id)
+        if "name" in patch and patch["name"] != current.name:
+            conn = await self._pg.connect()
+            try:
+                cur = conn.execute(
+                    "SELECT 1 FROM connections WHERE name = %s AND org_id = %s AND id != %s",
+                    (patch["name"], ctx.organization_id, connection_id))
+                exists = cur.fetchone() is not None
+            finally:
+                conn.close()
+            if exists:
+                raise DatahekError(
+                    ErrorCode.CONNECTION_EXISTS,
+                    f"Connection '{patch['name']}' already exists",
+                    details={"name": patch["name"]},
+                )
+        merged = {
+            "name": patch.get("name", current.name),
+            "provider": patch.get("provider", current.provider),
+            "host": patch.get("host", current.host),
+            "port": patch.get("port", current.port),
+            "database": patch.get("database", current.database),
+            "settings": patch.get("settings", current.settings),
+            "secret_ref": patch.get("secret_ref", current.secret_ref),
+        }
+        conn = await self._pg.connect()
+        try:
+            conn.execute(
+                "UPDATE connections SET name = %s, provider = %s, host = %s, port = %s, "
+                "database = %s, settings_json = %s, secret_ref_provider = %s, secret_ref_name = %s "
+                "WHERE id = %s AND org_id = %s",
+                (merged["name"], merged["provider"], merged["host"], merged["port"],
+                 merged["database"], self._encode_settings(merged["settings"]),
+                 merged["secret_ref"].provider if merged["secret_ref"] else None,
+                 merged["secret_ref"].name if merged["secret_ref"] else None,
+                 connection_id, ctx.organization_id))
+        finally:
+            conn.close()
+        return await self.get_connection(ctx, connection_id)

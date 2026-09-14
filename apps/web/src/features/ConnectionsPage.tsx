@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Database, Plus, Trash } from '@phosphor-icons/react';
+import { Database, PencilSimple, Plus, Trash } from '@phosphor-icons/react';
 import { api } from '../api/client';
 import type { Connection, ConnectionCreate } from '../api/types';
 import { Button } from '../components/ui/button';
@@ -28,6 +28,7 @@ export function ConnectionsPage() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const refresh = () => {
     setLoading(true);
@@ -39,12 +40,34 @@ export function ConnectionsPage() {
 
   useEffect(refresh, []);
 
+  const resetForm = () => {
+    setEditingId(null);
+    setName(''); setHost(''); setPort(''); setDatabase(''); setUsername(''); setPassword(''); setSslmode('');
+    setTestResult(null);
+  };
+
+  const startEdit = (c: Connection) => {
+    setEditingId(c.id);
+    setName(c.name);
+    setProvider(c.provider);
+    setHost(c.host ?? '');
+    setPort(c.port ? String(c.port) : '');
+    setDatabase(c.database ?? '');
+    setUsername(''); setPassword(''); setSslmode('');
+    setTestResult(null);
+    setOpen(true);
+  };
+
   const save = async () => {
     setSaving(true);
     try {
-      await api.createConnection(formSpec());
+      if (editingId) {
+        await api.updateConnection(editingId, formSpec());
+      } else {
+        await api.createConnection(formSpec());
+      }
       setOpen(false);
-      setName(''); setHost(''); setPort(''); setDatabase(''); setUsername(''); setPassword(''); setSslmode('');
+      resetForm();
       refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -102,10 +125,13 @@ export function ConnectionsPage() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button icon={<Plus size={16} />}>Add connection</Button>
+            <Button icon={<Plus size={16} />} onClick={resetForm}>Add connection</Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader title="Add connection" description="Credentials are stored as secret references." />
+            <DialogHeader
+              title={editingId ? 'Edit connection' : 'Add connection'}
+              description={editingId ? 'Leave credential fields empty to keep the current secrets.' : 'Credentials are stored as secret references.'}
+            />
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="nc-name">Name</Label>
@@ -202,6 +228,7 @@ export function ConnectionsPage() {
                 {c.host ?? '?'}:{c.port ?? '?'}/{c.database ?? '?'}
               </p>
             </div>
+            <Button variant="ghost" size="icon" aria-label={`Edit ${c.name}`} icon={<PencilSimple size={16} />} onClick={() => startEdit(c)} />
             <Button variant="ghost" size="icon" aria-label={`Delete ${c.name}`} icon={<Trash size={16} />} onClick={() => {
               if (window.confirm(`Delete connection '${c.name}'?`)) void remove(c.id);
             }} />

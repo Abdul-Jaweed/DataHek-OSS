@@ -32,3 +32,18 @@ class LocalConnectionManager(ConnectionManager):
     async def remove(self, ctx: RequestContext, connection_id: str) -> None:
         await self.get_connection(ctx, connection_id)
         del self._connections[connection_id]
+
+    async def update(self, ctx: RequestContext, connection_id: str, patch: dict) -> Connection:
+        from dataclasses import replace
+
+        current = await self.get_connection(ctx, connection_id)
+        if "name" in patch and patch["name"] != current.name:
+            if any(c.name == patch["name"] for c in self._connections.values()):
+                raise DatahekError(
+                    ErrorCode.CONNECTION_EXISTS,
+                    f"Connection '{patch['name']}' already exists",
+                    details={"name": patch["name"]},
+                )
+        updated = replace(current, **patch)
+        self._connections[connection_id] = updated
+        return updated
