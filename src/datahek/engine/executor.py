@@ -9,8 +9,8 @@ from datahek.contracts.connections import Connection
 from datahek.contracts.guardrails import GuardrailResult
 from datahek.contracts.providers import DataProvider
 from datahek.contracts.secrets import SecretRef, SecretsProvider
-from datahek.engine.guardrails import (GuardrailPipeline, PlanComplexityGuardrail, PlanReadOnlyGuardrail,
-                                        PolicyGuardrail, RateLimitGuardrail)
+from datahek.engine.guardrails import (GuardrailPipeline, InputGuardrail, PlanComplexityGuardrail,
+                                        PlanReadOnlyGuardrail, PolicyGuardrail, RateLimitGuardrail)
 from datahek.contracts.misc import ApprovalRequest, ApprovalService
 from datahek.contracts.policy import PolicyEngine
 from datahek.engine.plan import LogicalPlan, validate_plan
@@ -98,7 +98,8 @@ class Engine:
 
             rate_guardrails = [RateLimitGuardrail(LocalRateLimiter(), limit=rate_limit)]
         self.guardrails = guardrails or GuardrailPipeline(
-            rate_guardrails
+            [InputGuardrail()]
+            + rate_guardrails
             + ([PolicyGuardrail(policy)] if policy is not None else [])
             + [PlanReadOnlyGuardrail(), PlanComplexityGuardrail()]
         )
@@ -127,7 +128,8 @@ class Engine:
             validate_plan(plan, self.schema_service.tables(catalog), self.schema_service.columns(catalog),
                           dialect=provider.capabilities.dialect)
 
-        payload: dict[str, Any] = {"plan": plan, "capabilities": provider.capabilities}
+        payload: dict[str, Any] = {"plan": plan, "capabilities": provider.capabilities,
+                                   "question": getattr(ctx, "question", None)}
         decision: GuardrailResult = await self.guardrails.run(ctx, payload)
 
         await self._audit(ctx, AuditEvent(

@@ -30,6 +30,7 @@ class RequestContext:
     permissions: frozenset[str] = field(default_factory=frozenset)
     connection_id: str | None = None
     approval_id: str | None = None
+    question: str | None = None
     source: Source = "api"
     authenticated: bool = False
     entitlements: frozenset[str] = field(default_factory=frozenset)

@@ -14,6 +14,7 @@ from datahek.contracts.auth import AuthProvider
 from datahek.contracts.connections import ConnectionManager
 from datahek.contracts.reasoner import Reasoner
 from datahek.contracts.verifier import Verifier
+from datahek.defaults.guardrails import sanitize_output
 from datahek.contracts.models import ModelProvider
 from datahek.engine.executor import Engine, ProviderRegistry
 from datahek.engine.planner import Planner
@@ -139,6 +140,28 @@ async def _save_checkpoint(c, ctx, req, plan, result, decision="ALLOW") -> None:
         logging.getLogger("datahek.api").warning("Checkpoint save failed: %s", exc)
 
 
+async def _audit_output_redactions(c, ctx, connection, categories: list[str]) -> None:
+    """Record output-scan redactions in the audit trail (best-effort)."""
+    from datahek.contracts.audit import AuditEvent, AuditSink
+
+    if not c.has(AuditSink):
+        return
+    try:
+        await c.resolve(AuditSink).record(AuditEvent(
+            event_type="guardrail.output",
+            actor=ctx.user_id,
+            action="redact",
+            resource_ref=connection.id,
+            decision="REDACT",
+            tenant={"org": ctx.organization_id, "project": ctx.project_id},
+            payload={"categories": categories},
+        ))
+    except Exception as exc:
+        import logging
+
+        logging.getLogger("datahek.api").warning("Output redaction audit failed: %s", exc)
+
+
 def _verifier_enabled() -> bool:
     import os
 
@@ -174,9 +197,9 @@ def create_app(container=None) -> FastAPI:
     async def _ask_pipeline(req, c, conn_mgr, registry, planner, engine, reasoner, entitlements):
         from datahek.contracts.misc import ConversationStore
         from datahek.contracts.prompts import PromptStore
-        from datahek.defaults.guardrails import redact_pii
 
-        ctx = RequestContext(source="api", user_id=req.user_id, approval_id=req.approval_id)
+        ctx = RequestContext(source="api", user_id=req.user_id, approval_id=req.approval_id,
+                                 question=req.question)
         conn = await conn_mgr.get_connection(ctx, req.connection_id)
         provider = registry.get(conn.provider)
 
@@ -212,13 +235,16 @@ def create_app(container=None) -> FastAPI:
         columns = [c["name"] for c in result.columns]
         rows = [dict(zip(columns, [_json_safe(v) for v in row])) for row in result.rows]
         await _save_checkpoint(c, ctx, req, plan_result.plan, result)
-        explanation = redact_pii(await reasoner.explain(req.question, result, plan_result.plan, ctx))
+        explanation, redactions = sanitize_output(await reasoner.explain(req.question, result, plan_result.plan, ctx))
+        if redactions:
+            await _audit_output_redactions(c, ctx, conn, redactions)
         await _record_turn(conversations, ctx, req, explanation, "result")
         verification = None
         if _verifier_enabled() and c.has(Verifier):
             verification = await c.resolve(Verifier).verify(req.question, result, ctx)
         return {
             "verification": verification,
+            "redactions": redactions or None,
             "clarification": None,
             "answer": explanation,
             "columns": columns,
@@ -506,7 +532,8 @@ def create_app(container=None) -> FastAPI:
         from fastapi.responses import StreamingResponse
         import json as _json
 
-        ctx = RequestContext(source="api", user_id=req.user_id, approval_id=req.approval_id)
+        ctx = RequestContext(source="api", user_id=req.user_id, approval_id=req.approval_id,
+                                 question=req.question)
         conn = await conn_mgr.get_connection(ctx, req.connection_id)
         provider = registry.get(conn.provider)
 
@@ -550,9 +577,15 @@ def create_app(container=None) -> FastAPI:
             await _save_checkpoint(c, ctx, req, plan_result.plan, result)
             yield ev({"type": "start", "conversation_id": req.conversation_id, "columns": columns, "row_count": result.row_count})
             yield ev({"type": "progress", "stage": "explaining", "message": "Generating answer…"})
+            stream_redactions: set[str] = set()
             async for chunk in reasoner.stream_explanation(req.question, result, plan_result.plan, ctx):
-                yield ev({"type": "token", "content": chunk})
+                clean, found = sanitize_output(chunk)
+                stream_redactions.update(found)
+                yield ev({"type": "token", "content": clean})
             yield ev({"type": "rows", "rows": rows, "columns": columns, "row_count": result.row_count, "truncated": result.truncated})
+            if stream_redactions:
+                await _audit_output_redactions(c, ctx, conn, sorted(stream_redactions))
+                yield ev({"type": "redactions", "categories": sorted(stream_redactions)})
             if _verifier_enabled() and c.has(Verifier):
                 verdict = await c.resolve(Verifier).verify(req.question, result, ctx)
                 yield ev({"type": "verification", "ok": verdict["ok"], "note": verdict["note"]})

@@ -90,6 +90,14 @@ class Planner:
         provider: DataProvider,
         extra_prompt: str | None = None,
     ) -> PlanResult:
+        from datahek.engine.guardrails import InputGuardrail
+        from datahek.kernel.errors import DatahekError, ErrorCode
+
+        input_check = await InputGuardrail().run(ctx, {"question": question})
+        if input_check.decision != "ALLOW":
+            raise DatahekError(ErrorCode.QUERY_DENIED, input_check.reason,
+                               details={"decision": input_check.decision, "stage": "input"})
+
         if self._secrets is not None:
             connection = await _resolve_secrets(connection, self._secrets)
         catalog = await self._schema_service.get_catalog(ctx, connection, provider)

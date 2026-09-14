@@ -1,4 +1,5 @@
 """Guardrail pipeline — typed decisions with deterministic ordering."""
+import re
 from typing import Any
 
 from datahek.contracts.guardrails import Guardrail, GuardrailResult
@@ -101,3 +102,61 @@ class RateLimitGuardrail(Guardrail):
             reason=f"Rate limit exceeded ({self._limit} requests / {int(self._window_s)}s)",
             score=1.0,
         )
+
+
+_INJECTION_PATTERNS = (
+    r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)",
+    r"disregard\s+(all\s+)?(previous|prior|above)",
+    r"you\s+are\s+now\s+(a|an|the)\s",
+    r"reveal\s+(your\s+)?(system\s+)?prompt",
+    r"system\s+prompt",
+    r"\bdrop\s+table\b",
+    r"\bdelete\s+from\b",
+    r"\btruncate\s+table\b",
+    r"\binsert\s+into\b",
+    r"\bupdate\s+\w+\s+set\b",
+    r"\balter\s+table\b",
+    r"\b(grant|revoke)\s+\w+\s+on\b",
+)
+_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+class InputGuardrail(Guardrail):
+    """Plane-1 perimeter: prompt-injection signatures, length, control chars.
+
+    Runs before the planner reaches the LLM, and again in the execution
+    pipeline (defense in depth).
+    """
+
+    name = "input"
+    stage = "input"
+
+    def __init__(self, max_chars: int | None = None) -> None:
+        import os
+
+        self.enabled = os.environ.get("DATAHEK_GUARDRAIL_INPUT", "on").lower() not in ("off", "0", "false")
+        self._max_chars = max_chars or int(os.environ.get("DATAHEK_MAX_QUESTION_CHARS", "2000"))
+        self._patterns = tuple(re.compile(p, re.IGNORECASE) for p in _INJECTION_PATTERNS)
+
+    async def run(self, ctx: RequestContext, payload: dict) -> GuardrailResult:
+        if not self.enabled:
+            return GuardrailResult(decision="ALLOW", reason="ok")
+        question = payload.get("question") or ""
+        if not question:
+            return GuardrailResult(decision="ALLOW", reason="ok")
+        if len(question) > self._max_chars:
+            return GuardrailResult(
+                decision="DENY",
+                reason=f"Question exceeds the maximum length ({self._max_chars} characters)",
+                score=1.0,
+            )
+        if _CONTROL_CHARS.search(question):
+            return GuardrailResult(decision="DENY", reason="Question contains control characters", score=1.0)
+        for pattern in self._patterns:
+            if pattern.search(question):
+                return GuardrailResult(
+                    decision="DENY",
+                    reason="Prompt-injection or write-intent signature detected in the question",
+                    score=1.0,
+                )
+        return GuardrailResult(decision="ALLOW", reason="ok")

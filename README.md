@@ -35,6 +35,7 @@ question → schema discovery → logical plan → validation → guardrails
 - **Checkpoints & replay** — every run is stored (`/checkpoints`); replay re-executes a stored plan deterministically, no LLM involved
 - **Independent verification** — a verifier model checks the result answers the question, without seeing the planner's reasoning
 - **Rate limiting** — per-user sliding-window limiter protects the LLM budget
+- **Perimeter guardrails** — input injection/write-intent signatures and length/control-char checks before the LLM; output scanner strips emails, phones, cards, SSNs, API keys, tokens, passwords, and connection strings from every answer
 - **Four surfaces, one pipeline** — REST API, CLI, MCP server, and web UI share the same guardrails (MCP is never a privileged bypass)
 - **Conversational memory** — multi-turn conversations persisted in SQLite with streaming answers
 - **Local authentication** — `POST /auth/login` (default user `datahek`/`datahek`), enforced via `X-API-Key`
@@ -160,6 +161,8 @@ python -m datahek.mcp_server    # streamable HTTP on :8001
 | `DATAHEK_APPROVAL_SENSITIVE_TABLES` | credential/password/pii patterns | Comma-separated table-name patterns that require approval |
 | `DATAHEK_RATE_LIMIT_PER_MINUTE` | `120` | Per-user request limit (sliding window) |
 | `DATAHEK_VERIFIER` | `on` | Independent post-execution answer verification (`off` to disable) |
+| `DATAHEK_GUARDRAIL_INPUT` | `on` | Input injection/length checks (`off` to disable) |
+| `DATAHEK_MAX_QUESTION_CHARS` | `2000` | Maximum accepted question length |
 | `DATAHEK_METADATA_URL` | *(empty)* | PostgreSQL URL for durable connections/conversations/prompts/evaluations (empty → SQLite/in-memory defaults) |
 | `DATAHEK_METADATA_REDIS_URL` | *(empty)* | Redis URL for LLM settings persistence across restarts (empty → runtime settings only) |
 | `DATAHEK_ENCRYPTION_KEY` | *(empty)* | Optional: encrypt connection settings at rest in PostgreSQL |

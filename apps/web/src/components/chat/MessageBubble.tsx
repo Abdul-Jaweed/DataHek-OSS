@@ -14,6 +14,7 @@ export interface Message {
   error?: boolean;
   clarification?: boolean;
   verified?: { ok: boolean; note: string };
+  redactions?: string[];
 }
 
 export interface MessageBubbleProps {
@@ -78,6 +79,12 @@ export function MessageBubble({ message, actions }: MessageBubbleProps) {
           >
             {message.verified.ok ? '✓' : '⚠'} verified
             {message.verified.note ? ` · ${message.verified.note}` : ''}
+          </div>
+        )}
+
+        {message.redactions && message.redactions.length > 0 && (
+          <div className="mt-1 font-mono text-[11px] text-warning">
+            ⚠ redacted: {message.redactions.join(', ')}
           </div>
         )}
 
