@@ -27,3 +27,8 @@ docs/frontend/
 
 # local-only (not pushed)
 docs/
+
+# notebook scratch
+notebooks/*.db
+notebooks/*.jsonl
+notebooks/__pycache__/

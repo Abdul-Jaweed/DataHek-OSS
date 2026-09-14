@@ -239,6 +239,29 @@ compose stack. Leave the URLs unset to keep the zero-dependency SQLite defaults.
 
 ---
 
+## 📓 Notebooks
+
+Eight executable teaching notebooks in `notebooks/` — all run **offline**
+(a deterministic stub model replaces the LLM, so no API key or network is
+needed):
+
+| # | Notebook | Teaches |
+|---|---|---|
+| 01 | `01_quickstart` | end-to-end: ask, stream, checkpoints |
+| 02 | `02_pipeline` | schema → plan → validate → guardrails → execute → explain |
+| 03 | `03_guardrails` | input injection, read-only plans, dialect checks, physical sandboxing |
+| 04 | `04_joins` | multi-table plans, compiled SQL, policy coverage |
+| 05 | `05_approvals` | human-in-the-loop gating and decisions |
+| 06 | `06_checkpoints_replay` | stored runs and deterministic replay |
+| 07 | `07_semantic_layer` | metric definitions the planner prefers |
+| 08 | `08_evaluation` | regression dataset and live scoring |
+
+```bash
+pip install -e ".[notebooks]"
+jupyter lab notebooks/          # open any notebook
+python notebooks/_build.py      # re-execute all notebooks (CI-style)
+```
+
 ## 🧪 Testing
 
 ```bash
