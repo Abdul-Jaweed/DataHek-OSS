@@ -38,7 +38,7 @@ question → schema discovery → logical plan → validation → guardrails
 - **Rate limiting** — per-user sliding-window limiter protects the LLM budget
 - **Perimeter guardrails** — input injection/write-intent signatures and length/control-char checks before the LLM; output scanner strips emails, phones, cards, SSNs, API keys, tokens, passwords, and connection strings from every answer
 - **Four surfaces, one pipeline** — REST API, CLI, MCP server, and web UI share the same guardrails (MCP is never a privileged bypass)
-- **Conversational memory** — multi-turn conversations persisted in SQLite with streaming answers
+- **Conversational memory** — multi-turn conversations persisted in SQLite with streaming answers; recent turns feed the planner, so follow-ups like *"now the same but only for errors"* resolve correctly
 - **Local authentication** — `POST /auth/login` (default user `datahek`/`datahek`), enforced via `X-API-Key`
 - **Skills & prompts** — keyword-triggered domain guidance and up to 3 custom planner templates
 - **Evaluation** — every execution scored (validity, safety, latency) + regression datasets

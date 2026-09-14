@@ -112,6 +112,32 @@ def _normalize_join_refs(plan, catalog_columns: dict[str, set[str]]):
     return plan.__class__(version=plan.version, nodes=nodes)
 
 
+def _dialect_of(provider) -> str | None:
+    capabilities = getattr(provider, "capabilities", None)
+    return getattr(capabilities, "dialect", None)
+
+
+def _format_history(history: list[dict] | None, max_chars: int = 2000,
+                    per_message: int = 300) -> str:
+    """Compact recent conversation turns for the planner prompt."""
+    if not history:
+        return ""
+    lines: list[str] = []
+    total = 0
+    for message in history:
+        role = "User" if message.get("role") == "user" else "Assistant"
+        content = str(message.get("content") or "").strip()
+        if not content:
+            continue
+        content = content[:per_message]
+        line = f"{role}: {content}"
+        if total + len(line) > max_chars:
+            break
+        lines.append(line)
+        total += len(line)
+    return "\n".join(lines)
+
+
 class Planner:
     def __init__(self, model: ModelProvider, schema_service: SchemaService,
                  max_attempts: int = MAX_PLAN_ATTEMPTS, skills=None,
@@ -129,6 +155,7 @@ class Planner:
         connection: Connection,
         provider: DataProvider,
         extra_prompt: str | None = None,
+        history: list[dict] | None = None,
     ) -> PlanResult:
         from datahek.engine.guardrails import InputGuardrail
         from datahek.kernel.errors import DatahekError, ErrorCode
@@ -154,7 +181,8 @@ class Planner:
         for attempt in range(self._max_attempts):
             try:
                 response = await self._model.complete(
-                    self._build_request(question, schema_summary, feedback, skill_prompt, extra_prompt))
+                    self._build_request(question, schema_summary, feedback, skill_prompt,
+                                        extra_prompt, _dialect_of(provider), history))
             except ModelProviderError as e:
                 from datahek.kernel.errors import DatahekError, ErrorCode
                 if e.status_code == 429:
@@ -167,8 +195,7 @@ class Planner:
                 return PlanResult(plan=None, clarification="I could not interpret the request into a data plan.", confidence=0.2)
             try:
                 parsed = _normalize_join_refs(parsed, columns)
-                validate_plan(parsed, tables, columns,
-                              dialect=getattr(provider.capabilities, "dialect", None))
+                validate_plan(parsed, tables, columns, dialect=_dialect_of(provider))
                 sources: list[str] = []
                 for n in parsed.nodes:
                     if hasattr(n, "source"):
@@ -188,9 +215,15 @@ class Planner:
     @staticmethod
     def _build_request(question: str, schema_summary: str, feedback: str | None,
                        skill_prompt: str = "", extra_prompt: str | None = None,
-                       dialect: str | None = None) -> ModelRequest:
+                       dialect: str | None = None,
+                       history: list[dict] | None = None) -> ModelRequest:
         system = _PLAN_SYSTEM_PROMPT + _dialect_prompt(dialect)
-        user = f"Question: {question}\n\nSchema:\n{schema_summary}"
+        history_block = _format_history(history)
+        if history_block:
+            user = (f"Conversation so far:\n{history_block}\n\n"
+                    f"Question: {question}\n\nSchema:\n{schema_summary}")
+        else:
+            user = f"Question: {question}\n\nSchema:\n{schema_summary}"
         if skill_prompt:
             user += f"\n\n{skill_prompt}"
         if extra_prompt:

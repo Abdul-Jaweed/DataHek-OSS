@@ -121,6 +121,21 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
+async def _conversation_history(conversations, ctx, conversation_id: str | None,
+                                limit: int = 6) -> list[dict] | None:
+    """Recent turns for planner context (best-effort; never fails a request)."""
+    if conversations is None or not conversation_id:
+        return None
+    try:
+        conv = await conversations.get(ctx, conversation_id)
+        if conv is None:
+            return None
+        messages = conv.get("messages") or []
+        return messages[-limit:] if messages else None
+    except Exception:
+        return None
+
+
 async def _save_checkpoint(c, ctx, req, plan, result, decision="ALLOW") -> None:
     """Persist a per-run checkpoint for inspection/replay (best-effort)."""
     from datahek.contracts.misc import CheckpointStore
@@ -232,11 +247,12 @@ def create_app(container=None) -> FastAPI:
                 raise DatahekError(ErrorCode.NOT_FOUND, f"Prompt '{req.prompt_id}' not found")
             extra_prompt = tpl["content"]
 
+        history = await _conversation_history(conversations, ctx, req.conversation_id)
         analyst = c.resolve(MultiStepAnalyst) if c.has(MultiStepAnalyst) else None
         if (analyst is not None and _analyst_enabled()
                 and MultiStepAnalyst.looks_complex(req.question)):
             try:
-                multi = await analyst.run(req.question, ctx, conn, provider)
+                multi = await analyst.run(req.question, ctx, conn, provider, history=history)
             except DatahekError:
                 raise
             except Exception as exc:
@@ -265,7 +281,8 @@ def create_app(container=None) -> FastAPI:
                     "redactions": step_redactions or None,
                 }
 
-        plan_result = await planner.plan(req.question, ctx, conn, provider, extra_prompt=extra_prompt)
+        plan_result = await planner.plan(req.question, ctx, conn, provider,
+                                         extra_prompt=extra_prompt, history=history)
         if plan_result.clarification:
             await _record_turn(conversations, ctx, req, plan_result.clarification, "clarification")
             return {
@@ -604,7 +621,8 @@ def create_app(container=None) -> FastAPI:
                     analyst = c.resolve(MultiStepAnalyst)
                     yield ev({"type": "progress", "stage": "planning",
                               "message": "Decomposing into sub-questions…"})
-                    multi = await analyst.run(req.question, ctx, conn, provider)
+                    multi = await analyst.run(req.question, ctx, conn, provider,
+                                              history=await _conversation_history(conversations, ctx, req.conversation_id))
                     if multi is not None:
                         step_results, synthesis = multi
                         synthesis, stream_redactions = sanitize_output(synthesis)
@@ -631,7 +649,8 @@ def create_app(container=None) -> FastAPI:
                         return
 
                 plan_result = await planner.plan(req.question, ctx, conn, provider,
-                                                 extra_prompt=await _prompt_content(req))
+                                                 extra_prompt=await _prompt_content(req),
+                                                 history=await _conversation_history(conversations, ctx, req.conversation_id))
                 if plan_result.clarification:
                     await _record_turn(conversations, ctx, req, plan_result.clarification, "clarification")
                     yield ev({"type": "progress", "stage": "clarifying", "message": "Requesting clarification"})

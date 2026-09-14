@@ -67,7 +67,8 @@ class MultiStepAnalyst:
         steps = [str(s) for s in (data.get("steps") or []) if str(s).strip()]
         return steps[: self._max_steps]
 
-    async def run(self, question: str, ctx, conn, provider) -> tuple[list[dict], str] | None:
+    async def run(self, question: str, ctx, conn, provider,
+                  history: list[dict] | None = None) -> tuple[list[dict], str] | None:
         """Decompose + execute every step; returns (step_results, synthesis) or None."""
         steps = await self.decompose(question)
         if len(steps) < 2:
@@ -77,7 +78,7 @@ class MultiStepAnalyst:
 
         results: list[dict] = []
         for step in steps:
-            plan_result = await self._planner.plan(step, ctx, conn, provider)
+            plan_result = await self._planner.plan(step, ctx, conn, provider, history=history)
             if plan_result.clarification or plan_result.plan is None:
                 results.append({"question": step, "error": plan_result.clarification or "no plan"})
                 continue
