@@ -34,6 +34,8 @@ question → schema discovery → logical plan → validation → guardrails
 - **Human-in-the-loop approvals** — large exports, unbounded scans, and sensitive tables pause for approval (`/approvals`, UI inbox) before executing
 - **Checkpoints & replay** — every run is stored (`/checkpoints`); replay re-executes a stored plan deterministically, no LLM involved
 - **Independent verification** — a verifier model checks the result answers the question, without seeing the planner's reasoning
+- **Semantic layer** — named metric definitions (`revenue = sum(amount) on orders`) stored in the catalog; the planner prefers them over guessing column semantics
+- **Charts & export** — numeric results render as bar/line charts (with a table toggle) and every result table exports to CSV
 - **Multi-step analysis** — complex questions are decomposed into sub-queries, each executed through the same guarded pipeline, then synthesized into one answer (`DATAHEK_ANALYST=off` to disable)
 - **Rate limiting** — per-user sliding-window limiter protects the LLM budget
 - **Perimeter guardrails** — input injection/write-intent signatures and length/control-char checks before the LLM; output scanner strips emails, phones, cards, SSNs, API keys, tokens, passwords, and connection strings from every answer
@@ -165,6 +167,7 @@ python -m datahek.mcp_server    # streamable HTTP on :8001
 | `DATAHEK_GUARDRAIL_INPUT` | `on` | Input injection/length checks (`off` to disable) |
 | `DATAHEK_MAX_QUESTION_CHARS` | `2000` | Maximum accepted question length |
 | `DATAHEK_ANALYST` | `on` | Multi-step decomposition for complex questions (`off` to disable) |
+| `DATAHEK_DB_PATH` | `datahek.db` | SQLite conversation/checkpoint/metric store |
 | `DATAHEK_METADATA_URL` | *(empty)* | PostgreSQL URL for durable connections/conversations/prompts/evaluations (empty → SQLite/in-memory defaults) |
 | `DATAHEK_METADATA_REDIS_URL` | *(empty)* | Redis URL for LLM settings persistence across restarts (empty → runtime settings only) |
 | `DATAHEK_ENCRYPTION_KEY` | *(empty)* | Optional: encrypt connection settings at rest in PostgreSQL |

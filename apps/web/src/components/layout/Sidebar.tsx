@@ -6,6 +6,7 @@ import {
   Gauge,
   GearSix,
   Lightning,
+  Ruler,
   ShieldCheck,
 } from '@phosphor-icons/react';
 import { NavLink } from 'react-router-dom';
@@ -23,6 +24,7 @@ const NAV: NavItem[] = [
   { to: '/conversations', label: 'Conversations', icon: <ClockCounterClockwise size={20} /> },
   { to: '/prompts', label: 'Prompts', icon: <FileText size={20} /> },
   { to: '/approvals', label: 'Approvals', icon: <ShieldCheck size={20} /> },
+  { to: '/metrics', label: 'Metrics', icon: <Ruler size={20} /> },
   { to: '/evaluations', label: 'Evaluations', icon: <Gauge size={20} /> },
   { to: '/settings', label: 'Settings', icon: <GearSix size={20} /> },
 ];

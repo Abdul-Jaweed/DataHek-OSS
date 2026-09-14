@@ -56,6 +56,12 @@ export const api = {
   saveLlmSettings: (body: { base_url?: string; api_key?: string; model?: string }) =>
     request<{ base_url: string; model: string; api_key_set: boolean }>('/settings/llm', { method: 'POST', body: JSON.stringify(body) }),
 
+  listMetrics: () =>
+    request<{ id: string; name: string; table: string; aggregate: string; column: string; filter: string | null; description: string }[]>('/metrics'),
+  createMetric: (body: { name: string; table: string; aggregate: string; column?: string; filter?: string | null; description?: string }) =>
+    request<{ id: string }>('/metrics', { method: 'POST', body: JSON.stringify(body) }),
+  deleteMetric: (id: string) => request<void>(`/metrics/${id}`, { method: 'DELETE' }),
+
   listApprovals: () =>
     request<{ id: string; status: string; reason: string; requester: string; resource_ref: string }[]>('/approvals'),
   decideApproval: (id: string, decision: 'approve' | 'reject', actor = 'ui') =>

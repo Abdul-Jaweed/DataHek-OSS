@@ -112,6 +112,31 @@ def _normalize_join_refs(plan, catalog_columns: dict[str, set[str]]):
     return plan.__class__(version=plan.version, nodes=nodes)
 
 
+def _format_metrics(metrics: list[dict], question: str, limit: int = 10) -> str:
+    """Render the semantic layer for the planner: catalog metrics, relevance first."""
+    if not metrics:
+        return ""
+    question_lower = question.lower()
+    ordered = sorted(
+        metrics,
+        key=lambda m: (
+            m.get("name", "").lower() not in question_lower
+            and m.get("description", "").lower() not in question_lower,
+            m.get("name", ""),
+        ),
+    )[:limit]
+    lines = ["Metric definitions (semantic layer — prefer these when relevant, keep the alias):"]
+    for m in ordered:
+        expr = f"{m.get('aggregate')}({m.get('column')})"
+        if m.get("filter"):
+            expr += f" WHERE {m['filter']}"
+        line = f"- {m.get('name')}: {expr} on {m.get('table')}"
+        if m.get("description"):
+            line += f' — "{m["description"]}"'
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def _dialect_of(provider) -> str | None:
     capabilities = getattr(provider, "capabilities", None)
     return getattr(capabilities, "dialect", None)
@@ -141,12 +166,13 @@ def _format_history(history: list[dict] | None, max_chars: int = 2000,
 class Planner:
     def __init__(self, model: ModelProvider, schema_service: SchemaService,
                  max_attempts: int = MAX_PLAN_ATTEMPTS, skills=None,
-                 secrets: SecretsProvider | None = None):
+                 secrets: SecretsProvider | None = None, metrics=None):
         self._model = model
         self._schema_service = schema_service
         self._max_attempts = max_attempts
         self._skills = skills
         self._secrets = secrets
+        self._metrics = metrics
 
     async def plan(
         self,
@@ -177,12 +203,19 @@ class Planner:
             from datahek.engine.skills import build_skill_prompt
             skill_prompt = build_skill_prompt(self._skills.match(question))
 
+        metric_block = ""
+        if self._metrics is not None:
+            try:
+                metric_block = _format_metrics(await self._metrics.list(ctx), question)
+            except Exception as exc:
+                logger.warning("Metric catalog unavailable: %s", exc)
+
         feedback = None
         for attempt in range(self._max_attempts):
             try:
                 response = await self._model.complete(
                     self._build_request(question, schema_summary, feedback, skill_prompt,
-                                        extra_prompt, _dialect_of(provider), history))
+                                        extra_prompt, _dialect_of(provider), history, metric_block))
             except ModelProviderError as e:
                 from datahek.kernel.errors import DatahekError, ErrorCode
                 if e.status_code == 429:
@@ -216,7 +249,8 @@ class Planner:
     def _build_request(question: str, schema_summary: str, feedback: str | None,
                        skill_prompt: str = "", extra_prompt: str | None = None,
                        dialect: str | None = None,
-                       history: list[dict] | None = None) -> ModelRequest:
+                       history: list[dict] | None = None,
+                       metric_block: str = "") -> ModelRequest:
         system = _PLAN_SYSTEM_PROMPT + _dialect_prompt(dialect)
         history_block = _format_history(history)
         if history_block:
@@ -224,6 +258,8 @@ class Planner:
                     f"Question: {question}\n\nSchema:\n{schema_summary}")
         else:
             user = f"Question: {question}\n\nSchema:\n{schema_summary}"
+        if metric_block:
+            user += f"\n\n{metric_block}"
         if skill_prompt:
             user += f"\n\n{skill_prompt}"
         if extra_prompt:

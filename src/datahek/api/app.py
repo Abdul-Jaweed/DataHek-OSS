@@ -93,6 +93,15 @@ class AskRequest(BaseModel):
     approval_id: str | None = None
 
 
+class MetricRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    table: str = Field(..., min_length=1, max_length=128)
+    aggregate: str = Field(..., min_length=1, max_length=32)
+    column: str = Field("*", max_length=128)
+    filter: str | None = Field(None, max_length=500)
+    description: str = Field("", max_length=300)
+
+
 class ApprovalDecisionRequest(BaseModel):
     decision: str = Field(..., pattern="^(approve|reject)$")
     actor: str = Field("anonymous", max_length=128)
@@ -181,6 +190,17 @@ async def _audit_output_redactions(c, ctx, connection, categories: list[str]) ->
         import logging
 
         logging.getLogger("datahek.api").warning("Output redaction audit failed: %s", exc)
+
+
+def _validate_aggregate(aggregate: str) -> None:
+    from datahek.engine.plan import _DEFAULT_FUNCTIONS
+
+    if aggregate not in _DEFAULT_FUNCTIONS:
+        raise DatahekError(
+            ErrorCode.VALIDATION,
+            f"Aggregate '{aggregate}' is not supported",
+            details={"allowed": sorted(_DEFAULT_FUNCTIONS)},
+        )
 
 
 def _analyst_enabled() -> bool:
@@ -531,6 +551,54 @@ def create_app(container=None) -> FastAPI:
     async def delete_connection(connection_id: str, _identity=Depends(_require_auth)):
         ctx = RequestContext(source="api")
         await conn_mgr.remove(ctx, connection_id)
+
+    @app.get("/metrics")
+    async def list_metrics(_identity=Depends(_require_auth)):
+        from datahek.contracts.semantics import SemanticStore
+
+        store = c.resolve(SemanticStore)
+        return await store.list(RequestContext(source="api"))
+
+    @app.post("/metrics", status_code=201)
+    async def create_metric(req: MetricRequest, _identity=Depends(_require_auth)):
+        from datahek.contracts.semantics import Metric, SemanticStore
+        from datahek.kernel.ids import entity_id
+
+        _validate_aggregate(req.aggregate)
+        ctx = RequestContext(source="api")
+        metric = Metric(
+            id=entity_id("metric"), name=req.name, table=req.table,
+            aggregate=req.aggregate, column=req.column, filter=req.filter,
+            description=req.description, org_id=ctx.organization_id, project_id=ctx.project_id,
+        )
+        store = c.resolve(SemanticStore)
+        await store.create(ctx, metric)
+        return await store.get(ctx, metric.id)
+
+    @app.put("/metrics/{metric_id}")
+    async def update_metric(metric_id: str, req: MetricRequest, _identity=Depends(_require_auth)):
+        from datahek.contracts.semantics import SemanticStore
+
+        _validate_aggregate(req.aggregate)
+        ctx = RequestContext(source="api")
+        store = c.resolve(SemanticStore)
+        if await store.get(ctx, metric_id) is None:
+            raise DatahekError(ErrorCode.NOT_FOUND, f"Metric '{metric_id}' not found")
+        await store.update(ctx, metric_id, {
+            "name": req.name, "table": req.table, "aggregate": req.aggregate,
+            "column": req.column, "filter": req.filter, "description": req.description,
+        })
+        return await store.get(ctx, metric_id)
+
+    @app.delete("/metrics/{metric_id}", status_code=204)
+    async def delete_metric(metric_id: str, _identity=Depends(_require_auth)):
+        from datahek.contracts.semantics import SemanticStore
+
+        ctx = RequestContext(source="api")
+        store = c.resolve(SemanticStore)
+        if await store.get(ctx, metric_id) is None:
+            raise DatahekError(ErrorCode.NOT_FOUND, f"Metric '{metric_id}' not found")
+        await store.delete(ctx, metric_id)
 
     @app.get("/approvals")
     async def list_approvals(_identity=Depends(_require_auth)):

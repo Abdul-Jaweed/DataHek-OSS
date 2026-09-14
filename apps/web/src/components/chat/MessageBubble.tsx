@@ -1,4 +1,6 @@
-import { DownloadSimple } from '@phosphor-icons/react';
+import { ChartBar, DownloadSimple, Table } from '@phosphor-icons/react';
+import { useState } from 'react';
+import { ResultChart, shouldChart } from './ResultChart';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ReactNode } from 'react';
@@ -56,6 +58,9 @@ function downloadCsv(columns: string[], rows: Record<string, unknown>[]): void {
 
 export function MessageBubble({ message, actions }: MessageBubbleProps) {
   const isUser = message.role === 'user';
+  const chartable =
+    !isUser && !!message.columns && !!message.rows && shouldChart(message.columns, message.rows);
+  const [showChart, setShowChart] = useState(chartable);
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -106,7 +111,11 @@ export function MessageBubble({ message, actions }: MessageBubbleProps) {
           </div>
         )}
 
-        {message.columns && message.rows && (
+        {chartable && showChart && message.columns && message.rows && (
+          <ResultChart columns={message.columns} rows={message.rows} />
+        )}
+
+        {message.columns && message.rows && (!chartable || !showChart) && (
           <div className="mt-3 overflow-x-auto">
             <table className="w-full border-collapse font-mono text-xs">
               <thead>
@@ -148,6 +157,16 @@ export function MessageBubble({ message, actions }: MessageBubbleProps) {
                 aria-label="Export results as CSV"
               >
                 <DownloadSimple size={11} /> CSV
+              </button>
+            )}
+            {chartable && (
+              <button
+                className="flex cursor-pointer items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] text-muted transition-colors hover:border-border-strong hover:text-foreground"
+                onClick={() => setShowChart((v) => !v)}
+                aria-label={showChart ? 'Show table' : 'Show chart'}
+              >
+                {showChart ? <Table size={11} /> : <ChartBar size={11} />}
+                {showChart ? 'Table' : 'Chart'}
               </button>
             )}
           </div>

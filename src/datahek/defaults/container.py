@@ -13,6 +13,7 @@ from datahek.contracts.misc import ConversationStore
 from datahek.contracts.models import ModelProvider
 from datahek.contracts.policy import PolicyEngine
 from datahek.contracts.prompts import PromptStore
+from datahek.contracts.semantics import SemanticStore
 from datahek.contracts.reasoner import Reasoner
 from datahek.contracts.secrets import SecretsProvider
 from datahek.contracts.tenancy import TenantContext
@@ -39,6 +40,8 @@ from datahek.defaults.pg import PgMetadata, metadata_config
 from datahek.defaults.policy import LocalPolicyEngine
 from datahek.defaults.prompts import SqlitePromptStore
 from datahek.defaults.prompts_pg import PostgresPromptStore
+from datahek.defaults.semantics import SqliteSemanticStore
+from datahek.defaults.semantics_pg import PostgresSemanticStore
 from datahek.defaults.redis_llm import RedisLlmSettingsStore
 from datahek.defaults.secrets import EnvSecretsProvider
 from datahek.defaults.tenancy import SingleTenantContext
@@ -79,10 +82,12 @@ def build_default_container() -> Container:
                    singleton=True)
         c.register(ConversationStore, PostgresConversationStore(pg), singleton=True)
         c.register(PromptStore, PostgresPromptStore(pg), singleton=True)
+        c.register(SemanticStore, PostgresSemanticStore(pg), singleton=True)
     else:
         c.register(ConnectionManager, LocalConnectionManager(), singleton=True)
         c.register(ConversationStore, SqliteConversationStore(), singleton=True)
         c.register(PromptStore, SqlitePromptStore(), singleton=True)
+        c.register(SemanticStore, SqliteSemanticStore(), singleton=True)
     c.register(EntitlementProvider, EntitlementProvider(), singleton=True)
     return c
 
@@ -122,6 +127,7 @@ def build_app_container() -> Container:
         model=c.resolve(ModelProvider),
         schema_service=c.resolve(SchemaService),
         secrets=c.resolve(SecretsProvider),
+        metrics=c.resolve(SemanticStore),
     ), singleton=True)
     c.register(Reasoner, lambda: ModelReasoner(model=c.resolve(ModelProvider)), singleton=True)
     c.register(Verifier, lambda: ModelVerifier(c.resolve(ModelProvider)), singleton=True)
