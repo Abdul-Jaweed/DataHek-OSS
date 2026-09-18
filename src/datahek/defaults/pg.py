@@ -42,6 +42,18 @@ CREATE TABLE IF NOT EXISTS evaluation_runs (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_org ON conversations(org_id);
+CREATE TABLE IF NOT EXISTS approvals (
+  id TEXT PRIMARY KEY, org_id TEXT NOT NULL, project_id TEXT NOT NULL,
+  resource_ref TEXT NOT NULL, requester TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending', decided_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS checkpoints (
+  id TEXT PRIMARY KEY, org_id TEXT NOT NULL, conversation_id TEXT,
+  question TEXT NOT NULL, connection_id TEXT NOT NULL, plan_json TEXT NOT NULL,
+  sql TEXT, row_count INTEGER, decision TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 """
 
 

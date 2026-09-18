@@ -7,6 +7,22 @@ PG_URL = os.environ.get("DATAHEK_TEST_PG_URL") or "postgresql://datahek:datahek@
 
 @unittest.skipUnless(os.environ.get("DATAHEK_TEST_PG_URL"), "postgres test container not running")
 class TestPostgresConnectionManager(unittest.TestCase):
+    def setUp(self):
+        """Isolate tests from rows left by earlier runs (shared test database)."""
+        import asyncio
+        from datahek.defaults.pg import PgMetadata
+
+        async def clean():
+            pg = PgMetadata(url=PG_URL)
+            await pg.init_schema()
+            conn = await pg.connect()
+            try:
+                conn.execute("DELETE FROM connections")
+            finally:
+                conn.close()
+
+        asyncio.run(clean())
+
     def test_add_get_list_remove(self):
         import asyncio
         from datahek.defaults.pg import PgMetadata

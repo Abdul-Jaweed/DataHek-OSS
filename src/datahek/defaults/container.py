@@ -24,7 +24,10 @@ from datahek.connectors.postgres import PostgresProvider
 from datahek.connectors.sqlite import SQLiteProvider
 from datahek.contracts.misc import ApprovalService, CheckpointStore
 from datahek.defaults.approvals import LocalApprovalService
+from datahek.defaults.approvals_pg import PostgresApprovalService
+from datahek.defaults.approvals_sqlite import SqliteApprovalService
 from datahek.defaults.checkpoints import SqliteCheckpointStore
+from datahek.defaults.checkpoints_pg import PostgresCheckpointStore
 from datahek.defaults.audit import JsonlAuditSink
 from datahek.defaults.auth import AuthConfig, LocalAuthProvider
 from datahek.defaults.connections import LocalConnectionManager
@@ -71,7 +74,7 @@ def build_default_container() -> Container:
     c.register(TenantContext, SingleTenantContext(), singleton=True)
     c.register(AuditSink, JsonlAuditSink(), singleton=True)
     c.register(PolicyEngine, LocalPolicyEngine(), singleton=True)
-    c.register(ApprovalService, LocalApprovalService(), singleton=True)
+    c.register(ApprovalService, SqliteApprovalService(), singleton=True)
     c.register(CheckpointStore, SqliteCheckpointStore(), singleton=True)
     pg = PgMetadata()
     if pg._url:
@@ -83,6 +86,8 @@ def build_default_container() -> Container:
         c.register(ConversationStore, PostgresConversationStore(pg), singleton=True)
         c.register(PromptStore, PostgresPromptStore(pg), singleton=True)
         c.register(SemanticStore, PostgresSemanticStore(pg), singleton=True)
+        c.register(ApprovalService, PostgresApprovalService(pg), singleton=True)
+        c.register(CheckpointStore, PostgresCheckpointStore(pg), singleton=True)
     else:
         c.register(ConnectionManager, LocalConnectionManager(), singleton=True)
         c.register(ConversationStore, SqliteConversationStore(), singleton=True)

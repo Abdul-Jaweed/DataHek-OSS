@@ -606,9 +606,16 @@ def create_app(container=None) -> FastAPI:
 
         if not c.has(ApprovalService):
             return []
+        import inspect
+
         service = c.resolve(ApprovalService)
         lister = getattr(service, "list_all", None)
-        return lister() if lister is not None else []
+        if lister is None:
+            return []
+        result = lister()
+        if inspect.isawaitable(result):
+            result = await result
+        return result
 
     @app.post("/approvals/{approval_id}/decide")
     async def decide_approval(approval_id: str, req: ApprovalDecisionRequest,
