@@ -152,6 +152,125 @@ def build_mcp_server(container=None) -> FastMCP:
             return "\n".join(lines)
         return await _safe(run())
 
+    @mcp.tool(name="data.list_connections")
+    async def data_list_connections() -> str:
+        """List available connections (name, provider, database — never credentials)."""
+        async def run():
+            ctx = RequestContext(source="mcp")
+            conns = await conn_mgr.list_connections(ctx)
+            if not conns:
+                return "No connections configured"
+            return "\n".join(f"{c.name} | {c.provider} | {c.database or '-'}" for c in conns)
+        return await _safe(run())
+
+    @mcp.tool(name="data.list_metrics")
+    async def data_list_metrics() -> str:
+        """List the semantic layer: named metric definitions the planner prefers."""
+        async def run():
+            from datahek.contracts.semantics import SemanticStore
+
+            ctx = RequestContext(source="mcp")
+            metrics = await c.resolve(SemanticStore).list(ctx)
+            if not metrics:
+                return "No metrics defined"
+            return "\n".join(
+                f"{m['name']} = {m['aggregate']}({m['column']}) on {m['table']}"
+                + (f" where {m['filter']}" if m.get("filter") else "")
+                for m in metrics)
+        return await _safe(run())
+
+    @mcp.tool(name="data.run_saved_query")
+    async def data_run_saved_query(name_or_id: str) -> str:
+        """Run a saved query by name/id. Reuses the newest matching checkpoint's
+        stored plan when available (deterministic, no model call); otherwise
+        executes through the full guarded pipeline."""
+        async def run():
+            from datahek.contracts.misc import CheckpointStore
+            from datahek.contracts.saved import SavedQueryStore
+            from datahek.engine.plan import LogicalPlan
+
+            ctx = RequestContext(source="mcp")
+            saved = await c.resolve(SavedQueryStore).get(ctx, name_or_id)
+            if saved is None:
+                found = [q for q in await c.resolve(SavedQueryStore).list_queries(ctx)
+                         if q["name"] == name_or_id]
+                saved = found[0] if found else None
+            if saved is None:
+                return f"Saved query '{name_or_id}' not found"
+
+            if c.has(CheckpointStore):
+                checkpoints = await c.resolve(CheckpointStore).list(ctx, limit=50)
+                match = next((cp for cp in checkpoints
+                              if cp["question"] == saved["question"]
+                              and cp.get("plan") and cp.get("sql")), None)
+                if match is not None:
+                    plan = LogicalPlan.from_dict(match["plan"])
+                    if plan.read_only:
+                        conn = await conn_mgr.get_connection(ctx, match["connection_id"])
+                        provider = registry.get(conn.provider)
+                        client = await provider.connect(conn)
+                        try:
+                            raw = await provider.compile_and_execute(client, plan, ctx)
+                        finally:
+                            close = getattr(provider, "close", None)
+                            if close is not None:
+                                try:
+                                    await close(client)
+                                except Exception:
+                                    pass
+                        cols = [cc["name"] for cc in raw["columns"]]
+                        lines = [f"[deterministic replay of checkpoint {match['id'][-8:]} · {match['sql']}]"]
+                        for row in raw["rows"]:
+                            lines.append("  " + ", ".join(f"{c}={v}" for c, v in zip(cols, row)))
+                        return "\n".join(lines)
+
+            conn = await conn_mgr.get_connection(ctx, saved["connection_id"])
+            provider = registry.get(conn.provider)
+            plan_result = await planner.plan(saved["question"], ctx, conn, provider)
+            if plan_result.clarification:
+                return f"Clarification: {plan_result.clarification}"
+            result = await engine.execute(ctx, plan_result.plan, conn)
+            explanation = await reasoner.explain(saved["question"], result, plan_result.plan, ctx)
+            cols = [cc["name"] for cc in result.columns]
+            lines = [explanation]
+            for row in result.rows:
+                lines.append("  " + ", ".join(f"{cc}={v}" for cc, v in zip(cols, row)))
+            return "\n".join(lines)
+        return await _safe(run())
+
+    @mcp.tool(name="data.replay_checkpoint")
+    async def data_replay_checkpoint(checkpoint_id: str) -> str:
+        """Deterministically re-run a stored plan — same SQL, no model involved."""
+        async def run():
+            from datahek.contracts.misc import CheckpointStore
+            from datahek.engine.plan import LogicalPlan
+
+            ctx = RequestContext(source="mcp")
+            item = await c.resolve(CheckpointStore).get(ctx, checkpoint_id)
+            if item is None:
+                return f"Checkpoint '{checkpoint_id}' not found"
+            plan = LogicalPlan.from_dict(item["plan"])
+            if not plan.read_only:
+                return "Replay blocked: stored plan is not read-only"
+            conn = await conn_mgr.get_connection(ctx, item["connection_id"])
+            provider = registry.get(conn.provider)
+            client = await provider.connect(conn)
+            try:
+                raw = await provider.compile_and_execute(client, plan, ctx)
+            finally:
+                close = getattr(provider, "close", None)
+                if close is not None:
+                    try:
+                        await close(client)
+                    except Exception:
+                        pass
+            cols = [cc["name"] for cc in raw["columns"]]
+            lines = [f"[replay · {item['sql']}]"]
+            for row in raw["rows"]:
+                lines.append("  " + ", ".join(f"{c}={v}" for c, v in zip(cols, row)))
+            return "\n".join(lines)
+        return await _safe(run())
+
     return mcp
 
 

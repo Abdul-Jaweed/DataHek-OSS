@@ -19,6 +19,7 @@ from datahek.contracts.reasoner import Reasoner
 from datahek.contracts.saved import SavedQueryStore
 from datahek.contracts.verifier import Verifier
 from datahek.engine.analyst import MultiStepAnalyst
+from datahek.engine.suggestions import FollowUpSuggester
 from datahek.defaults.guardrails import sanitize_output
 from datahek.contracts.models import ModelProvider
 from datahek.engine.executor import Engine, ProviderRegistry
@@ -215,6 +216,12 @@ def _validate_aggregate(aggregate: str) -> None:
         )
 
 
+def _suggestions_enabled() -> bool:
+    import os
+
+    return os.environ.get("DATAHEK_SUGGESTIONS", "off").lower() in ("on", "1", "true")
+
+
 def _analyst_enabled() -> bool:
     import os
 
@@ -339,7 +346,13 @@ def create_app(container=None) -> FastAPI:
             verification = await c.resolve(Verifier).verify(req.question, result, ctx)
         metrics.inc("datahek_ask_results_total", outcome="ok")
         metrics.inc("datahek_rows_returned_total", result.row_count or 0)
+
+        suggestions = None
+        if _suggestions_enabled() and c.has(FollowUpSuggester):
+            found = await c.resolve(FollowUpSuggester).suggest(req.question, result, ctx)
+            suggestions = found or None
         return {
+            "suggestions": suggestions,
             "verification": verification,
             "redactions": redactions or None,
             "clarification": None,
@@ -994,6 +1007,10 @@ def create_app(container=None) -> FastAPI:
             if _verifier_enabled() and c.has(Verifier):
                 verdict = await c.resolve(Verifier).verify(req.question, result, ctx)
                 yield ev({"type": "verification", "ok": verdict["ok"], "note": verdict["note"]})
+            if _suggestions_enabled() and c.has(FollowUpSuggester):
+                found = await c.resolve(FollowUpSuggester).suggest(req.question, result, ctx)
+                if found:
+                    yield ev({"type": "suggestions", "items": found})
             yield ev({"type": "progress", "stage": "done", "message": "Complete"})
             yield ev({"type": "done"})
 

@@ -40,6 +40,8 @@ question → schema discovery → logical plan → validation → guardrails
 - **Audit search** — `GET /audit` filters the JSONL trail by event type, actor, decision, or free text
 - **Catalog-aware skills** — domain guidance (time-series, debugging) only activates when the schema actually has matching columns
 - **MCP per-client tokens** — optional bearer auth with scopes (`DATAHEK_MCP_TOKENS`)
+- **7 MCP tools** — list_tables · table_schema · ask · list_connections · list_metrics · run_saved_query (deterministic replay when possible) · replay_checkpoint
+- **Follow-up suggestions** — opt-in agent proposing next questions (`DATAHEK_SUGGESTIONS=on`); clicking a chip asks it
 - **Semantic layer** — named metric definitions (`revenue = sum(amount) on orders`) stored in the catalog; the planner prefers them over guessing column semantics
 - **Charts & export** — numeric results render as bar/line charts (with a table toggle) and every result table exports to CSV
 - **Multi-step analysis** — complex questions are decomposed into sub-queries, each executed through the same guarded pipeline, then synthesized into one answer (`DATAHEK_ANALYST=off` to disable)
@@ -175,6 +177,7 @@ python -m datahek.mcp_server    # streamable HTTP on :8001
 | `DATAHEK_MASK_SALT` | `datahek` | Salt for the `hash` masking strategy |
 | `DATAHEK_MCP_TOOL_TIMEOUT` | `120` | Seconds before an MCP tool call is stopped |
 | `DATAHEK_LOG_FORMAT` | `text` | `json` emits one structured log object per line |
+| `DATAHEK_SUGGESTIONS` | `off` | `on` = propose follow-up questions after each answer |
 | `DATAHEK_MAX_QUESTION_CHARS` | `2000` | Maximum accepted question length |
 | `DATAHEK_ANALYST` | `on` | Multi-step decomposition for complex questions (`off` to disable) |
 | `DATAHEK_DB_PATH` | `datahek.db` | SQLite conversation/checkpoint/metric store |

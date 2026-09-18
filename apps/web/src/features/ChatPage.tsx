@@ -22,6 +22,8 @@ function applyEvent(ev: StreamEvent, message: Message): Partial<Message> {
       return { verified: { ok: ev.ok, note: ev.note } };
     case 'redactions':
       return { redactions: ev.categories };
+    case 'suggestions':
+      return { suggestions: ev.items };
     case 'steps':
       return { steps: ev.steps };
     case 'done':
@@ -127,7 +129,7 @@ export function ChatPage() {
           </p>
         )}
         {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} />
+          <MessageBubble key={m.id} message={m} onSuggestion={streaming ? undefined : send} />
         ))}
       </div>
 

@@ -27,11 +27,13 @@ export interface Message {
   verified?: { ok: boolean; note: string };
   redactions?: string[];
   steps?: MessageStep[];
+  suggestions?: string[];
 }
 
 export interface MessageBubbleProps {
   message: Message;
   actions?: ReactNode;
+  onSuggestion?: (text: string) => void;
 }
 
 function csvEscape(value: unknown): string {
@@ -56,7 +58,7 @@ function downloadCsv(columns: string[], rows: Record<string, unknown>[]): void {
   URL.revokeObjectURL(url);
 }
 
-export function MessageBubble({ message, actions }: MessageBubbleProps) {
+export function MessageBubble({ message, actions, onSuggestion }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const chartable =
     !isUser && !!message.columns && !!message.rows && shouldChart(message.columns, message.rows);
@@ -180,6 +182,20 @@ export function MessageBubble({ message, actions }: MessageBubbleProps) {
           >
             {message.verified.ok ? '✓' : '⚠'} verified
             {message.verified.note ? ` · ${message.verified.note}` : ''}
+          </div>
+        )}
+
+        {message.suggestions && message.suggestions.length > 0 && onSuggestion && (
+          <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border pt-2">
+            {message.suggestions.map((sug) => (
+              <button
+                key={sug}
+                className="cursor-pointer rounded-full border border-border px-2.5 py-1 text-[11px] text-muted transition-colors hover:border-brand hover:text-brand-strong"
+                onClick={() => onSuggestion(sug)}
+              >
+                {sug}
+              </button>
+            ))}
           </div>
         )}
 

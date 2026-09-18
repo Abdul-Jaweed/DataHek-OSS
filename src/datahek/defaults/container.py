@@ -56,6 +56,7 @@ from datahek.engine.executor import Engine, ProviderRegistry
 from datahek.engine.planner import Planner
 from datahek.engine.analyst import MultiStepAnalyst
 from datahek.engine.reasoner import ModelReasoner
+from datahek.engine.suggestions import FollowUpSuggester
 from datahek.engine.verifier import ModelVerifier
 from datahek.engine.schema import SchemaService
 from datahek.kernel.config import config_from_env
@@ -143,6 +144,7 @@ def build_app_container() -> Container:
     ), singleton=True)
     c.register(Reasoner, lambda: ModelReasoner(model=c.resolve(ModelProvider)), singleton=True)
     c.register(Verifier, lambda: ModelVerifier(c.resolve(ModelProvider)), singleton=True)
+    c.register(FollowUpSuggester, lambda: FollowUpSuggester(c.resolve(ModelProvider)), singleton=True)
     c.register(MultiStepAnalyst, lambda: MultiStepAnalyst(
         model=c.resolve(ModelProvider),
         planner=c.resolve(Planner),
