@@ -118,7 +118,7 @@ export function ConnectionsPage() {
     <div className="mx-auto max-w-5xl p-6 sm:p-10">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Connections</h1>
+          <h1 className="text-[21px] font-extrabold tracking-[-0.02em] text-foreground">Connections</h1>
           <p className="text-sm text-muted">
             {connections.length}/5 used · guarded by read-only enforcement
           </p>
@@ -141,7 +141,7 @@ export function ConnectionsPage() {
                 <Label htmlFor="nc-provider">Provider</Label>
                 <select
                   id="nc-provider"
-                  className="h-9 w-full cursor-pointer rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:outline-none focus:border-brand"
+                  className="h-9 w-full cursor-pointer rounded-md border border-border bg-surface-2 px-3 text-sm text-foreground focus:border-border-strong"
                   value={provider}
                   onChange={(e) => setProvider(e.target.value)}
                 >
@@ -176,7 +176,7 @@ export function ConnectionsPage() {
                 <Label htmlFor="nc-ssl">SSL mode</Label>
                 <select
                   id="nc-ssl"
-                  className="h-9 w-full cursor-pointer rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:outline-none focus:border-brand"
+                  className="h-9 w-full cursor-pointer rounded-md border border-border bg-surface-2 px-3 text-sm text-foreground focus:border-border-strong"
                   value={sslmode}
                   onChange={(e) => setSslmode(e.target.value)}
                 >

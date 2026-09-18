@@ -17,7 +17,8 @@ export type ChartSpec =
 
 const MAX_CATEGORIES = 12;
 const DONUT_MAX_SLICES = 5;
-const PALETTE = ['#eab308', '#38bdf8', '#4ade80', '#f472b6', '#a78bfa', '#fb923c'];
+/* Amber-anchored categorical sequence — no decorative blue/green per the design system */
+const PALETTE = ['#eab308', '#a78bfa', '#f472b6', '#94a3b8', '#fb923c', '#e879f9'];
 
 function isNumeric(value: unknown): boolean {
   if (typeof value === 'number') return true;
@@ -104,7 +105,7 @@ export function ResultChart({ columns, rows }: ResultChartProps) {
   const tip = {
     contentStyle: {
       background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: 8, fontSize: 12, fontFamily: 'var(--font-mono)',
+      borderRadius: 6, fontSize: 12, fontFamily: 'var(--font-mono)',
     },
     labelStyle: { color: 'var(--muted)' },
   };
@@ -113,7 +114,7 @@ export function ResultChart({ columns, rows }: ResultChartProps) {
   if (spec.kind === 'scatter') {
     const points = rows.map((r) => ({ x: toNumber(r[spec.x]), y: toNumber(r[spec.y]) }));
     return (
-      <div className="mt-2 h-56 w-full">
+      <div className="h-56 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 6, right: 10, bottom: 0, left: -12 }}>
             <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
@@ -135,7 +136,7 @@ export function ResultChart({ columns, rows }: ResultChartProps) {
       fill: PALETTE[i % PALETTE.length],
     }));
     return (
-      <div className="mt-2 h-56 w-full">
+      <div className="h-56 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Tooltip {...tip} />
@@ -152,7 +153,7 @@ export function ResultChart({ columns, rows }: ResultChartProps) {
 
   if (spec.kind === 'line') {
     return (
-      <div className="mt-2 h-56 w-full">
+      <div className="h-56 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 6, right: 10, bottom: 0, left: -12 }}>
             <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />

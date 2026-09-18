@@ -51,7 +51,7 @@ export function PromptsPage() {
     <div className="mx-auto max-w-5xl p-6 sm:p-10">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Prompts</h1>
+          <h1 className="text-[21px] font-extrabold tracking-[-0.02em] text-foreground">Prompts</h1>
           <p className="text-sm text-muted">{prompts.length}/3 used · injected as planner guidance</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>

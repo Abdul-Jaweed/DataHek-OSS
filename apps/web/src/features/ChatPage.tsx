@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus } from '@phosphor-icons/react';
+import { ArrowsClockwise } from '@phosphor-icons/react';
 import type { StreamEvent } from '../api/types';
 import { streamAsk } from '../api/client';
 import { Composer } from '../components/chat/Composer';
@@ -51,8 +51,8 @@ export function ChatPage() {
     const convId = await ensureConversation();
 
     const assistantId = `a-${Date.now()}`;
-    appendMessage({ id: `u-${Date.now()}`, role: 'user', content: text });
-    appendMessage({ id: assistantId, role: 'assistant', content: '', streaming: true });
+    appendMessage({ id: `u-${Date.now()}`, role: 'user', content: text, at: Date.now() });
+    appendMessage({ id: assistantId, role: 'assistant', content: '', streaming: true, at: Date.now() });
     setStreaming(true);
 
     try {
@@ -96,44 +96,72 @@ export function ChatPage() {
     );
   }
 
+  const selected = connections.find((c) => c.id === selectedConnectionId);
+  let promptNo = 0;
+
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-3 border-b border-border px-4 py-3 sm:px-6">
-        <select
-          className="h-9 cursor-pointer rounded-md border border-border bg-surface px-3 font-mono text-sm text-foreground focus:outline-none focus:border-brand"
-          value={selectedConnectionId ?? ''}
-          onChange={(e) => selectConnection(e.target.value || null)}
-          aria-label="Connection"
-        >
-          {connections.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name} · {c.provider}
-            </option>
-          ))}
-        </select>
-        <Badge variant="neutral" className="hidden sm:inline-flex">
-          {selectedConnectionId ? 'read-only' : 'no connection'}
-        </Badge>
-        <div className="ml-auto">
-          <Button variant="ghost" size="sm" icon={<Plus size={16} />} onClick={newConversation} disabled={streaming}>
-            <span className="hidden sm:inline">New</span>
-          </Button>
+      <div className="border-b border-border bg-surface">
+        <div className="mx-auto flex w-full max-w-[1060px] flex-wrap items-center gap-3 px-4 py-2.5 sm:px-6">
+          <label className="kicker text-faint" htmlFor="target-db">
+            Target DB:
+          </label>
+          <select
+            id="target-db"
+            className="h-8 max-w-[260px] cursor-pointer rounded-md border border-border bg-surface-2 px-2 font-mono text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-border-strong"
+            value={selectedConnectionId ?? ''}
+            onChange={(e) => selectConnection(e.target.value || null)}
+          >
+            {connections.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} · {c.provider}
+              </option>
+            ))}
+          </select>
+          <Badge variant={selectedConnectionId ? 'success' : 'neutral'} dot>
+            {selectedConnectionId ? 'read-only mode' : 'no connection'}
+          </Badge>
+          <div className="ml-auto">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<ArrowsClockwise size={14} />}
+              onClick={newConversation}
+              disabled={streaming}
+            >
+              <span className="hidden sm:inline">New conversation</span>
+            </Button>
+          </div>
         </div>
       </div>
 
       {progress && <ProgressSection progress={progress} />}
-      <div ref={threadRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6" aria-live="polite">
-        {messages.length === 0 && (
-          <p className="pt-16 text-center text-sm text-muted">
-            Ask anything about your data. Follow-ups keep context.
-          </p>
-        )}
-        {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} onSuggestion={streaming ? undefined : send} />
-        ))}
+
+      <div ref={threadRef} className="min-h-0 flex-1 overflow-y-auto" aria-live="polite">
+        <div className="mx-auto w-full max-w-[1060px] space-y-4 px-4 py-4 sm:px-6">
+          {messages.length === 0 && (
+            <div className="pt-16 text-center">
+              <p className="kicker text-faint">No messages yet</p>
+              <p className="mt-2 text-[13px] text-muted">
+                Ask anything about your data. Follow-ups keep context.
+              </p>
+            </div>
+          )}
+          {messages.map((m) => {
+            if (m.role === 'user') promptNo += 1;
+            return (
+              <MessageBubble
+                key={m.id}
+                message={m}
+                index={m.role === 'user' ? promptNo : undefined}
+                onSuggestion={streaming ? undefined : send}
+              />
+            );
+          })}
+        </div>
       </div>
 
-      <Composer hasConnection={!!selectedConnectionId} streaming={streaming} onSend={send} />
+      <Composer connectionName={selected?.name ?? null} streaming={streaming} onSend={send} />
     </div>
   );
 }

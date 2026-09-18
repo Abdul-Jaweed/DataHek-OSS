@@ -124,7 +124,7 @@ export function SavedQueriesPage() {
     <div className="mx-auto max-w-4xl p-6 sm:p-10">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Saved queries</h1>
+          <h1 className="text-[21px] font-extrabold tracking-[-0.02em] text-foreground">Saved queries</h1>
           <p className="text-sm text-muted">Reusable questions with optional schedules — every run goes through the full guarded pipeline</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
@@ -146,7 +146,7 @@ export function SavedQueriesPage() {
                 <Label htmlFor="sq-c">Connection</Label>
                 <select
                   id="sq-c"
-                  className="h-9 w-full cursor-pointer rounded-md border border-border bg-surface px-3 font-mono text-sm text-foreground focus:outline-none focus:border-brand"
+                  className="h-9 w-full cursor-pointer rounded-md border border-border bg-surface-2 px-3 font-mono text-sm text-foreground focus:border-border-strong"
                   value={connectionId}
                   onChange={(e) => setConnectionId(e.target.value)}
                 >
@@ -231,7 +231,7 @@ export function SavedQueriesPage() {
                     type="number"
                     min={1}
                     placeholder="min"
-                    className="h-7 w-16 rounded-md border border-border bg-surface px-2 font-mono text-xs text-foreground focus:outline-none focus:border-brand"
+                    className="h-7 w-16 rounded-md border border-border bg-surface-2 px-2 font-mono text-xs text-foreground focus:border-border-strong"
                     aria-label="Schedule interval in minutes"
                   />
                   <Button size="sm" variant="secondary" type="submit">Schedule</Button>

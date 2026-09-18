@@ -1,14 +1,14 @@
-import { List, Monitor, Moon, SidebarSimple, Sun } from '@phosphor-icons/react';
+import { List, SidebarSimple } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { applyTheme, useStore, type ThemePreference } from '../../store/use-store';
 import { cn } from '../../lib/utils';
 import { Sidebar } from './Sidebar';
 
-const THEMES: { value: ThemePreference; label: string; icon: ReactNode }[] = [
-  { value: 'light', label: 'Light', icon: <Sun size={15} /> },
-  { value: 'dark', label: 'Dark', icon: <Moon size={15} /> },
-  { value: 'system', label: 'System', icon: <Monitor size={15} /> },
+const THEMES: { value: ThemePreference; label: string }[] = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'System' },
 ];
 
 export interface AppShellProps {
@@ -36,10 +36,10 @@ export function AppShell({ headerRight, children }: AppShellProps) {
       <aside
         className={cn(
           'sidebar-shell hidden shrink-0 overflow-hidden border-r border-border bg-surface md:block',
-          sidebarHidden ? 'w-0 border-r-0' : 'w-60',
+          sidebarHidden ? 'w-0 border-r-0' : 'w-[236px]',
         )}
       >
-        <div className="w-60">
+        <div className="w-[236px]">
           <Sidebar />
         </div>
       </aside>
@@ -47,39 +47,39 @@ export function AppShell({ headerRight, children }: AppShellProps) {
       {/* Mobile drawer */}
       {drawerOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-60 border-r border-border bg-surface shadow-lg">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-[8px]" onClick={() => setDrawerOpen(false)} />
+          <aside className="absolute inset-y-0 left-0 w-[236px] border-r border-border bg-surface shadow-lg">
             <Sidebar onNavigate={() => setDrawerOpen(false)} />
           </aside>
         </div>
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur sm:px-4">
+        <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border bg-surface px-4 sm:px-6">
           <button
-            className="cursor-pointer rounded-md p-2 text-muted hover:bg-surface-2 hover:text-foreground md:hidden"
+            className="cursor-pointer rounded-sm p-1.5 text-muted hover:bg-surface-2 hover:text-foreground md:hidden"
             onClick={() => setDrawerOpen((v) => !v)}
             aria-label="Toggle navigation"
           >
-            <List size={20} />
+            <List size={18} />
           </button>
 
           {/* Sidebar hide/slide toggle (desktop) */}
           <button
-            className="hidden cursor-pointer rounded-md p-2 text-muted hover:bg-surface-2 hover:text-foreground md:inline-flex"
+            className="hidden cursor-pointer rounded-sm p-1.5 text-muted hover:bg-surface-2 hover:text-foreground md:inline-flex"
             onClick={toggleSidebar}
             aria-label={sidebarHidden ? 'Show sidebar' : 'Hide sidebar'}
             title={sidebarHidden ? 'Show sidebar' : 'Hide sidebar'}
           >
-            <SidebarSimple size={19} weight={sidebarHidden ? 'bold' : 'regular'} />
+            <SidebarSimple size={17} weight={sidebarHidden ? 'bold' : 'regular'} />
           </button>
 
           <div className="ml-auto flex items-center gap-3">
             {headerRight}
 
-            {/* Theme toggle: Light / Dark / System */}
+            {/* Theme switcher: Light / Dark / System */}
             <div
-              className="flex rounded-md bg-surface-2 p-0.5"
+              className="flex items-center rounded-md border border-border bg-surface-2 p-0.5"
               role="group"
               aria-label="Theme"
             >
@@ -87,17 +87,15 @@ export function AppShell({ headerRight, children }: AppShellProps) {
                 <button
                   key={t.value}
                   className={cn(
-                    'flex h-7 w-8 cursor-pointer items-center justify-center rounded-[6px] transition-colors duration-150',
+                    'h-6 cursor-pointer rounded-sm border px-2 font-mono text-[11px] transition-colors duration-150',
                     theme === t.value
-                      ? 'bg-surface text-brand-strong shadow-sm'
-                      : 'text-faint hover:text-foreground',
+                      ? 'border-border bg-surface font-semibold text-foreground'
+                      : 'border-transparent text-muted hover:text-foreground',
                   )}
                   onClick={() => setTheme(t.value)}
-                  title={t.label}
-                  aria-label={`${t.label} mode`}
                   aria-pressed={theme === t.value}
                 >
-                  {t.icon}
+                  {t.label}
                 </button>
               ))}
             </div>

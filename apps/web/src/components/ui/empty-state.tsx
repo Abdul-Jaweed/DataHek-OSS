@@ -13,9 +13,11 @@ export interface EmptyStateProps {
 export function EmptyState({ title, description, actionLabel, onAction, icon }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="mb-4 text-faint">{icon ?? <Database size={40} weight="thin" />}</div>
-      <h3 className="text-lg font-semibold text-foreground">{title}</h3>
-      {description && <p className="mt-2 max-w-sm text-sm text-muted">{description}</p>}
+      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-sm border border-border bg-surface text-faint [&_svg]:h-5 [&_svg]:w-5">
+        {icon ?? <Database size={20} weight="regular" />}
+      </div>
+      <h3 className="text-[15px] font-bold text-foreground">{title}</h3>
+      {description && <p className="mt-2 max-w-sm text-[12.5px] leading-relaxed text-muted">{description}</p>}
       {actionLabel && onAction && (
         <Button className="mt-5" onClick={onAction}>
           {actionLabel}

@@ -45,7 +45,7 @@ export function EvaluationsPage() {
     <div className="mx-auto max-w-5xl p-6 sm:p-10">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Evaluations</h1>
+          <h1 className="text-[21px] font-extrabold tracking-[-0.02em] text-foreground">Evaluations</h1>
           <p className="text-sm text-muted">Curated regression dataset · real engine</p>
         </div>
         <Button icon={<Play size={16} />} onClick={run} loading={running}>

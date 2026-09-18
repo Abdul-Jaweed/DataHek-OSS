@@ -80,7 +80,7 @@ export function MetricsPage() {
     <div className="mx-auto max-w-4xl p-6 sm:p-10">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Semantic layer</h1>
+          <h1 className="text-[21px] font-extrabold tracking-[-0.02em] text-foreground">Semantic layer</h1>
           <p className="text-sm text-muted">
             Named metric definitions the planner prefers over guessing — e.g. revenue = sum(amount) on orders
           </p>
@@ -110,7 +110,7 @@ export function MetricsPage() {
                   <Label htmlFor="m-agg">Aggregate</Label>
                   <select
                     id="m-agg"
-                    className="h-9 w-full cursor-pointer rounded-md border border-border bg-surface px-3 font-mono text-sm text-foreground focus:outline-none focus:border-brand"
+                    className="h-9 w-full cursor-pointer rounded-md border border-border bg-surface-2 px-3 font-mono text-sm text-foreground focus:border-border-strong"
                     value={aggregate}
                     onChange={(e) => setAggregate(e.target.value)}
                   >

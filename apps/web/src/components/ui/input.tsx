@@ -5,9 +5,9 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
   return (
     <input
       className={cn(
-        'flex h-9 w-full rounded-md border border-border bg-surface px-3 py-1 text-sm text-foreground',
-        'placeholder:text-faint focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/25',
-        'disabled:opacity-50',
+        'flex h-9 w-full rounded-md border border-border bg-surface-2 px-3 py-1 text-sm text-foreground',
+        'placeholder:text-faint focus:border-border-strong focus:bg-surface',
+        'aria-invalid:border-danger disabled:opacity-50',
         className,
       )}
       {...props}
@@ -19,8 +19,9 @@ export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
   return (
     <textarea
       className={cn(
-        'flex min-h-20 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground',
-        'placeholder:text-faint focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/25',
+        'flex min-h-20 w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground',
+        'placeholder:text-faint focus:border-border-strong focus:bg-surface',
+        'aria-invalid:border-danger disabled:opacity-50',
         className,
       )}
       {...props}
@@ -29,10 +30,5 @@ export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
 }
 
 export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
-  return (
-    <label
-      className={cn('font-mono text-[11px] uppercase tracking-wider text-muted', className)}
-      {...props}
-    />
-  );
+  return <label className={cn('kicker text-muted', className)} {...props} />;
 }

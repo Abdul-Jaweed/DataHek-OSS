@@ -60,7 +60,7 @@ export function SettingsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6 sm:p-10">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Settings</h1>
+        <h1 className="text-[21px] font-extrabold tracking-[-0.02em] text-foreground">Settings</h1>
         <p className="text-sm text-muted">LLM provider, authentication, and environment</p>
       </div>
 

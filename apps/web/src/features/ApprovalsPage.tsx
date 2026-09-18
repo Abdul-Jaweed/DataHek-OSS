@@ -83,7 +83,7 @@ export function ApprovalsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6 sm:p-10">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Approvals</h1>
+        <h1 className="text-[21px] font-extrabold tracking-[-0.02em] text-foreground">Approvals</h1>
         <p className="text-sm text-muted">
           Human-in-the-loop gate — large exports and sensitive tables wait here for a decision
         </p>
@@ -100,14 +100,14 @@ export function ApprovalsPage() {
 
       {pending.length > 0 && (
         <div className="space-y-3">
-          <h2 className="font-mono text-xs uppercase tracking-wider text-muted">Pending · {pending.length}</h2>
+          <h2 className="kicker text-muted">Pending · {pending.length}</h2>
           {pending.map(row)}
         </div>
       )}
 
       {decided.length > 0 && (
         <div className="space-y-3">
-          <h2 className="font-mono text-xs uppercase tracking-wider text-muted">History · {decided.length}</h2>
+          <h2 className="kicker text-muted">History · {decided.length}</h2>
           {decided.map(row)}
         </div>
       )}
