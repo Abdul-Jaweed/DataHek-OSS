@@ -589,14 +589,14 @@ def create_app(container=None) -> FastAPI:
         ctx = RequestContext(source="api")
         await conn_mgr.remove(ctx, connection_id)
 
-    @app.get("/metrics")
+    @app.get("/semantics")
     async def list_metrics(_identity=Depends(_require_auth)):
         from datahek.contracts.semantics import SemanticStore
 
         store = c.resolve(SemanticStore)
         return await store.list(RequestContext(source="api"))
 
-    @app.post("/metrics", status_code=201)
+    @app.post("/semantics", status_code=201)
     async def create_metric(req: MetricRequest, _identity=Depends(_require_auth)):
         from datahek.contracts.semantics import Metric, SemanticStore
         from datahek.kernel.ids import entity_id
@@ -612,7 +612,7 @@ def create_app(container=None) -> FastAPI:
         await store.create(ctx, metric)
         return await store.get(ctx, metric.id)
 
-    @app.put("/metrics/{metric_id}")
+    @app.put("/semantics/{metric_id}")
     async def update_metric(metric_id: str, req: MetricRequest, _identity=Depends(_require_auth)):
         from datahek.contracts.semantics import SemanticStore
 
@@ -627,7 +627,7 @@ def create_app(container=None) -> FastAPI:
         })
         return await store.get(ctx, metric_id)
 
-    @app.delete("/metrics/{metric_id}", status_code=204)
+    @app.delete("/semantics/{metric_id}", status_code=204)
     async def delete_metric(metric_id: str, _identity=Depends(_require_auth)):
         from datahek.contracts.semantics import SemanticStore
 

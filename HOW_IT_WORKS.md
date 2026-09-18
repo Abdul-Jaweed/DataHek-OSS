@@ -406,7 +406,7 @@ If both attempts fail, the engine replies with a **clarifying question** instead
 | Run checkpoints (plan + SQL + row count) | SQLite (`checkpoints`) | `GET /checkpoints`, `POST /checkpoints/{id}/replay` |
 | Guardrail + execution audit | JSONL (`DATAHEK_AUDIT_PATH`) | — |
 | Approvals | in-memory (OSS default) | `GET /approvals`, `POST /approvals/{id}/decide` |
-| Metrics (semantic layer) | SQLite / PostgreSQL (`metrics`) | `GET/POST/PUT/DELETE /metrics` |
+| Metrics (semantic layer) | SQLite / PostgreSQL (`metrics`) | `GET/POST/PUT/DELETE /semantics` |
 | Evaluation runs | SQLite / PostgreSQL | `GET /evaluations` |
 
 Replay is **deterministic**: it re-runs a stored plan with no LLM involved.

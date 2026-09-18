@@ -118,32 +118,32 @@ class TestMetricApi(unittest.TestCase):
     def test_crud_and_validation(self):
         with tempfile.TemporaryDirectory() as d:
             client = _client(_CapturingModel(), f"{d}/db.sqlite")
-            r = client.post("/metrics", json={
+            r = client.post("/semantics", json={
                 "name": "revenue", "table": "orders", "aggregate": "sum",
                 "column": "amount", "description": "total sales"})
             self.assertEqual(r.status_code, 201, r.text)
             mid = r.json()["id"]
 
-            r = client.get("/metrics")
+            r = client.get("/semantics")
             self.assertEqual(len(r.json()), 1)
             self.assertEqual(r.json()[0]["name"], "revenue")
 
-            r = client.put(f"/metrics/{mid}", json={
+            r = client.put(f"/semantics/{mid}", json={
                 "name": "revenue", "table": "orders", "aggregate": "sum",
                 "column": "amount", "description": "updated"})
             self.assertEqual(r.json()["description"], "updated")
 
-            r = client.post("/metrics", json={"name": "bad", "table": "t", "aggregate": "median"})
+            r = client.post("/semantics", json={"name": "bad", "table": "t", "aggregate": "median"})
             self.assertEqual(r.status_code, 422)
 
-            self.assertEqual(client.delete(f"/metrics/{mid}").status_code, 204)
-            self.assertEqual(client.delete(f"/metrics/{mid}").status_code, 404)
+            self.assertEqual(client.delete(f"/semantics/{mid}").status_code, 204)
+            self.assertEqual(client.delete(f"/semantics/{mid}").status_code, 404)
 
     def test_planner_prompt_receives_metrics(self):
         with tempfile.TemporaryDirectory() as d:
             model = _CapturingModel()
             client = _client(model, f"{d}/db.sqlite")
-            client.post("/metrics", json={
+            client.post("/semantics", json={
                 "name": "revenue", "table": "orders", "aggregate": "sum",
                 "column": "amount", "description": "total sales"})
             client.post("/ask", json={"question": "what was the revenue?", "connection_id": "conn_1"})

@@ -20,7 +20,7 @@ export default defineConfig({
       '/evaluations': apiTarget,
       '/approvals': apiTarget,
       '/checkpoints': apiTarget,
-      '/metrics': apiTarget,
+      '/semantics': apiTarget,
     },
   },
   build: { outDir: 'dist' },
