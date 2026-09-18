@@ -38,6 +38,7 @@ from datahek.defaults.evaluation import InMemoryEvaluationStore, LocalEvaluator
 from datahek.defaults.evaluation_pg import PostgresEvaluationStore
 from datahek.defaults.infisical import InfisicalSecretsProvider
 from datahek.defaults.masking import TagBasedMaskingPolicy
+from datahek.defaults.metrics import LocalMetrics
 from datahek.defaults.models import OpenAICompatibleModelProvider
 from datahek.defaults.pg import PgMetadata, metadata_config
 from datahek.defaults.policy import LocalPolicyEngine
@@ -94,6 +95,7 @@ def build_default_container() -> Container:
         c.register(PromptStore, SqlitePromptStore(), singleton=True)
         c.register(SemanticStore, SqliteSemanticStore(), singleton=True)
     c.register(EntitlementProvider, EntitlementProvider(), singleton=True)
+    c.register(LocalMetrics, LocalMetrics(), singleton=True)
     return c
 
 

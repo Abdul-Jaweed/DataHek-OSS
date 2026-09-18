@@ -305,6 +305,7 @@ def create_app(container=None) -> FastAPI:
                                          extra_prompt=extra_prompt, history=history)
         if plan_result.clarification:
             await _record_turn(conversations, ctx, req, plan_result.clarification, "clarification")
+            metrics.inc("datahek_ask_results_total", outcome="clarification")
             return {
                 "clarification": plan_result.clarification,
                 "answer": plan_result.clarification,
@@ -324,6 +325,8 @@ def create_app(container=None) -> FastAPI:
         verification = None
         if _verifier_enabled() and c.has(Verifier):
             verification = await c.resolve(Verifier).verify(req.question, result, ctx)
+        metrics.inc("datahek_ask_results_total", outcome="ok")
+        metrics.inc("datahek_rows_returned_total", result.row_count or 0)
         return {
             "verification": verification,
             "redactions": redactions or None,
@@ -353,7 +356,30 @@ def create_app(container=None) -> FastAPI:
                         "LLM settings reload from Redis failed (%s); continuing with env config", exc)
         yield
 
+    from datahek.defaults.log_setup import configure_logging
+
+    configure_logging()
+
     app = FastAPI(title="DataHek OSS", version=__version__, lifespan=lifespan)
+
+    from datahek.defaults.metrics import LocalMetrics
+
+    metrics: LocalMetrics = c.resolve(LocalMetrics)
+
+    @app.middleware("http")
+    async def _metrics_middleware(request: Request, call_next):
+        import time as _time
+
+        started = _time.perf_counter()
+        response = await call_next(request)
+        elapsed = _time.perf_counter() - started
+        route = request.scope.get("route")
+        endpoint = getattr(route, "path", request.url.path)
+        if endpoint.startswith("/metrics"):
+            return response
+        metrics.inc("datahek_requests_total", endpoint=endpoint, status=response.status_code)
+        metrics.observe("datahek_request_duration_seconds", elapsed, endpoint=endpoint)
+        return response
     conn_mgr: ConnectionManager = c.resolve(ConnectionManager)
     registry: ProviderRegistry = c.resolve(ProviderRegistry)
     planner: Planner = c.resolve(Planner)
@@ -383,6 +409,11 @@ def create_app(container=None) -> FastAPI:
 
     @app.exception_handler(DatahekError)
     async def _datahek_error_handler(request: Request, exc: DatahekError) -> JSONResponse:
+        if request.url.path.startswith("/ask"):
+            try:
+                metrics.inc("datahek_ask_results_total", outcome=exc.code.value.lower())
+            except Exception:
+                pass
         return JSONResponse(
             status_code=_STATUS_BY_CODE.get(exc.code, 400),
             content=exc.to_dict(),
@@ -396,6 +427,12 @@ def create_app(container=None) -> FastAPI:
             status_code=500,
             content={"code": ErrorCode.INTERNAL.value, "message": "Internal server error", "details": {}},
         )
+
+    @app.get("/metrics")
+    async def prometheus_metrics():
+        from fastapi.responses import PlainTextResponse
+
+        return PlainTextResponse(metrics.render(), media_type="text/plain; version=0.0.4")
 
     @app.get("/health")
     async def health():
