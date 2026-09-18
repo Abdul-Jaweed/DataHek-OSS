@@ -34,6 +34,10 @@ class SqliteCheckpointStore(CheckpointStore):
         conn = sqlite3.connect(self._path)
         try:
             conn.executescript(_SCHEMA)
+            try:  # migrate existing databases
+                conn.execute("ALTER TABLE checkpoints ADD COLUMN forked_from TEXT")
+            except sqlite3.OperationalError:
+                pass
             conn.commit()
         finally:
             conn.close()
@@ -48,14 +52,14 @@ class SqliteCheckpointStore(CheckpointStore):
             checkpoint.get("question", ""), checkpoint.get("connection_id", ""),
             json.dumps(checkpoint.get("plan") or {}), checkpoint.get("sql"),
             checkpoint.get("row_count"), checkpoint.get("decision", "ALLOW"),
-            datetime.now(timezone.utc).isoformat(),
+            datetime.now(timezone.utc).isoformat(), checkpoint.get("forked_from"),
         )
         conn = self._connect()
         try:
             conn.execute(
                 "INSERT OR REPLACE INTO checkpoints (id, org_id, conversation_id, question, "
-                "connection_id, plan_json, sql, row_count, decision, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
+                "connection_id, plan_json, sql, row_count, decision, created_at, forked_from) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
             conn.commit()
         finally:
             conn.close()
@@ -67,6 +71,7 @@ class SqliteCheckpointStore(CheckpointStore):
             "id": row[0], "conversation_id": row[1], "question": row[2],
             "connection_id": row[3], "plan": json.loads(row[4]), "sql": row[5],
             "row_count": row[6], "decision": row[7], "created_at": row[8],
+            "forked_from": row[9] if len(row) > 9 else None,
         }
 
     async def get(self, ctx: RequestContext, checkpoint_id: str) -> dict | None:
@@ -74,7 +79,7 @@ class SqliteCheckpointStore(CheckpointStore):
         try:
             cur = conn.execute(
                 "SELECT id, conversation_id, question, connection_id, plan_json, sql, "
-                "row_count, decision, created_at FROM checkpoints WHERE id = ? AND org_id = ?",
+                "row_count, decision, created_at, forked_from FROM checkpoints WHERE id = ? AND org_id = ?",
                 (checkpoint_id, ctx.organization_id))
             row = cur.fetchone()
         finally:
@@ -86,7 +91,7 @@ class SqliteCheckpointStore(CheckpointStore):
         try:
             cur = conn.execute(
                 "SELECT id, conversation_id, question, connection_id, plan_json, sql, "
-                "row_count, decision, created_at FROM checkpoints "
+                "row_count, decision, created_at, forked_from FROM checkpoints "
                 "WHERE org_id = ? ORDER BY created_at DESC LIMIT ?",
                 (ctx.organization_id, limit))
             rows = cur.fetchall()

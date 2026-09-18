@@ -50,6 +50,31 @@ async def run_guarded(coro, timeout_s: float = 120.0):
         return "Error: internal error"
 
 
+def build_mcp_auth():
+    """Per-client MCP tokens — enabled only when DATAHEK_MCP_TOKENS is set.
+
+    Format: token1,token2:scopeA|scopeB (scopes optional). Requests without a
+    valid bearer token are rejected by FastMCP before any tool runs.
+    """
+    raw = os.environ.get("DATAHEK_MCP_TOKENS", "").strip()
+    if not raw:
+        return None
+    tokens: dict[str, dict] = {}
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        key, _, scope_str = entry.partition(":")
+        tokens[key] = {
+            "client_id": f"mcp-{key[:6]}",
+            "scopes": [sc for sc in scope_str.split("|") if sc],
+        }
+    required = [sc for sc in os.environ.get("DATAHEK_MCP_REQUIRED_SCOPES", "").split(",") if sc.strip()]
+    from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
+
+    return StaticTokenVerifier(tokens=tokens, required_scopes=required or None)
+
+
 def build_mcp_server(container=None) -> FastMCP:
     from datahek.defaults.container import build_app_container
 
@@ -79,6 +104,7 @@ def build_mcp_server(container=None) -> FastMCP:
     mcp = FastMCP(
         SERVER_NAME,
         instructions="DataHek OSS data tools — read-only, natural-language data access.",
+        auth=build_mcp_auth(),
     )
 
     @mcp.tool(name="data.list_tables")

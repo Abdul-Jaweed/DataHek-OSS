@@ -127,3 +127,44 @@ class TestPlannerSkillsIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestSkillPreconditions(unittest.TestCase):
+    def _catalog(self, column_names):
+        from datahek.engine.schema import ColumnMeta, SchemaCatalog, TableMeta
+
+        return SchemaCatalog(source="c1:db", tables=[TableMeta(
+            name="events", columns=[ColumnMeta(name=c, data_type="String") for c in column_names])])
+
+    def test_timeseries_requires_time_column(self):
+        from datahek.engine.skills import SkillRegistry, builtin_skills
+
+        reg = SkillRegistry(builtin_skills())
+        with_time = reg.match("show the trend over time", self._catalog(["ts", "value"]))
+        self.assertIn("timeseries", [s.name for s in with_time])
+
+        without_time = reg.match("show the trend over time", self._catalog(["service", "value"]))
+        self.assertNotIn("timeseries", [s.name for s in without_time])
+
+    def test_debugging_requires_status_column(self):
+        from datahek.engine.skills import SkillRegistry, builtin_skills
+
+        reg = SkillRegistry(builtin_skills())
+        matched = reg.match("why did the service fail?", self._catalog(["status", "duration"]))
+        self.assertIn("debugging", [s.name for s in matched])
+
+        no_status = reg.match("why did the service fail?", self._catalog(["service", "duration"]))
+        self.assertNotIn("debugging", [s.name for s in no_status])
+
+    def test_unconditional_skills_always_match(self):
+        from datahek.engine.skills import SkillRegistry, builtin_skills
+
+        reg = SkillRegistry(builtin_skills())
+        matched = reg.match("total revenue by region", self._catalog(["region", "amount"]))
+        self.assertIn("analytics", [s.name for s in matched])
+
+    def test_no_catalog_keeps_keyword_only_behaviour(self):
+        from datahek.engine.skills import SkillRegistry, builtin_skills
+
+        reg = SkillRegistry(builtin_skills())
+        matched = reg.match("show the trend over time")
+        self.assertIn("timeseries", [s.name for s in matched])

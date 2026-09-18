@@ -16,6 +16,7 @@ from datahek import __version__
 from datahek.contracts.auth import AuthProvider
 from datahek.contracts.connections import ConnectionManager
 from datahek.contracts.reasoner import Reasoner
+from datahek.contracts.saved import SavedQueryStore
 from datahek.contracts.verifier import Verifier
 from datahek.engine.analyst import MultiStepAnalyst
 from datahek.defaults.guardrails import sanitize_output
@@ -91,6 +92,17 @@ class AskRequest(BaseModel):
     conversation_id: str | None = None
     prompt_id: str | None = None
     approval_id: str | None = None
+
+
+class SavedQueryRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=128)
+    question: str = Field(..., min_length=1, max_length=10_000)
+    connection_id: str = Field(..., min_length=1)
+
+
+class ScheduleRequest(BaseModel):
+    saved_query_id: str = Field(..., min_length=1)
+    interval_seconds: int = Field(..., ge=1, le=86400 * 7)
 
 
 class MetricRequest(BaseModel):
@@ -354,7 +366,35 @@ def create_app(container=None) -> FastAPI:
                 except Exception as exc:
                     logging.getLogger(__name__).warning(
                         "LLM settings reload from Redis failed (%s); continuing with env config", exc)
+
+        scheduler = None
+        if c.has(SavedQueryStore):
+            from datahek.defaults.scheduler import LocalScheduler
+
+            async def _scheduled_run(run_ctx, schedule):
+                saved = await c.resolve(SavedQueryStore).get(run_ctx, schedule["saved_query_id"])
+                if saved is None:
+                    return {"status": "error", "detail": "saved query missing"}
+                req = AskRequest(question=saved["question"], connection_id=saved["connection_id"])
+                try:
+                    answer = await _ask_pipeline(req, c, conn_mgr, registry, planner, engine,
+                                                 reasoner, entitlements)
+                except Exception as exc:
+                    return {"status": "error", "detail": str(exc)[:200]}
+                if answer.get("clarification"):
+                    return {"status": "clarification", "detail": answer["clarification"][:200]}
+                return {"status": "ok", "rows": answer.get("row_count"),
+                        "detail": f"{answer.get('row_count', 0)} rows"}
+
+            scheduler = LocalScheduler(
+                store=c.resolve(SavedQueryStore),
+                runner=_scheduled_run,
+                poll_seconds=float(os.environ.get("DATAHEK_SCHEDULER_POLL_SECONDS", "30")),
+            )
+            await scheduler.start(RequestContext(source="scheduler"))
         yield
+        if scheduler is not None:
+            await scheduler.stop()
 
     from datahek.defaults.log_setup import configure_logging
 
@@ -427,6 +467,16 @@ def create_app(container=None) -> FastAPI:
             status_code=500,
             content={"code": ErrorCode.INTERNAL.value, "message": "Internal server error", "details": {}},
         )
+
+    @app.get("/audit")
+    async def search_audit_endpoint(limit: int = 50, event_type: str | None = None,
+                                    actor: str | None = None, decision: str | None = None,
+                                    contains: str | None = None,
+                                    _identity=Depends(_require_auth)):
+        from datahek.defaults.audit_search import search_audit
+
+        return search_audit(limit=min(limit, 500), event_type=event_type,
+                            actor=actor, decision=decision, contains=contains)
 
     @app.get("/metrics")
     async def prometheus_metrics():
@@ -588,6 +638,131 @@ def create_app(container=None) -> FastAPI:
     async def delete_connection(connection_id: str, _identity=Depends(_require_auth)):
         ctx = RequestContext(source="api")
         await conn_mgr.remove(ctx, connection_id)
+
+    @app.post("/saved-queries", status_code=201)
+    async def create_saved_query(req: SavedQueryRequest, _identity=Depends(_require_auth)):
+        from datahek.contracts.saved import SavedQuery, SavedQueryStore
+        from datahek.kernel.ids import entity_id
+
+        ctx = RequestContext(source="api")
+        query = SavedQuery(id=entity_id("saved"), name=req.name, question=req.question,
+                           connection_id=req.connection_id,
+                           org_id=ctx.organization_id, project_id=ctx.project_id)
+        store = c.resolve(SavedQueryStore)
+        await store.create(ctx, query)
+        return await store.get(ctx, query.id)
+
+    @app.get("/saved-queries")
+    async def list_saved_queries(_identity=Depends(_require_auth)):
+        from datahek.contracts.saved import SavedQueryStore
+
+        return await c.resolve(SavedQueryStore).list_queries(RequestContext(source="api"))
+
+    @app.post("/saved-queries/{query_id}/run")
+    async def run_saved_query(query_id: str, _identity=Depends(_require_auth)):
+        from datahek.contracts.saved import SavedQueryStore
+
+        ctx = RequestContext(source="api")
+        store = c.resolve(SavedQueryStore)
+        saved = await store.get(ctx, query_id)
+        if saved is None:
+            raise DatahekError(ErrorCode.NOT_FOUND, f"Saved query '{query_id}' not found")
+        req = AskRequest(question=saved["question"], connection_id=saved["connection_id"])
+        return await _ask_pipeline(req, c, conn_mgr, registry, planner, engine, reasoner, entitlements)
+
+    @app.delete("/saved-queries/{query_id}", status_code=204)
+    async def delete_saved_query(query_id: str, _identity=Depends(_require_auth)):
+        from datahek.contracts.saved import SavedQueryStore
+
+        ctx = RequestContext(source="api")
+        store = c.resolve(SavedQueryStore)
+        if await store.get(ctx, query_id) is None:
+            raise DatahekError(ErrorCode.NOT_FOUND, f"Saved query '{query_id}' not found")
+        await store.delete(ctx, query_id)
+
+    @app.post("/schedules", status_code=201)
+    async def create_schedule(req: ScheduleRequest, _identity=Depends(_require_auth)):
+        from datahek.contracts.saved import SavedQueryStore, Schedule
+        from datahek.kernel.ids import entity_id
+
+        ctx = RequestContext(source="api")
+        store = c.resolve(SavedQueryStore)
+        if await store.get(ctx, req.saved_query_id) is None:
+            raise DatahekError(ErrorCode.NOT_FOUND, f"Saved query '{req.saved_query_id}' not found")
+        schedule = Schedule(id=entity_id("sched"), saved_query_id=req.saved_query_id,
+                            interval_seconds=req.interval_seconds,
+                            org_id=ctx.organization_id, project_id=ctx.project_id)
+        await store.create_schedule(ctx, schedule)
+        return await store.get_schedule(ctx, schedule.id)
+
+    @app.get("/schedules")
+    async def list_schedules(_identity=Depends(_require_auth)):
+        from datahek.contracts.saved import SavedQueryStore
+
+        return await c.resolve(SavedQueryStore).list_schedules(RequestContext(source="api"))
+
+    @app.delete("/schedules/{schedule_id}", status_code=204)
+    async def delete_schedule(schedule_id: str, _identity=Depends(_require_auth)):
+        from datahek.contracts.saved import SavedQueryStore
+
+        ctx = RequestContext(source="api")
+        store = c.resolve(SavedQueryStore)
+        if await store.get_schedule(ctx, schedule_id) is None:
+            raise DatahekError(ErrorCode.NOT_FOUND, f"Schedule '{schedule_id}' not found")
+        await store.delete_schedule(ctx, schedule_id)
+
+    @app.post("/checkpoints/{checkpoint_id}/fork")
+    async def fork_checkpoint(checkpoint_id: str, _identity=Depends(_require_auth)):
+        """Re-plan and re-run a stored question with current settings (new lineage)."""
+        from datahek.contracts.misc import CheckpointStore
+
+        ctx = RequestContext(source="api")
+        store = c.resolve(CheckpointStore)
+        item = await store.get(ctx, checkpoint_id)
+        if item is None:
+            raise DatahekError(ErrorCode.NOT_FOUND, f"Checkpoint '{checkpoint_id}' not found")
+
+        req = AskRequest(question=item["question"], connection_id=item["connection_id"],
+                         conversation_id=item.get("conversation_id"))
+        answer = await _ask_pipeline(req, c, conn_mgr, registry, planner, engine, reasoner, entitlements)
+        # re-save the newest checkpoint with lineage (best-effort)
+        try:
+            newest = (await store.list(ctx, limit=1)) or [None]
+            if newest and newest[0] and newest[0]["id"] != checkpoint_id:
+                forked = newest[0]
+                forked["forked_from"] = checkpoint_id
+                await store.save(ctx, forked)
+                answer["forked_from"] = checkpoint_id
+                answer["new_checkpoint_id"] = forked["id"]
+        except Exception:
+            pass
+        return answer
+
+    @app.get("/checkpoints/{checkpoint_id}/diff/{other_id}")
+    async def diff_checkpoints(checkpoint_id: str, other_id: str,
+                               _identity=Depends(_require_auth)):
+        """Field-level comparison of two stored runs (what changed between them)."""
+        from datahek.contracts.misc import CheckpointStore
+
+        ctx = RequestContext(source="api")
+        store = c.resolve(CheckpointStore)
+        left = await store.get(ctx, checkpoint_id)
+        right = await store.get(ctx, other_id)
+        if left is None or right is None:
+            raise DatahekError(ErrorCode.NOT_FOUND, "Checkpoint not found")
+
+        fields = ("question", "sql", "row_count", "decision", "conversation_id", "forked_from")
+        changes = {
+            field: {"left": left.get(field), "right": right.get(field)}
+            for field in fields
+            if left.get(field) != right.get(field)
+        }
+        return {
+            "left": checkpoint_id,
+            "right": other_id,
+            "identical": not changes,
+            "changes": changes,
+        }
 
     @app.get("/semantics")
     async def list_metrics(_identity=Depends(_require_auth)):

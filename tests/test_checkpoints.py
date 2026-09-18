@@ -108,3 +108,61 @@ class TestCheckpointApi(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestForkAndDiff(unittest.TestCase):
+    def test_fork_reruns_and_links_lineage(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            client = _client(f"{d}/db.sqlite")
+            client.post("/ask", json={"question": "show traces", "connection_id": "conn_1"})
+            original = client.get("/checkpoints").json()[0]["id"]
+
+            fork = client.post(f"/checkpoints/{original}/fork")
+            self.assertEqual(fork.status_code, 200, fork.text)
+            body = fork.json()
+            self.assertEqual(body.get("forked_from"), original)
+            self.assertTrue(body.get("new_checkpoint_id"))
+
+            newest = client.get("/checkpoints").json()[0]
+            self.assertEqual(newest["forked_from"], original)
+
+    def test_diff_reports_changes(self):
+        import asyncio
+        import tempfile
+        from datahek.defaults.checkpoints import SqliteCheckpointStore
+        from datahek.kernel.context import RequestContext
+
+        with tempfile.TemporaryDirectory() as d:
+            path = f"{d}/cp.db"
+            store = SqliteCheckpointStore(path)
+            ctx = RequestContext(source="api")
+
+            async def seed():
+                await store.save(ctx, {"id": "cp_a", "question": "q1", "connection_id": "c1",
+                                       "plan": {}, "sql": "SELECT 1", "row_count": 1})
+                await store.save(ctx, {"id": "cp_b", "question": "q1", "connection_id": "c1",
+                                       "plan": {}, "sql": "SELECT 2", "row_count": 2})
+
+            asyncio.run(seed())
+
+            from fastapi.testclient import TestClient
+            from datahek.api.app import create_app
+            from datahek.defaults.container import build_app_container
+            import os
+
+            os.environ["DATAHEK_DB_PATH"] = path
+            try:
+                client = TestClient(create_app(container=build_app_container()))
+                r = client.get("/checkpoints/cp_a/diff/cp_b")
+                self.assertEqual(r.status_code, 200, r.text)
+                body = r.json()
+                self.assertFalse(body["identical"])
+                self.assertEqual(body["changes"]["sql"], {"left": "SELECT 1", "right": "SELECT 2"})
+                self.assertEqual(body["changes"]["row_count"], {"left": 1, "right": 2})
+
+                same = client.get("/checkpoints/cp_a/diff/cp_a")
+                self.assertTrue(same.json()["identical"])
+            finally:
+                os.environ.pop("DATAHEK_DB_PATH", None)

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="DataHek OSS documentation — install, configure, and operate the open-source conversational data platform." />
+<title>DataHek OSS — Documentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #fafafa; --surface: #ffffff; --surface-2: #f4f4f5;
+    --border: #e4e4e7; --text: #18181b; --text-2: #52525b; --text-3: #71717a;
+    --brand: #eab308; --brand-soft: #fefce8; --brand-strong: #a16207; --brand-contrast: #1c1917;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #09090b; --surface: #131316; --surface-2: #232326;
+      --border: #232326; --text: #fafafa; --text-2: #a1a1aa; --text-3: #71717a;
+      --brand: #facc15; --brand-soft: rgba(250,204,21,.12); --brand-strong: #facc15; --brand-contrast: #1c1917;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Inter", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  a { color: var(--brand-strong); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: 220px 1fr; gap: 40px; }
+  @media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } nav.toc { position: static !important; } }
+  header { border-bottom: 1px solid var(--border); background: var(--surface); }
+  .top { max-width: 1060px; margin: 0 auto; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 16px; color: var(--text); text-decoration: none; }
+  .mark { width: 28px; height: 28px; border-radius: 8px; background: var(--brand); color: var(--brand-contrast); display: grid; place-items: center; }
+  .tag { font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; }
+  .top .right { margin-left: auto; display: flex; gap: 16px; font-family: var(--mono); font-size: 12px; }
+  nav.toc { position: sticky; top: 24px; align-self: start; padding: 24px 0; font-size: 13.5px; }
+  nav.toc a { display: block; color: var(--text-2); padding: 4px 0; text-decoration: none; }
+  nav.toc a:hover { color: var(--text); }
+  nav.toc .h { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); margin: 14px 0 4px; }
+  main { padding: 32px 0 96px; min-width: 0; }
+  h1 { font-size: 32px; font-weight: 800; letter-spacing: -.03em; }
+  h2 { font-size: 21px; font-weight: 800; letter-spacing: -.02em; margin: 44px 0 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  h2:first-of-type { border-top: none; }
+  h3 { font-size: 15.5px; font-weight: 700; margin: 22px 0 8px; }
+  p, li { color: var(--text-2); font-size: 14.5px; }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  code { font-family: var(--mono); font-size: .88em; background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
+  pre { background: #131316; color: #e4e4e7; border-radius: 10px; padding: 14px 16px; overflow-x: auto; margin: 12px 0; font-size: 13px; line-height: 1.75; }
+  pre code { background: none; border: none; padding: 0; color: inherit; }
+  .cmt { color: #71717a; }
+  .ok { color: #4ade80; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+  td:first-child { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+  .note { border-left: 3px solid var(--brand); background: var(--brand-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 13.5px; color: var(--text); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 16px 0; }
+  .card { border: 1px solid var(--border); background: var(--surface); border-radius: 12px; padding: 14px; }
+  .card b { display: block; font-size: 13.5px; margin-bottom: 4px; }
+  .card span { font-size: 12.5px; color: var(--text-2); }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <a class="logo" href="index.html">
+      <span class="mark"><svg width="16" height="16" viewBox="0 0 32 32" fill="currentColor"><path d="M15.5 2.5 5 19h8l-1.5 10.5L27 13h-9l1.5-10.5z"/></svg></span>
+      DataHek OSS <span class="tag">docs</span>
+    </a>
+    <div class="right">
+      <a href="https://github.com/Abdul-Jaweed/DataHek-OSS">GitHub</a>
+      <a href="https://github.com/Abdul-Jaweed/DataHek-OSS/blob/main/HOW_IT_WORKS.md">How it works</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="toc">
+    <div class="h">Get started</div>
+    <a href="#what">What is DataHek</a>
+    <a href="#quickstart">Quickstart</a>
+    <a href="#first-steps">First steps</a>
+    <div class="h">Operate</div>
+    <a href="#configuration">Configuration</a>
+    <a href="#api">API reference</a>
+    <a href="#guardrails">Guardrails</a>
+    <a href="#connectors">Connectors</a>
+    <a href="#observability">Observability</a>
+    <div class="h">Learn</div>
+    <a href="#architecture">Architecture</a>
+    <a href="#notebooks">Notebooks</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+
+  <main>
+    <h1>DataHek OSS documentation</h1>
+    <p>Everything needed to run, extend, and operate the open-source conversational data platform.</p>
+
+    <h2 id="what">What is DataHek</h2>
+    <p>DataHek turns plain-language questions into <b>safe, read-only data operations</b>. The LLM proposes a structured query plan; deterministic code validates it, enforces guardrails, executes it on a physically read-only connection, masks sensitive columns, and audits every step. Answers stream back with a chart, a table, and a CSV export.</p>
+    <div class="cards">
+      <div class="card"><b>4 connectors</b><span>ClickHouse · PostgreSQL · MySQL · SQLite · DuckDB</span></div>
+      <div class="card"><b>4 surfaces</b><span>Web UI · REST API · CLI · MCP server</span></div>
+      <div class="card"><b>Governance built in</b><span>Guardrails · approvals · audit · verification</span></div>
+      <div class="card"><b>Apache-2.0</b><span>No license keys, no telemetry</span></div>
+    </div>
+
+    <h2 id="quickstart">Quickstart</h2>
+    <pre><code>git clone https://github.com/Abdul-Jaweed/DataHek-OSS.git
+cd DataHek-OSS
+cp .env.example .env          <span class="cmt"># optional: LLM keys</span>
+docker compose up -d --build
+<span class="ok">✓ web :5173 · api :8000 · mcp :8001</span></code></pre>
+    <p>Or from source (Python 3.12+):</p>
+    <pre><code>python -m venv .venv &amp;&amp; source .venv/bin/activate
+pip install -e ".[all]"
+uvicorn datahek.api.app:create_app --factory --port 8000</code></pre>
+
+    <h2 id="first-steps">First steps</h2>
+    <ol>
+      <li>Open the web app → <b>Settings</b> → enter your LLM base URL, API key, and model → Save.</li>
+      <li><b>Connections</b> → add a database (provider, host, port, database, credentials, SSL).</li>
+      <li><b>Chat</b> → ask: <code>How many rows are in the traces table?</code></li>
+      <li><b>Semantics</b> → define metrics like <code>error_count = count(*) where status = 'error'</code>.</li>
+      <li><b>Saved</b> → save recurring questions and schedule them.</li>
+      <li><b>Approvals</b> → review gated exports and sensitive queries.</li>
+    </ol>
+
+    <h2 id="configuration">Configuration</h2>
+    <table>
+      <tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+      <tr><td>LLM_BASE_URL / LLM_API_KEY / LLM_MODEL</td><td>env or UI</td><td>OpenAI-compatible endpoint (the Settings form overrides at runtime)</td></tr>
+      <tr><td>DATAHEK_AUTH_MODE</td><td>none</td><td>local = enforce X-API-Key (default user datahek/datahek)</td></tr>
+      <tr><td>DATAHEK_METADATA_URL</td><td>—</td><td>PostgreSQL for connections, conversations, prompts, metrics, approvals, checkpoints</td></tr>
+      <tr><td>DATAHEK_METADATA_REDIS_URL</td><td>—</td><td>Redis for runtime LLM settings</td></tr>
+      <tr><td>DATAHEK_ENCRYPTION_KEY</td><td>—</td><td>Encrypts connection credentials at rest</td></tr>
+      <tr><td>DATAHEK_APPROVAL_ROW_LIMIT</td><td>1000</td><td>Row limit (or unbounded scan) that requires approval</td></tr>
+      <tr><td>DATAHEK_RATE_LIMIT_PER_MINUTE</td><td>120</td><td>Per-user sliding-window request limit</td></tr>
+      <tr><td>DATAHEK_MASK_MODE</td><td>redact</td><td>redact · hash · partial</td></tr>
+      <tr><td>DATAHEK_MCP_TOKENS</td><td>—</td><td>Per-client MCP bearer tokens (token or token:scopeA|scopeB)</td></tr>
+      <tr><td>DATAHEK_SCHEDULER_POLL_SECONDS</td><td>30</td><td>How often due schedules are checked</td></tr>
+      <tr><td>DATAHEK_LOG_FORMAT</td><td>text</td><td>json = one structured log object per line</td></tr>
+    </table>
+
+    <h2 id="api">API reference</h2>
+    <table>
+      <tr><th>Endpoint</th><th>Purpose</th></tr>
+      <tr><td>POST /ask · POST /ask/stream</td><td>Ask a question (JSON or SSE with progress/token/rows/verification events)</td></tr>
+      <tr><td>GET/POST/PUT/DELETE /connections · POST /connections/test</td><td>Connection catalog, testing, credential-safe updates</td></tr>
+      <tr><td>GET /conversations/{id}</td><td>Multi-turn history</td></tr>
+      <tr><td>GET /checkpoints · POST /checkpoints/{id}/replay</td><td>Stored runs and deterministic replay (no LLM)</td></tr>
+      <tr><td>POST /checkpoints/{id}/fork · GET /checkpoints/{id}/diff/{other}</td><td>Re-plan a stored question; compare two runs</td></tr>
+      <tr><td>GET/POST/PUT/DELETE /semantics</td><td>Metric definitions (semantic layer)</td></tr>
+      <tr><td>GET/POST /saved-queries · POST /saved-queries/{id}/run · GET/POST/DELETE /schedules</td><td>Saved questions and scheduled execution</td></tr>
+      <tr><td>GET /approvals · POST /approvals/{id}/decide</td><td>Human-in-the-loop inbox</td></tr>
+      <tr><td>GET /audit</td><td>Filtered search over the audit trail (event_type, actor, decision, contains)</td></tr>
+      <tr><td>GET /health · GET /metrics</td><td>Readiness and Prometheus metrics</td></tr>
+      <tr><td>POST /auth/login</td><td>Local login → API token</td></tr>
+    </table>
+
+    <h2 id="guardrails">Guardrails</h2>
+    <ul>
+      <li><b>Input perimeter</b> — injection/write-intent signatures, length, control characters (before the LLM)</li>
+      <li><b>Plan validation</b> — tables, columns, joins, dialect function allowlists; one retry then clarification</li>
+      <li><b>Policy gate</b> — allowlists, sensitive tables, unbounded exports → human approval; rate limits</li>
+      <li><b>Physical read-only</b> — PG read-only transactions · SQLite <code>mode=ro</code> · MySQL read-only sessions · ClickHouse <code>readonly=1</code> · DuckDB <code>read_only=True</code></li>
+      <li><b>Output scanner</b> — emails, phones, cards, SSNs, API keys, tokens, passwords, connection strings → redacted + audited</li>
+    </ul>
+
+    <h2 id="connectors">Connectors</h2>
+    <p>ClickHouse, PostgreSQL, MySQL, SQLite, and DuckDB — all on the same LogicalPlan pipeline, all validated by the same guardrails. Adding a connector means implementing the provider contract; the engine never changes.</p>
+
+    <h2 id="observability">Observability</h2>
+    <pre><code>curl localhost:8000/metrics
+<span class="cmt"># datahek_requests_total{endpoint="/ask",status="200"} 12</span>
+<span class="cmt"># datahek_ask_results_total{outcome="ok"} 9</span>
+<span class="cmt"># datahek_rows_returned_total 84</span>
+
+curl "localhost:8000/audit?decision=DENY&amp;limit=20"
+<span class="cmt"># filtered audit events, newest first</span></code></pre>
+
+    <h2 id="architecture">Architecture</h2>
+    <pre><code>Web UI · REST API · CLI · MCP
+        │  RequestContext (tenant-aware)
+        ▼
+  Engine: schema → plan → validate → guardrails
+          → audit → execute (read-only) → mask → explain
+        ▼
+  Connectors: ClickHouse · PostgreSQL · MySQL · SQLite · DuckDB
+        ▼
+  Stores: SQLite (default) · PostgreSQL + Redis (opt-in)</code></pre>
+    <p>Full walkthrough with real query samples: <a href="https://github.com/Abdul-Jaweed/DataHek-OSS/blob/main/HOW_IT_WORKS.md">HOW_IT_WORKS.md</a>.</p>
+
+    <h2 id="notebooks">Notebooks</h2>
+    <pre><code>pip install -e ".[notebooks]"
+jupyter lab notebooks/     <span class="cmt"># 8 offline walkthroughs — no API key needed</span></code></pre>
+
+    <h2 id="faq">FAQ</h2>
+    <h3>Do I need an LLM?</h3>
+    <p>For ask/chat, yes — any OpenAI-compatible endpoint. Guardrails, validation, execution and audit all work without a model.</p>
+    <h3>Where does my data go?</h3>
+    <p>Nowhere. Everything runs on your infrastructure; the only outbound calls are to the LLM endpoint you configure.</p>
+    <h3>Can an injection write to my database?</h3>
+    <p>No. Write plans are structurally impossible to compile, and the database connection itself is read-only — two independent layers reject it.</p>
+  </main>
+</div>
+</body>
+</html>

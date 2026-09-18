@@ -56,6 +56,25 @@ export const api = {
   saveLlmSettings: (body: { base_url?: string; api_key?: string; model?: string }) =>
     request<{ base_url: string; model: string; api_key_set: boolean }>('/settings/llm', { method: 'POST', body: JSON.stringify(body) }),
 
+  listSavedQueries: () =>
+    request<{ id: string; name: string; question: string; connection_id: string }[]>('/saved-queries'),
+  createSavedQuery: (body: { name: string; question: string; connectionId: string }) =>
+    request<{ id: string }>('/saved-queries', {
+      method: 'POST',
+      body: JSON.stringify({ name: body.name, question: body.question, connection_id: body.connectionId }),
+    }),
+  runSavedQuery: (id: string) =>
+    request<{ answer: string; row_count?: number; clarification?: string | null }>(`/saved-queries/${id}/run`, { method: 'POST' }),
+  deleteSavedQuery: (id: string) => request<void>(`/saved-queries/${id}`, { method: 'DELETE' }),
+  listSchedules: () =>
+    request<{ id: string; saved_query_id: string; interval_seconds: number; last_status: string | null; last_rows: number | null; next_run_at: string }[]>('/schedules'),
+  createSchedule: (savedQueryId: string, intervalSeconds: number) =>
+    request<{ id: string }>('/schedules', {
+      method: 'POST',
+      body: JSON.stringify({ saved_query_id: savedQueryId, interval_seconds: intervalSeconds }),
+    }),
+  deleteSchedule: (id: string) => request<void>(`/schedules/${id}`, { method: 'DELETE' }),
+
   listMetrics: () =>
     request<{ id: string; name: string; table: string; aggregate: string; column: string; filter: string | null; description: string }[]>('/semantics'),
   createMetric: (body: { name: string; table: string; aggregate: string; column?: string; filter?: string | null; description?: string }) =>

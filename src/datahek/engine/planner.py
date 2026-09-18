@@ -226,7 +226,7 @@ class Planner:
         skill_prompt = ""
         if self._skills is not None:
             from datahek.engine.skills import build_skill_prompt
-            skill_prompt = build_skill_prompt(self._skills.match(question))
+            skill_prompt = build_skill_prompt(self._skills.match(question, catalog))
 
         metric_block = ""
         if self._metrics is not None:

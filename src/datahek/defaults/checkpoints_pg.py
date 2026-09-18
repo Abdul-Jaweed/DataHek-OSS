@@ -4,7 +4,7 @@ from datahek.defaults.pg import PgMetadata
 from datahek.kernel.context import RequestContext
 from datahek.kernel.ids import new_id
 
-_COLUMNS = "id, conversation_id, question, connection_id, plan_json, sql, row_count, decision, created_at"
+_COLUMNS = "id, conversation_id, question, connection_id, plan_json, sql, row_count, decision, created_at, forked_from"
 
 
 def _row_to_dict(row) -> dict:
@@ -13,7 +13,7 @@ def _row_to_dict(row) -> dict:
     return {
         "id": row[0], "conversation_id": row[1], "question": row[2],
         "connection_id": row[3], "plan": json.loads(row[4]), "sql": row[5],
-        "row_count": row[6], "decision": row[7],
+        "row_count": row[6], "decision": row[7], "forked_from": row[9],
         "created_at": row[8].isoformat() if hasattr(row[8], "isoformat") else str(row[8]),
     }
 
@@ -30,11 +30,13 @@ class PostgresCheckpointStore(CheckpointStore):
         try:
             conn.execute(
                 "INSERT INTO checkpoints (id, org_id, conversation_id, question, connection_id, "
-                "plan_json, sql, row_count, decision) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "plan_json, sql, row_count, decision, forked_from) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (cid, ctx.organization_id, checkpoint.get("conversation_id"),
                  checkpoint.get("question", ""), checkpoint.get("connection_id", ""),
                  json.dumps(checkpoint.get("plan") or {}), checkpoint.get("sql"),
-                 checkpoint.get("row_count"), checkpoint.get("decision", "ALLOW")))
+                 checkpoint.get("row_count"), checkpoint.get("decision", "ALLOW"),
+                 checkpoint.get("forked_from")))
         finally:
             conn.close()
         return cid

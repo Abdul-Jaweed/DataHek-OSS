@@ -7,6 +7,7 @@ import {
   GearSix,
   Lightning,
   Ruler,
+  BookmarkSimple,
   ShieldCheck,
 } from '@phosphor-icons/react';
 import { NavLink } from 'react-router-dom';
@@ -22,6 +23,7 @@ const NAV: NavItem[] = [
   { to: '/chat', label: 'Chat', icon: <ChatCircleText size={20} /> },
   { to: '/connections', label: 'Connections', icon: <Database size={20} /> },
   { to: '/conversations', label: 'Conversations', icon: <ClockCounterClockwise size={20} /> },
+  { to: '/saved', label: 'Saved', icon: <BookmarkSimple size={20} /> },
   { to: '/prompts', label: 'Prompts', icon: <FileText size={20} /> },
   { to: '/approvals', label: 'Approvals', icon: <ShieldCheck size={20} /> },
   { to: '/metrics', label: 'Metrics', icon: <Ruler size={20} /> },

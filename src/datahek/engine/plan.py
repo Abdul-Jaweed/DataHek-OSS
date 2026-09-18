@@ -121,6 +121,7 @@ _AGGREGATE_FUNCTIONS = {
     "postgres": frozenset({"count", "count_distinct", "sum", "avg", "min", "max"}),
     "mysql": frozenset({"count", "count_distinct", "sum", "avg", "min", "max"}),
     "sqlite": frozenset({"count", "count_distinct", "sum", "avg", "min", "max"}),
+    "duckdb": frozenset({"count", "count_distinct", "sum", "avg", "min", "max"}),
 }
 _DEFAULT_FUNCTIONS = frozenset().union(*_AGGREGATE_FUNCTIONS.values())
 

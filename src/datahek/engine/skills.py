@@ -12,6 +12,11 @@ class Skill:
     priority: int
     triggers: list[str] = field(default_factory=list)
     guidance: str = ""
+    # Catalog preconditions: at least one column name must contain one of these
+    # patterns (case-insensitive). Empty = always applicable.
+    requires_columns: tuple[str, ...] = ()
+    # At least one table name must contain one of these patterns. Empty = any.
+    requires_tables: tuple[str, ...] = ()
 
 
 class SkillRegistry:
@@ -24,10 +29,25 @@ class SkillRegistry:
     def all(self) -> list[Skill]:
         return list(self._skills)
 
-    def match(self, question: str) -> list[Skill]:
+    def match(self, question: str, catalog=None) -> list[Skill]:
         ql = question.lower()
-        matched = [s for s in self._skills if any(t in ql for t in s.triggers)]
+        matched = [s for s in self._skills
+                   if any(t in ql for t in s.triggers) and self._preconditions_hold(s, catalog)]
         return sorted(matched, key=lambda s: s.priority, reverse=True)
+
+    @staticmethod
+    def _preconditions_hold(skill: Skill, catalog) -> bool:
+        if catalog is None or (not skill.requires_columns and not skill.requires_tables):
+            return True
+        tables = [t.name.lower() for t in catalog.tables]
+        columns = [c.name.lower() for t in catalog.tables for c in t.columns]
+        if skill.requires_tables and not any(
+                p in table for p in skill.requires_tables for table in tables):
+            return False
+        if skill.requires_columns and not any(
+                p in column for p in skill.requires_columns for column in columns):
+            return False
+        return True
 
 
 def build_skill_prompt(skills: list[Skill]) -> str:
@@ -49,11 +69,13 @@ def builtin_skills() -> list[Skill]:
             name="timeseries", priority=10,
             triggers=["trend", "hourly", "daily", "weekly", "over time", "last week", "last month", "by hour", "by day", "trending"],
             guidance="Group by time buckets and order by time for trend questions.",
+            requires_columns=("time", "date", "ts", "day", "month", "hour"),
         ),
         Skill(
             name="debugging", priority=10,
             triggers=["error", "root cause", "why", "failed", "failure", "anomaly", "spike", "outage"],
             guidance="Filter for failure states and correlate likely causes.",
+            requires_columns=("status", "error", "level", "state", "outcome"),
         ),
         Skill(
             name="data_exploration", priority=3,

@@ -108,3 +108,6 @@ volumes:
   datahek-data:
   datahek-pg:
   datahek-redis:
+# Prebuilt images: to run from GHCR instead of building locally, set
+#   image: ghcr.io/abdul-jaweed/datahek-oss:latest
+# on the api and mcp services and run 'docker compose up -d' (no --build).

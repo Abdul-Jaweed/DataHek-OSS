@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS checkpoints (
   sql TEXT, row_count INTEGER, decision TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE checkpoints ADD COLUMN IF NOT EXISTS forked_from TEXT;
 """
 
 

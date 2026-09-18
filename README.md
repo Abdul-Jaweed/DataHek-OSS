@@ -25,7 +25,7 @@ question → schema discovery → logical plan → validation → guardrails
 
 ## ✨ Key features
 
-- **Universal data engine** — a provider-agnostic **Logical Query Plan** with **multi-table JOINs** (AST-level join model, join tables validated and policy-checked), compiled per connector (ClickHouse, PostgreSQL, MySQL, SQLite)
+- **Universal data engine** — a provider-agnostic **Logical Query Plan** with **multi-table JOINs** (AST-level join model, join tables validated and policy-checked), compiled per connector (ClickHouse, PostgreSQL, MySQL, SQLite, DuckDB)
 - **Read-only by construction** — write plans are structurally denied before any provider runs
 - **Typed guardrail decisions** — `ALLOW / DENY / REDACT / MASK / REQUIRE_APPROVAL / RATE_LIMIT` across input → plan → SQL → output
 - **Masking before reasoning** — sensitive columns are masked before the explanation model sees results
@@ -35,6 +35,11 @@ question → schema discovery → logical plan → validation → guardrails
 - **Checkpoints & replay** — every run is stored (`/checkpoints`); replay re-executes a stored plan deterministically, no LLM involved
 - **Independent verification** — a verifier model checks the result answers the question, without seeing the planner's reasoning
 - **Observability** — Prometheus-compatible `GET /metrics` (requests, durations, ask outcomes, rows) and optional JSON logs (`DATAHEK_LOG_FORMAT=json`)
+- **Saved & scheduled queries** — save recurring questions, run them any time, schedule them (in-process scheduler; every run goes through the full guarded pipeline)
+- **Checkpoint fork & diff** — re-plan a stored question as a new lineage; compare any two runs field by field
+- **Audit search** — `GET /audit` filters the JSONL trail by event type, actor, decision, or free text
+- **Catalog-aware skills** — domain guidance (time-series, debugging) only activates when the schema actually has matching columns
+- **MCP per-client tokens** — optional bearer auth with scopes (`DATAHEK_MCP_TOKENS`)
 - **Semantic layer** — named metric definitions (`revenue = sum(amount) on orders`) stored in the catalog; the planner prefers them over guessing column semantics
 - **Charts & export** — numeric results render as bar/line charts (with a table toggle) and every result table exports to CSV
 - **Multi-step analysis** — complex questions are decomposed into sub-queries, each executed through the same guarded pipeline, then synthesized into one answer (`DATAHEK_ANALYST=off` to disable)
@@ -267,6 +272,11 @@ jupyter lab notebooks/          # open any notebook
 python notebooks/_build.py      # re-execute all notebooks (CI-style)
 ```
 
+## 🐳 Prebuilt images (GHCR) & docs site
+
+- **Container images**: `.github/workflows/docker.yml` (kept locally — pushing workflow files needs a `workflow`-scoped token) builds and publishes `ghcr.io/<owner>/datahek-oss` on version tags. To run from a prebuilt image, set `image: ghcr.io/abdul-jaweed/datahek-oss:latest` on the `api`/`mcp` services and `docker compose up -d` (no `--build`).
+- **Docs site**: `docs-site/index.html` — deploy via Pages (branch `main`, folder `/docs-site`) or serve with `python -m http.server 8080 --directory docs-site`.
+
 ## 🧪 Testing
 
 ```bash
@@ -294,7 +304,7 @@ All contributions to OSS packages are licensed under Apache-2.0 (DCO).
 ## 🗺️ Roadmap
 
 - ✅ Platform kernel + contracts · JOINs (AST join model · validation · policy coverage) · vertical slice (ClickHouse) · API/CLI/MCP/web surfaces · streaming · conversations · reasoner · evaluation + datasets · masking · entitlements · connectors (ClickHouse, PostgreSQL, MySQL, SQLite, live-verified) · Docker · local auth + login · connection test/delete · React web UI · runtime LLM settings
-- 🔜 CI · semantic layer · visualization engine · scheduled queries · enterprise operations
+- 🔜 CI workflow · visualization engine · enterprise operations
 - 🔒 **Enterprise** (separate repo): SSO/SCIM, multi-tenancy, policy engine, centralized audit, admin console — built as implementations of the OSS contracts
 
 ---
