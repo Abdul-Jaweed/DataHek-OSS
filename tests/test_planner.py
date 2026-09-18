@@ -204,3 +204,38 @@ class TestModelProviderErrorConversion(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestTolerantParsing(unittest.TestCase):
+    """LLM output slips that must not waste a planning attempt."""
+
+    def test_trailing_commas_repaired(self):
+        rough = """{"nodes": [{"type": "ReadNode", "source": "traces",
+                    "columns": ["service",], "limit": 5,}],}"""
+        plan, clarification = Planner._parse(rough)
+        self.assertIsNotNone(plan, clarification)
+        self.assertEqual(plan.nodes[0].source, "traces")
+
+    def test_markdown_fence_stripped(self):
+        rough = """```json
+        {"nodes": [{"type": "ReadNode", "source": "traces", "columns": ["service"], "limit": 5}]}
+        ```"""
+        plan, _ = Planner._parse(rough)
+        self.assertIsNotNone(plan)
+
+    def test_single_quotes_repaired(self):
+        rough = "{'nodes': [{'type': 'ReadNode', 'source': 'traces', 'columns': ['service'], 'limit': 5}]}"
+        plan, _ = Planner._parse(rough)
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan.nodes[0].source, "traces")
+
+    def test_filter_operator_normalized(self):
+        rough = """{"nodes": [{"type": "ReadNode", "source": "traces",
+                    "columns": ["service"], "filter": "status == 'error'", "limit": 5}]}"""
+        plan, _ = Planner._parse(rough)
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan.nodes[0].filter, "status = 'error'")
+
+    def test_garbage_still_rejected(self):
+        plan, clarification = Planner._parse("I cannot help with that request.")
+        self.assertIsNone(plan)
+        self.assertIsNone(clarification)

@@ -6,6 +6,7 @@ then converted into a clarification request.
 """
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 
 from datahek.contracts.connections import Connection
@@ -135,6 +136,30 @@ def _format_metrics(metrics: list[dict], question: str, limit: int = 10) -> str:
             line += f' — "{m["description"]}"'
         lines.append(line)
     return "\n".join(lines)
+
+
+def _tolerant_json_text(content: str) -> str:
+    """Strip markdown fences and repair the most common LLM JSON slips."""
+    text = content.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    # trailing commas before } or ] — the single most common model slip
+    text = re.sub(r",\s*([}\]])", r"\1", text)
+    return text
+
+
+def _literal_eval_fallback(text: str) -> dict | None:
+    """Accept Python-style dicts ('single quotes', True/False/None) safely."""
+    import ast
+
+    try:
+        parsed = ast.literal_eval(text)
+    except (ValueError, SyntaxError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def _dialect_of(provider) -> str | None:
@@ -277,17 +302,20 @@ class Planner:
 
     @staticmethod
     def _parse(content: str) -> tuple[LogicalPlan | None, str | None]:
-        text = content.strip()
-        if text.startswith("```"):
-            text = text.strip("`")
-            if text.startswith("json"):
-                text = text[4:]
+        text = _tolerant_json_text(content)
         try:
             data = json.loads(text)
         except json.JSONDecodeError:
+            data = _literal_eval_fallback(text)
+            if data is None:
+                return None, None
+        if not isinstance(data, dict):
             return None, None
         if data.get("clarification"):
             return None, str(data["clarification"])
+        for node in data.get("nodes", []):
+            if isinstance(node, dict) and isinstance(node.get("filter"), str):
+                node["filter"] = node["filter"].replace("==", "=")
         try:
             return LogicalPlan.from_dict(data), None
         except Exception:
