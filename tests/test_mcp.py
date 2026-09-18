@@ -73,11 +73,15 @@ async def _call(name, args):
 
 
 class TestMCPRegistration(unittest.TestCase):
-    def test_registers_three_tools(self):
+    def test_registers_tool_catalog(self):
         server = _server()
         tools = asyncio.run(server.list_tools())
         names = {t.name for t in tools}
-        self.assertEqual(names, {"data.list_tables", "data.table_schema", "data.ask"})
+        self.assertEqual(names, {
+            "data.list_tables", "data.table_schema", "data.ask",
+            "data.list_connections", "data.list_metrics",
+            "data.run_saved_query", "data.replay_checkpoint",
+        })
 
 
 class TestMCPTools(unittest.TestCase):
