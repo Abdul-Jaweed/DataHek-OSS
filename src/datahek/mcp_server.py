@@ -14,6 +14,7 @@ Usage:
 """
 import argparse
 import logging
+import os
 
 from fastmcp import FastMCP
 
@@ -29,6 +30,24 @@ from datahek.kernel.errors import DatahekError
 logger = logging.getLogger(__name__)
 
 SERVER_NAME = "data-vault"
+
+
+async def run_guarded(coro, timeout_s: float = 120.0):
+    """Run a tool coroutine with a hard timeout and contained errors.
+
+    Prototype-inspired MCP boundary: hang-proof, secret-free error messages.
+    """
+    import asyncio
+
+    try:
+        return await asyncio.wait_for(coro, timeout=timeout_s)
+    except asyncio.TimeoutError:
+        return f"Error: tool timed out after {timeout_s:.0f}s"
+    except DatahekError as e:
+        return f"Error: {e}"
+    except Exception:
+        logger.exception("MCP tool failed")
+        return "Error: internal error"
 
 
 def build_mcp_server(container=None) -> FastMCP:
@@ -54,13 +73,8 @@ def build_mcp_server(container=None) -> FastMCP:
         )
 
     async def _safe(coro):
-        try:
-            return await coro
-        except DatahekError as e:
-            return f"Error: {e}"
-        except Exception as e:
-            logger.exception("MCP tool failed")
-            return "Error: internal error"
+        timeout = float(os.environ.get("DATAHEK_MCP_TOOL_TIMEOUT", "120"))
+        return await run_guarded(coro, timeout_s=timeout)
 
     mcp = FastMCP(
         SERVER_NAME,

@@ -165,6 +165,9 @@ python -m datahek.mcp_server    # streamable HTTP on :8001
 | `DATAHEK_RATE_LIMIT_PER_MINUTE` | `120` | Per-user request limit (sliding window) |
 | `DATAHEK_VERIFIER` | `on` | Independent post-execution answer verification (`off` to disable) |
 | `DATAHEK_GUARDRAIL_INPUT` | `on` | Input injection/length checks (`off` to disable) |
+| `DATAHEK_MASK_MODE` | `redact` | Sensitive-column masking strategy: `redact` · `hash` · `partial` |
+| `DATAHEK_MASK_SALT` | `datahek` | Salt for the `hash` masking strategy |
+| `DATAHEK_MCP_TOOL_TIMEOUT` | `120` | Seconds before an MCP tool call is stopped |
 | `DATAHEK_MAX_QUESTION_CHARS` | `2000` | Maximum accepted question length |
 | `DATAHEK_ANALYST` | `on` | Multi-step decomposition for complex questions (`off` to disable) |
 | `DATAHEK_DB_PATH` | `datahek.db` | SQLite conversation/checkpoint/metric store |
