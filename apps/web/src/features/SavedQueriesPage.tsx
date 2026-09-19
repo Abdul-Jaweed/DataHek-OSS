@@ -7,6 +7,7 @@ import { Badge } from '../components/ui/badge';
 import { EmptyState } from '../components/ui/empty-state';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTrigger } from '../components/ui/dialog';
 import { Input, Label } from '../components/ui/input';
+import { toast } from '../lib/toast';
 
 interface SavedQuery {
   id: string;
@@ -68,8 +69,10 @@ export function SavedQueriesPage() {
       setName('');
       setQuestion('');
       refresh();
+      toast('Saved query created');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      toast(e instanceof Error ? e.message : String(e), 'error');
     } finally {
       setSaving(false);
     }
@@ -80,8 +83,10 @@ export function SavedQueriesPage() {
     try {
       await api.deleteSavedQuery(id);
       refresh();
+      toast('Saved query deleted');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      toast(e instanceof Error ? e.message : String(e), 'error');
     }
   };
 
@@ -91,8 +96,10 @@ export function SavedQueriesPage() {
     try {
       const r = await api.runSavedQuery(q.id);
       setResult((prev) => ({ ...prev, [q.id]: { answer: r.answer || 'No answer', rows: r.row_count ?? null } }));
+      toast('Query finished');
     } catch (e) {
       setResult((prev) => ({ ...prev, [q.id]: { answer: e instanceof Error ? e.message : String(e), rows: null } }));
+      toast(e instanceof Error ? e.message : String(e), 'error');
     } finally {
       setRunning(null);
     }
@@ -104,8 +111,10 @@ export function SavedQueriesPage() {
     try {
       await api.createSchedule(q.id, Math.round(parsed * 60));
       refresh();
+      toast('Schedule added');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      toast(e instanceof Error ? e.message : String(e), 'error');
     }
   };
 
@@ -113,8 +122,10 @@ export function SavedQueriesPage() {
     try {
       await api.deleteSchedule(id);
       refresh();
+      toast('Schedule removed');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      toast(e instanceof Error ? e.message : String(e), 'error');
     }
   };
 

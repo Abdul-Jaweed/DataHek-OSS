@@ -12,6 +12,7 @@ import {
   Warning,
 } from '@phosphor-icons/react';
 import { useState } from 'react';
+import { toast } from '../../lib/toast';
 import { ResultChart, shouldChart } from './ResultChart';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -76,15 +77,20 @@ function csvEscape(value: unknown): string {
 }
 
 function downloadCsv(columns: string[], rows: Record<string, unknown>[]): void {
-  const header = columns.map(csvEscape).join(',');
-  const body = rows.map((row) => columns.map((c) => csvEscape(row[c])).join(',')).join('\n');
-  const blob = new Blob([`\uFEFF${header}\n${body}`], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `datahek-results-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  try {
+    const header = columns.map(csvEscape).join(',');
+    const body = rows.map((row) => columns.map((c) => csvEscape(row[c])).join(',')).join('\n');
+    const blob = new Blob([`\uFEFF${header}\n${body}`], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `datahek-results-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('CSV exported');
+  } catch {
+    toast('CSV export failed', 'error');
+  }
 }
 
 function StatusBadge({ message }: { message: Message }) {
@@ -178,8 +184,9 @@ export function MessageBubble({ message, index, actions, onSuggestion }: Message
       await navigator.clipboard.writeText(sqlSteps.map((s) => s.sql).join('\n\n'));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+      toast('SQL copied');
     } catch {
-      /* clipboard unavailable */
+      toast('Copy failed', 'error');
     }
   };
 

@@ -8,6 +8,7 @@ import { EmptyState } from '../components/ui/empty-state';
 import { Badge } from '../components/ui/badge';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTrigger } from '../components/ui/dialog';
 import { Input, Label } from '../components/ui/input';
+import { toast } from '../lib/toast';
 
 const PROVIDERS = ['clickhouse', 'postgres', 'mysql', 'sqlite'];
 
@@ -66,6 +67,7 @@ export function ConnectionsPage() {
       } else {
         await api.createConnection(formSpec());
       }
+      toast(editingId ? 'Connection updated' : 'Connection added');
       setOpen(false);
       resetForm();
       refresh();
@@ -98,8 +100,10 @@ export function ConnectionsPage() {
     try {
       const r = await api.testConnection(formSpec());
       setTestResult(r.ok ? `OK · ${r.latency_ms ?? '?'}ms` : `Failed: ${r.error ?? 'unknown'}`);
+      toast(r.ok ? 'Connection test passed' : 'Connection test failed', r.ok ? 'success' : 'error');
     } catch (e) {
       setTestResult(`Failed: ${e instanceof Error ? e.message : String(e)}`);
+      toast(e instanceof Error ? e.message : String(e), 'error');
     } finally {
       setTesting(false);
     }
