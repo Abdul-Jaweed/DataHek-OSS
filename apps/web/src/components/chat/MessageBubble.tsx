@@ -13,6 +13,7 @@ import {
 } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { toast } from '../../lib/toast';
+import { DataTable } from '../ui/data-table';
 import { ResultChart, shouldChart } from './ResultChart';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -56,14 +57,6 @@ type Tab = 'chart' | 'table' | 'sql';
 
 function fmtTime(at?: number): string {
   return at ? `${new Date(at).toISOString().slice(11, 19)} UTC` : '';
-}
-
-function isNumeric(value: unknown): boolean {
-  if (typeof value === 'number') return true;
-  if (typeof value === 'string' && value.trim() !== '') {
-    return Number.isFinite(Number(value.replace(/,/g, '')));
-  }
-  return false;
 }
 
 function csvEscape(value: unknown): string {
@@ -294,52 +287,23 @@ export function MessageBubble({ message, index, actions, onSuggestion }: Message
           )}
 
           {effectiveTab === 'table' && hasData && message.columns && message.rows && (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left" aria-label="Query results">
-                <thead>
-                  <tr className="h-9 border-b border-border bg-surface-2">
-                    {message.columns.map((c) => (
-                      <th
-                        key={c}
-                        className={[
-                          'kicker px-3.5 font-medium text-muted',
-                          message.rows!.every((r) => isNumeric(r[c]) || r[c] === null) ? 'text-right' : '',
-                        ].join(' ')}
-                      >
-                        {c}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="font-mono text-[12px]">
-                  {message.rows.map((row, i) => (
-                    <tr key={i} className="h-9 border-b border-border last:border-b-0 hover:bg-surface-2/60">
-                      {message.columns!.map((c) => (
-                        <td
-                          key={c}
-                          className={[
-                            'px-3.5 text-foreground',
-                            message.rows!.every((r) => isNumeric(r[c]) || r[c] === null)
-                              ? 'text-right tabular-nums'
-                              : '',
-                          ].join(' ')}
-                        >
-                          {String(row[c] ?? '')}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="flex items-center justify-between gap-3 border-t border-border bg-surface-2 px-3.5 py-2 font-mono text-[11px] text-muted">
-                <span>
-                  Showing {message.rows.length.toLocaleString()} of{' '}
-                  {(message.rowCount ?? message.rows.length).toLocaleString()} rows
-                  {message.truncated ? ' · truncated' : ''}
-                </span>
-                {message.redactions && message.redactions.length > 0 && <span>Masked fields: {message.redactions.length}</span>}
-              </div>
-            </div>
+            <DataTable
+              columns={message.columns}
+              rows={message.rows}
+              note={
+                [
+                  message.rowCount !== undefined && message.rowCount !== message.rows.length
+                    ? `${message.rowCount.toLocaleString()} rows total`
+                    : '',
+                  message.truncated ? 'truncated' : '',
+                  message.redactions && message.redactions.length > 0
+                    ? `${message.redactions.length} masked fields`
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || undefined
+              }
+            />
           )}
 
           {effectiveTab === 'sql' && sqlSteps.length > 0 && (
