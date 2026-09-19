@@ -35,7 +35,7 @@ export function AppShell({ headerRight, children }: AppShellProps) {
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          'sidebar-shell hidden shrink-0 overflow-hidden border-r border-border bg-surface md:block',
+          'sidebar-shell hidden shrink-0 overflow-hidden border-r border-rail-border bg-rail md:block',
           sidebarHidden ? 'w-0 border-r-0' : 'w-[236px]',
         )}
       >
@@ -48,7 +48,7 @@ export function AppShell({ headerRight, children }: AppShellProps) {
       {drawerOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-[8px]" onClick={() => setDrawerOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-[236px] border-r border-border bg-surface shadow-lg">
+          <aside className="absolute inset-y-0 left-0 w-[236px] border-r border-rail-border bg-rail shadow-lg">
             <Sidebar onNavigate={() => setDrawerOpen(false)} />
           </aside>
         </div>

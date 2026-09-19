@@ -83,10 +83,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <Lightning size={15} weight="bold" />
           </div>
           <div className="flex min-w-0 flex-col">
-            <span className="text-[13px] font-bold uppercase leading-none tracking-tight text-foreground">
+            <span className="text-[13px] font-bold uppercase leading-none tracking-tight text-rail-fg">
               DataHek
             </span>
-            <span className="mt-1 truncate font-mono text-[9px] font-medium uppercase tracking-[0.14em] text-faint">
+            <span className="mt-1 truncate font-mono text-[9px] font-medium uppercase tracking-[0.14em] text-rail-faint">
               OSS Analytics Workbench
             </span>
           </div>
@@ -105,7 +105,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <nav className="mt-4 flex flex-1 flex-col gap-4 overflow-y-auto" aria-label="Main">
         {GROUPS.map((group) => (
           <div key={group.label} className="flex flex-col gap-0.5">
-            <span className="px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-faint">
+            <span className="px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-rail-faint">
               {group.label}
             </span>
             {group.items.map((item) => (
@@ -117,17 +117,17 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   cn(
                     'flex items-center gap-2.5 rounded-sm px-2.5 py-1.5 text-[13px] transition-colors duration-150',
                     isActive
-                      ? 'bg-surface-2 font-medium text-foreground shadow-[inset_2px_0_0_var(--brand)]'
-                      : 'text-muted hover:bg-surface-2/60 hover:text-foreground',
+                      ? 'bg-rail-active font-medium text-rail-fg shadow-[inset_2px_0_0_var(--brand)]'
+                      : 'text-rail-muted hover:bg-rail-hover hover:text-rail-fg',
                   )
                 }
               >
                 {({ isActive }) => (
                   <>
-                    <span className={isActive ? 'text-brand-strong' : 'text-faint'}>{item.icon}</span>
+                    <span className={isActive ? 'text-brand' : 'text-rail-faint'}>{item.icon}</span>
                     <span className="flex-1">{item.label}</span>
                     {item.to === '/approvals' && pendingApprovals > 0 && (
-                      <span className="rounded-sm border border-border bg-surface-2 px-1.5 font-mono text-[10px] font-semibold text-foreground">
+                      <span className="rounded-sm border border-rail-border bg-rail-active px-1.5 font-mono text-[10px] font-semibold text-rail-fg">
                         {pendingApprovals}
                       </span>
                     )}
@@ -139,8 +139,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </nav>
 
-      <div className="mt-3 border-t border-border px-1 pt-3">
-        <div className="flex items-center gap-2 font-mono text-[11px] text-faint">
+      <div className="mt-3 border-t border-rail-border px-1 pt-3">
+        <div className="flex items-center gap-2 font-mono text-[11px] text-rail-faint">
           <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
           <span className="uppercase tracking-wider">Read-only enforced</span>
         </div>

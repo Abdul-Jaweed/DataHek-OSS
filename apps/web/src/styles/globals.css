@@ -26,6 +26,13 @@
   --elev-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --elev-md: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.04);
   --elev-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.03);
+  --rail: #0e0e11;
+  --rail-border: #26262b;
+  --rail-fg: #fafafa;
+  --rail-muted: #a1a1aa;
+  --rail-faint: #71717a;
+  --rail-hover: rgba(255, 255, 255, 0.06);
+  --rail-active: rgba(255, 255, 255, 0.1);
 }
 
 [data-theme='dark'] {
@@ -54,6 +61,13 @@
   --elev-sm: none;
   --elev-md: none;
   --elev-lg: none;
+  --rail: #0e0e11;
+  --rail-border: #26262b;
+  --rail-fg: #fafafa;
+  --rail-muted: #a1a1aa;
+  --rail-faint: #71717a;
+  --rail-hover: rgba(255, 255, 255, 0.06);
+  --rail-active: rgba(255, 255, 255, 0.1);
 }
 
 @theme inline {
@@ -77,6 +91,13 @@
   --color-warning-soft: var(--warning-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
+  --color-rail: var(--rail);
+  --color-rail-border: var(--rail-border);
+  --color-rail-fg: var(--rail-fg);
+  --color-rail-muted: var(--rail-muted);
+  --color-rail-faint: var(--rail-faint);
+  --color-rail-hover: var(--rail-hover);
+  --color-rail-active: var(--rail-active);
 
   /* Shapes: boxy 2px per code.html reference; telemetry pills stay 999px */
   --radius-sm: 2px;
