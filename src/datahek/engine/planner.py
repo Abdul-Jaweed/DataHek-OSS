@@ -46,6 +46,8 @@ Rules:
 - When joining, reference joined-table columns as "table.column"; plain names target the base table.
 - Only use aggregate functions allowed for the target database dialect (given below).
 - Use "count_distinct" for distinct counting on SQL dialects (renders COUNT(DISTINCT col)).
+- Set "limit": if the user specifies a row count, use it; otherwise default to 10.
+  For grouped or time-series results, set the number of rows the result naturally needs.
 - If the question is ambiguous or no table matches, return
   {"nodes": [], "clarification": "<question for the user>"}.
 """

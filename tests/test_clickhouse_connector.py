@@ -44,7 +44,7 @@ class TestCompileSql(unittest.TestCase):
 
     def test_no_limit_means_default(self):
         plan = LogicalPlan(nodes=[ReadNode(source="t", columns=["a"])])
-        self.assertIn("LIMIT 1000", compile_sql(plan))
+        self.assertIn("LIMIT 10", compile_sql(plan))
 
     def test_capabilities(self):
         p = ClickHouseProvider()
@@ -113,7 +113,7 @@ class TestCompileAggregateStrayColumn(unittest.TestCase):
             aggregates=[Aggregate(function="avg", column="duration_ms", alias="avg_d")],
         )])
         sql = compile_sql(plan)
-        self.assertEqual(sql, "SELECT service, avg(duration_ms) AS avg_d FROM traces GROUP BY service LIMIT 1000")
+        self.assertEqual(sql, "SELECT service, avg(duration_ms) AS avg_d FROM traces GROUP BY service LIMIT 10")
         self.assertNotIn("SELECT service, duration_ms", sql)
 
     def test_object_order_by_compiles(self):

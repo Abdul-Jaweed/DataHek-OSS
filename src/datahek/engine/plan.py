@@ -10,7 +10,7 @@ from typing import Any, Literal
 from datahek.kernel.errors import DatahekError, ErrorCode
 
 PLAN_VERSION = 1
-DEFAULT_LIMIT = 1000
+DEFAULT_LIMIT = 10
 
 
 @dataclass(frozen=True)
