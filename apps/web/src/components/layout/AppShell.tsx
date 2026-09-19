@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { applyTheme, useStore, type ThemePreference } from '../../store/use-store';
 import { cn } from '../../lib/utils';
+import { Toaster } from '../ui/toaster';
 import { Sidebar } from './Sidebar';
 
 const THEMES: { value: ThemePreference; label: string }[] = [
@@ -103,6 +104,8 @@ export function AppShell({ headerRight, children }: AppShellProps) {
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
+
+      <Toaster />
     </div>
   );
 }
