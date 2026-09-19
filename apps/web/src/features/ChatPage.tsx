@@ -121,6 +121,11 @@ export function ChatPage() {
           <Badge variant={selectedConnectionId ? 'success' : 'neutral'} dot>
             {selectedConnectionId ? 'read-only mode' : 'no connection'}
           </Badge>
+          {progress && (
+            <div className="hidden lg:flex">
+              <ProgressSection progress={progress} variant="inline" />
+            </div>
+          )}
           <div className="ml-auto">
             <Button
               variant="secondary"
@@ -135,7 +140,11 @@ export function ChatPage() {
         </div>
       </div>
 
-      {progress && <ProgressSection progress={progress} />}
+      {progress && (
+        <div className="lg:hidden">
+          <ProgressSection progress={progress} />
+        </div>
+      )}
 
       <div ref={threadRef} className="min-h-0 flex-1 overflow-y-auto" aria-live="polite">
         <div className="mx-auto w-full max-w-[1060px] space-y-4 px-4 py-4 sm:px-6">
