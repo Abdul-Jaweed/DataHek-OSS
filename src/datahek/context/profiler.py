@@ -37,6 +37,8 @@ def _role_candidates(family: str, distinct: int | None, uniqueness: float | None
                      null_ratio: float, sensitive: bool) -> tuple[tuple[str, ...], dict[str, float]]:
     if sensitive:
         return (), {}
+    if family == "time":
+        return ("temporal",), {"temporal": 1.0}
     roles: list[str] = []
     confidence: dict[str, float] = {}
     if uniqueness is not None and uniqueness >= _IDENTIFIER_UNIQUENESS and null_ratio == 0.0:
@@ -48,9 +50,6 @@ def _role_candidates(family: str, distinct: int | None, uniqueness: float | None
     elif family == "number":
         roles.append("measure")
         confidence["measure"] = 0.9
-    if family == "time":
-        roles.append("temporal")
-        confidence["temporal"] = 1.0
     if family == "string" and distinct is not None and distinct <= _DIMENSION_MAX_DISTINCT \
             and "identifier" not in roles:
         roles.append("dimension")
