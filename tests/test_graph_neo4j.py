@@ -2,6 +2,8 @@
 import os
 import unittest
 
+from datahek.kernel.context import RequestContext
+
 try:
     import graph_repository_contract as contract
 except ImportError:  # pragma: no cover - module-path invocation
@@ -30,13 +32,21 @@ class TestNeo4jGraph(contract.GraphRepositoryContract):
 
     def setUp(self):
         super().setUp()
+        self.ctx = RequestContext(source="cli", organization_id="contract-test")
         self.call(self._clear())
         self.call(self.repo.init_schema())
+
+    def tearDown(self):
+        try:
+            self.call(self._clear())
+        finally:
+            super().tearDown()
 
     async def _clear(self):
         async with self.repo._driver.session() as session:
             await (await session.run(
-                "MATCH (n:DataHekNode) DETACH DELETE n")).consume()
+                "MATCH (n:DataHekNode) WHERE n.org_id = 'contract-test' "
+                "DETACH DELETE n")).consume()
 
 
 if __name__ == "__main__":

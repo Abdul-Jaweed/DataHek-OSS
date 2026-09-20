@@ -35,17 +35,19 @@ class GraphRepositoryContract(unittest.TestCase):
         if init is not None:
             await init()
 
-    def node(self, node_id, label="Table", org="default", version=1, **props):
-        return GraphNode(id=node_id, org_id=org, project_id="default", label=label,
+    def node(self, node_id, label="Table", org=None, version=1, **props):
+        return GraphNode(id=node_id, org_id=org or self.ctx.organization_id,
+                         project_id="default", label=label,
                          properties=props or {"name": node_id}, context_version=version,
                          schema_hash="hash-1", provenance=ProvenanceSource.SYSTEM,
                          created_at=STAMP, updated_at=STAMP)
 
-    def rel(self, rel_id, rel_type, source, target, org="default", version=1):
-        return GraphRelationship(id=rel_id, org_id=org, project_id="default",
-                                 type=rel_type, source_id=source, target_id=target,
-                                 context_version=version, schema_hash="hash-1",
-                                 provenance=ProvenanceSource.SYSTEM, confidence=1.0)
+    def rel(self, rel_id, rel_type, source, target, org=None, version=1):
+        return GraphRelationship(id=rel_id, org_id=org or self.ctx.organization_id,
+                                 project_id="default", type=rel_type, source_id=source,
+                                 target_id=target, context_version=version,
+                                 schema_hash="hash-1", provenance=ProvenanceSource.SYSTEM,
+                                 confidence=1.0)
 
     def call(self, coro):
         return self._loop.run_until_complete(coro)
