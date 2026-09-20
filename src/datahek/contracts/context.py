@@ -167,6 +167,8 @@ class OntologyConcept:
     provenance: ProvenanceSource
     validation: ValidationStatus
     confidence: float
+    description: str = ""
+    synonyms: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
