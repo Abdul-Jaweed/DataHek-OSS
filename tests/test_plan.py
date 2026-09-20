@@ -1,7 +1,7 @@
 """Logical plan model (ADR-006) — versioned, serializable, provider-agnostic."""
 import unittest
 
-from datahek.engine.plan import Aggregate, LogicalPlan, ReadNode, WriteNode, validate_plan
+from datahek.engine.plan import Aggregate, Join, LogicalPlan, ReadNode, WriteNode, validate_plan
 from datahek.kernel.errors import DatahekError, ErrorCode
 
 
@@ -159,3 +159,65 @@ class TestDialectFunctionValidation(unittest.TestCase):
         with self.assertRaises(DatahekError):
             validate_plan(self._plan("median"), tables={"traces"},
                           columns={"traces": {"service", "duration_ms"}}, dialect="postgres")
+
+
+class TestTypeAwareValidation(unittest.TestCase):
+    def _validate(self, plan, types):
+        validate_plan(plan, tables=set(types), columns={t: set(c) for t, c in types.items()},
+                      dialect="postgres", column_types=types)
+
+    def test_empty_plan_rejected(self):
+        with self.assertRaises(DatahekError) as cm:
+            self._validate(LogicalPlan(nodes=[]), {})
+        self.assertEqual(cm.exception.code, ErrorCode.PLAN_INVALID)
+
+    def test_sum_on_boolean_rejected(self):
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="events",
+            aggregates=[Aggregate(function="sum", column="is_error", alias="n")],
+        )])
+        with self.assertRaises(DatahekError) as cm:
+            self._validate(plan, {"events": {"is_error": "boolean"}})
+        self.assertEqual(cm.exception.code, ErrorCode.PLAN_INVALID)
+        self.assertIn("numeric", str(cm.exception))
+
+    def test_avg_on_text_rejected(self):
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="events",
+            aggregates=[Aggregate(function="avg", column="service_name", alias="a")],
+        )])
+        with self.assertRaises(DatahekError):
+            self._validate(plan, {"events": {"service_name": "text"}})
+
+    def test_sum_on_numeric_allowed(self):
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="events",
+            aggregates=[Aggregate(function="sum", column="duration_ms", alias="total")],
+        )])
+        self._validate(plan, {"events": {"duration_ms": "double precision"}})
+
+    def test_join_incompatible_types_rejected(self):
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="events", columns=["x"],
+            joins=[Join(table="sales", on_left="product_id", on_right="id")],
+        )])
+        with self.assertRaises(DatahekError) as cm:
+            self._validate(plan, {"events": {"x": "text", "product_id": "text"},
+                                  "sales": {"id": "integer"}})
+        self.assertEqual(cm.exception.code, ErrorCode.PLAN_INVALID)
+        self.assertIn("incompatible", str(cm.exception))
+
+    def test_join_compatible_types_allowed(self):
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="events", columns=["x"],
+            joins=[Join(table="sales", on_left="product_id", on_right="id")],
+        )])
+        self._validate(plan, {"events": {"x": "text", "product_id": "text"},
+                              "sales": {"id": "character varying"}})
+
+    def test_compile_empty_plan_raises_plan_invalid(self):
+        from datahek.engine.compile import compile_sql
+
+        with self.assertRaises(DatahekError) as cm:
+            compile_sql(LogicalPlan(nodes=[]))
+        self.assertEqual(cm.exception.code, ErrorCode.PLAN_INVALID)

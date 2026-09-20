@@ -142,3 +142,6 @@ class SchemaService:
 
     def columns(self, catalog: SchemaCatalog) -> dict[str, set[str]]:
         return {t.name: {c.name for c in t.columns} for t in catalog.tables}
+
+    def column_types(self, catalog: SchemaCatalog) -> dict[str, dict[str, str]]:
+        return {t.name: {c.name: c.data_type for c in t.columns} for t in catalog.tables}

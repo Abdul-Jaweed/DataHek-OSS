@@ -48,6 +48,8 @@ Rules:
 - Use "count_distinct" for distinct counting on SQL dialects (renders COUNT(DISTINCT col)).
 - Set "limit": if the user specifies a row count, use it; otherwise default to 10.
   For grouped or time-series results, set the number of rows the result naturally needs.
+- Never apply sum or avg to boolean columns; count true values with count(*) plus a WHERE condition.
+- Only join columns whose types are compatible (see the schema summary); otherwise return a clarification.
 - If the question is ambiguous or no table matches, return
   {"nodes": [], "clarification": "<question for the user>"}.
 """
@@ -259,7 +261,8 @@ class Planner:
                 return PlanResult(plan=None, clarification="I could not interpret the request into a data plan.", confidence=0.2)
             try:
                 parsed = _normalize_join_refs(parsed, columns)
-                validate_plan(parsed, tables, columns, dialect=_dialect_of(provider))
+                validate_plan(parsed, tables, columns, dialect=_dialect_of(provider),
+                              column_types=self._schema_service.column_types(catalog))
                 sources: list[str] = []
                 for n in parsed.nodes:
                     if hasattr(n, "source"):

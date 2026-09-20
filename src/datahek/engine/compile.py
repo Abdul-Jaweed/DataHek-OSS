@@ -5,6 +5,7 @@ provider, the node model is shared. Supports the common SELECT shape with
 optional joins for ClickHouse, PostgreSQL, MySQL, and SQLite.
 """
 from datahek.engine.plan import DEFAULT_LIMIT, LogicalPlan, ReadNode
+from datahek.kernel.errors import DatahekError, ErrorCode
 
 
 def _qualified(column: str, base: str, has_joins: bool) -> str:
@@ -18,6 +19,8 @@ def compile_sql(plan: LogicalPlan) -> str:
     """Compile a read-only LogicalPlan to SQL (SELECT ... [JOIN ...] LIMIT shape)."""
     if not plan.read_only:
         raise ValueError("Write plans cannot be compiled to SQL")
+    if not plan.nodes:
+        raise DatahekError(ErrorCode.PLAN_INVALID, "Plan contains no read nodes")
     node = plan.nodes[0]
     if not isinstance(node, ReadNode):
         raise ValueError(f"Unsupported node type: {type(node).__name__}")

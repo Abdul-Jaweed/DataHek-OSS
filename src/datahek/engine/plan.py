@@ -126,15 +126,44 @@ _AGGREGATE_FUNCTIONS = {
 }
 _DEFAULT_FUNCTIONS = frozenset().union(*_AGGREGATE_FUNCTIONS.values())
 
+_NUMERIC_HINTS = ("int", "float", "double", "decimal", "numeric", "real", "serial", "money", "uint", "number")
+
+
+def _type_family(type_name: str) -> str:
+    lowered = (type_name or "").lower()
+    if any(h in lowered for h in _NUMERIC_HINTS):
+        return "number"
+    if any(h in lowered for h in ("char", "text", "string", "uuid", "json")):
+        return "string"
+    if any(h in lowered for h in ("timestamp", "date", "time")):
+        return "time"
+    if "bool" in lowered:
+        return "bool"
+    return "other"
+
 
 def validate_plan(
     plan: LogicalPlan,
     tables: set[str],
     columns: dict[str, set[str]],
     dialect: str | None = None,
+    column_types: dict[str, dict[str, str]] | None = None,
 ) -> None:
     """Validate the plan against a schema catalog. Raises PLAN_INVALID."""
+    if not plan.nodes:
+        raise DatahekError(ErrorCode.PLAN_INVALID, "Plan contains no read nodes")
     allowed_functions = _AGGREGATE_FUNCTIONS.get(dialect, _DEFAULT_FUNCTIONS)
+    types = column_types or {}
+
+    def _type_of(col: str, default_table: str) -> str | None:
+        if col == "*" or "." in col:
+            table, _, bare = col.partition(".")
+            lookup_table = table if bare else default_table
+            bare = bare or col
+        else:
+            lookup_table, bare = default_table, col
+        return types.get(lookup_table, {}).get(bare)
+
     for node in plan.nodes:
         if isinstance(node, WriteNode):
             continue
@@ -184,6 +213,17 @@ def validate_plan(
             _resolve(j.on_left, node.source, "join condition")
             if j.on_right:
                 _resolve(j.on_right, j.table, "join condition")
+            left_type = _type_of(j.on_left, node.source)
+            right_type = _type_of(j.on_right, j.table) if j.on_right else None
+            if left_type and right_type:
+                left_family, right_family = _type_family(left_type), _type_family(right_type)
+                if "other" not in (left_family, right_family) and left_family != right_family:
+                    raise DatahekError(
+                        ErrorCode.PLAN_INVALID,
+                        f"Join columns have incompatible types: '{j.on_left}' is {left_type}, "
+                        f"'{j.on_right}' is {right_type}",
+                        details={"on_left": j.on_left, "on_right": j.on_right},
+                    )
 
         for col in node.columns:
             _resolve(col, node.source, "select")
@@ -206,6 +246,15 @@ def validate_plan(
                     f"Aggregate function '{agg.function}' is not supported on dialect '{dialect or 'any'}'",
                     details={"function": agg.function, "dialect": dialect},
                 )
+            if agg.function in ("sum", "avg") and agg.column != "*":
+                col_type = _type_of(agg.column, node.source)
+                if col_type and not any(h in col_type.lower() for h in _NUMERIC_HINTS):
+                    raise DatahekError(
+                        ErrorCode.PLAN_INVALID,
+                        f"Aggregate '{agg.function}' requires a numeric column; "
+                        f"'{agg.column}' is {col_type}",
+                        details={"function": agg.function, "column": agg.column},
+                    )
             if agg.function == "count_distinct" and agg.column == "*":
                 raise DatahekError(
                     ErrorCode.PLAN_INVALID,
