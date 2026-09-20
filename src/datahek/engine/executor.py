@@ -182,7 +182,27 @@ class Engine:
                                    details={"decision": decision.decision})
             raise DatahekError(ErrorCode.QUERY_DENIED, decision.reason, details={"decision": decision.decision})
 
-        client = await provider.connect(connection)
+        try:
+            client = await provider.connect(connection)
+        except DatahekError:
+            raise
+        except Exception as e:
+            logger.warning("Connection failed for provider %s: %s", provider.provider_id, e)
+            await self._audit(ctx, AuditEvent(
+                event_type="query.execution",
+                actor=ctx.user_id,
+                action="execute",
+                resource_ref=connection.id,
+                decision="ALLOW",
+                tenant={"org": ctx.organization_id, "project": ctx.project_id},
+                payload={"outcome": "connection_failed",
+                         "error_code": ErrorCode.CONNECTION_FAILED.value},
+            ))
+            raise DatahekError(
+                ErrorCode.CONNECTION_FAILED,
+                "Could not connect to the data source",
+                details={"provider": provider.provider_id},
+            ) from e
         started = time.monotonic()
         try:
             raw = await provider.compile_and_execute(client, plan, ctx)

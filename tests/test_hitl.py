@@ -75,6 +75,14 @@ class TestPolicyApprovalRules(unittest.TestCase):
         d = self._decision("traces", 5000)
         self.assertEqual(d["action"], "REQUIRE_APPROVAL")
 
+    def test_limit_at_threshold_allowed(self):
+        d = self._decision("traces", 1000)
+        self.assertEqual(d["action"], "ALLOW")
+
+    def test_limit_above_threshold_requires_approval(self):
+        d = self._decision("traces", 1001)
+        self.assertEqual(d["action"], "REQUIRE_APPROVAL")
+
     def test_sensitive_table_requires_approval(self):
         d = self._decision("salaries", 10)
         self.assertEqual(d["action"], "REQUIRE_APPROVAL")

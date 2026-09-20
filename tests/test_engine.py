@@ -106,6 +106,20 @@ class TestEngine(unittest.TestCase):
         self.assertNotIn("secret", str(cm.exception))
         self.assertEqual(cm.exception.code, ErrorCode.CONNECTION_FAILED)
 
+    def test_connect_error_classified_not_raw(self):
+        class Unresolvable(_FakeProvider):
+            async def connect(self, connection):
+                raise RuntimeError("failed to resolve host 'db.internal' secret-token")
+
+        registry = ProviderRegistry()
+        registry.register(Unresolvable())
+        engine = Engine(registry)
+        with self.assertRaises(DatahekError) as cm:
+            asyncio.run(engine.execute(self.ctx, LogicalPlan(nodes=[ReadNode(source="t", columns=["a"])]), self.conn))
+        self.assertEqual(cm.exception.code, ErrorCode.CONNECTION_FAILED)
+        self.assertNotIn("secret-token", str(cm.exception))
+        self.assertNotIn("db.internal", str(cm.exception))
+
 
 class TestEngineAudit(unittest.TestCase):
     def setUp(self):

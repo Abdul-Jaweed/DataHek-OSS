@@ -33,7 +33,7 @@ class LocalPolicyEngine(PolicyEngine):
                     return f"table '{source}' matches a sensitive-table policy"
             source = getattr(node, "source", "")
             limit = getattr(node, "limit", None)
-            if limit is not None and limit >= self._approval_row_limit:
+            if limit is not None and limit > self._approval_row_limit:
                 return f"row limit {limit} exceeds the approval threshold ({self._approval_row_limit})"
             if limit is None and not getattr(node, "aggregates", None):
                 return f"unbounded scan of '{source}' without a row limit"
