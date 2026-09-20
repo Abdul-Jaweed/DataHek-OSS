@@ -19,7 +19,16 @@ class GraphRepositoryContract(unittest.TestCase):
         self.repo = self.make_repo()
         self.ctx = RequestContext(source="cli")
         self.other = RequestContext(source="cli", organization_id="other-org")
-        asyncio.run(self._setup_schema())
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+        self.call(self._setup_schema())
+
+    def tearDown(self):
+        close = getattr(self.repo, "close", None)
+        if close is not None:
+            self.call(close())
+        self._loop.close()
+        asyncio.set_event_loop(None)
 
     async def _setup_schema(self):
         init = getattr(self.repo, "init_schema", None)
@@ -39,7 +48,7 @@ class GraphRepositoryContract(unittest.TestCase):
                                  provenance=ProvenanceSource.SYSTEM, confidence=1.0)
 
     def call(self, coro):
-        return asyncio.run(coro)
+        return self._loop.run_until_complete(coro)
 
     def test_create_and_get_node(self):
         self.call(self.repo.create_node(self.ctx, self.node("n1", name="orders")))

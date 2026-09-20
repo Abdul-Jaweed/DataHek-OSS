@@ -77,6 +77,11 @@ def build_default_container() -> Container:
         c.register(AuthProvider, LocalAuthProvider.from_env(), singleton=True)
     c.register(TenantContext, SingleTenantContext(), singleton=True)
     c.register(AuditSink, JsonlAuditSink(), singleton=True)
+    if os.environ.get("DATAHEK_NEO4J_URL"):
+        from datahek.contracts.context import GraphRepository
+        from datahek.context.graph.neo4j import Neo4jGraphRepository
+
+        c.register(GraphRepository, Neo4jGraphRepository.from_env(), singleton=True)
     c.register(PolicyEngine, LocalPolicyEngine(), singleton=True)
     c.register(ApprovalService, SqliteApprovalService(), singleton=True)
     c.register(CheckpointStore, SqliteCheckpointStore(), singleton=True)

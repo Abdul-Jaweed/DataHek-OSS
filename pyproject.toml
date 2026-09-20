@@ -30,6 +30,7 @@ redis = ["redis>=5.0"]
 notebooks = ["jupyter", "nbclient", "ipykernel"]
 sqlite = []
 duckdb = ["duckdb>=1.0"]
+graph = ["neo4j>=5.20"]
 mcp = ["fastmcp>=3.4.5"]
 api = ["fastapi>=0.141.1", "uvicorn>=0.30.0", "pydantic>=2"]
 all = [
@@ -38,6 +39,7 @@ all = [
     "psycopg[binary]>=3",
     "pymysql>=1.1",
     "duckdb>=1.0",
+    "neo4j>=5.20",
     "cryptography>=42",
     "redis>=5.0",
     "fastmcp>=3.4.5",

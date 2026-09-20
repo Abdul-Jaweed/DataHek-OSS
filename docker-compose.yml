@@ -55,6 +55,10 @@ services:
       DATAHEK_METADATA_URL: postgresql://datahek:${POSTGRES_PASSWORD:-datahek}@postgres:5432/datahek
       DATAHEK_ENCRYPTION_KEY: ${DATAHEK_ENCRYPTION_KEY:-}
       DATAHEK_METADATA_REDIS_URL: redis://redis:6379/0
+      DATAHEK_NEO4J_URL: ${DATAHEK_NEO4J_URL:-}
+      DATAHEK_NEO4J_USER: ${DATAHEK_NEO4J_USER:-neo4j}
+      DATAHEK_NEO4J_PASSWORD: ${DATAHEK_NEO4J_PASSWORD:-}
+      DATAHEK_NEO4J_DATABASE: ${DATAHEK_NEO4J_DATABASE:-}
       DATAHEK_APPROVAL_ROW_LIMIT: ${DATAHEK_APPROVAL_ROW_LIMIT:-1000}
       DATAHEK_APPROVAL_SENSITIVE_TABLES: ${DATAHEK_APPROVAL_SENSITIVE_TABLES:-}
       DATAHEK_SCHEDULER_POLL_SECONDS: ${DATAHEK_SCHEDULER_POLL_SECONDS:-30}
@@ -97,6 +101,18 @@ services:
     ports:
       - "5173:5173"
 
+  neo4j:
+    profiles: ["graph"]
+    image: neo4j:5-community
+    container_name: datahek-oss-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/${DATAHEK_NEO4J_PASSWORD:-datahek-graph}
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - datahek-neo4j:/data
+
   mcp:
     build: .
     container_name: datahek-oss-mcp
@@ -116,6 +132,10 @@ services:
       DATAHEK_METADATA_URL: postgresql://datahek:${POSTGRES_PASSWORD:-datahek}@postgres:5432/datahek
       DATAHEK_ENCRYPTION_KEY: ${DATAHEK_ENCRYPTION_KEY:-}
       DATAHEK_METADATA_REDIS_URL: redis://redis:6379/0
+      DATAHEK_NEO4J_URL: ${DATAHEK_NEO4J_URL:-}
+      DATAHEK_NEO4J_USER: ${DATAHEK_NEO4J_USER:-neo4j}
+      DATAHEK_NEO4J_PASSWORD: ${DATAHEK_NEO4J_PASSWORD:-}
+      DATAHEK_NEO4J_DATABASE: ${DATAHEK_NEO4J_DATABASE:-}
       DATAHEK_APPROVAL_ROW_LIMIT: ${DATAHEK_APPROVAL_ROW_LIMIT:-1000}
       DATAHEK_APPROVAL_SENSITIVE_TABLES: ${DATAHEK_APPROVAL_SENSITIVE_TABLES:-}
       DATAHEK_SCHEDULER_POLL_SECONDS: ${DATAHEK_SCHEDULER_POLL_SECONDS:-30}
@@ -133,6 +153,7 @@ volumes:
   datahek-data:
   datahek-pg:
   datahek-redis:
+  datahek-neo4j:
 # Prebuilt images: to run from GHCR instead of building locally, set
 #   image: ghcr.io/abdul-jaweed/datahek-oss:latest
 # on the api and mcp services and run 'docker compose up -d' (no --build).
