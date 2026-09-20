@@ -215,6 +215,15 @@ class TestTypeAwareValidation(unittest.TestCase):
         self._validate(plan, {"events": {"x": "text", "product_id": "text"},
                               "sales": {"id": "character varying"}})
 
+    def test_type_family_public_helper(self):
+        from datahek.engine.plan import type_family
+
+        self.assertEqual(type_family("double precision"), "number")
+        self.assertEqual(type_family("character varying"), "string")
+        self.assertEqual(type_family("timestamp with time zone"), "time")
+        self.assertEqual(type_family("boolean"), "bool")
+        self.assertEqual(type_family("jsonb"), "string")
+
     def test_compile_empty_plan_raises_plan_invalid(self):
         from datahek.engine.compile import compile_sql
 

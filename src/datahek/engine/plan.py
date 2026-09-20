@@ -129,7 +129,7 @@ _DEFAULT_FUNCTIONS = frozenset().union(*_AGGREGATE_FUNCTIONS.values())
 _NUMERIC_HINTS = ("int", "float", "double", "decimal", "numeric", "real", "serial", "money", "uint", "number")
 
 
-def _type_family(type_name: str) -> str:
+def type_family(type_name: str) -> str:
     lowered = (type_name or "").lower()
     if any(h in lowered for h in _NUMERIC_HINTS):
         return "number"
@@ -216,7 +216,7 @@ def validate_plan(
             left_type = _type_of(j.on_left, node.source)
             right_type = _type_of(j.on_right, j.table) if j.on_right else None
             if left_type and right_type:
-                left_family, right_family = _type_family(left_type), _type_family(right_type)
+                left_family, right_family = type_family(left_type), type_family(right_type)
                 if "other" not in (left_family, right_family) and left_family != right_family:
                     raise DatahekError(
                         ErrorCode.PLAN_INVALID,
