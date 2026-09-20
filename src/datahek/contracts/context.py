@@ -428,6 +428,77 @@ class ContextStore(Protocol):
                           context_id: str) -> ContextPackage | None: ...
 
 
+@dataclass(frozen=True)
+class RuntimeContext:
+    question: str
+    purpose: str = "sql.planner"
+
+
+@dataclass(frozen=True)
+class RetrievedContext:
+    context_id: str
+    version: int
+    schema_hash: str
+    scope: str
+    connection_id: str
+    schema: tuple[TableSchema, ...]
+    profiles: dict[str, tuple[ColumnProfile, ...]]
+    topology: TopologyContext | None
+    granularity: GranularityContext | None
+    taxonomy: TaxonomyContext | None
+    ontology: OntologyContext | None
+    governance: GovernanceContext | None
+    metrics: tuple[dict, ...]
+    quality: QualityReport
+    freshness: FreshnessReport
+    stale: bool = False
+
+
+@dataclass(frozen=True)
+class ComposedContext:
+    context_id: str
+    version: int
+    schema_hash: str
+    scope: str
+    connection_id: str
+    purpose: str
+    schema: tuple[TableSchema, ...]
+    profiles: dict[str, tuple[ColumnProfile, ...]]
+    topology: TopologyContext | None
+    granularity: GranularityContext | None
+    taxonomy: TaxonomyContext | None
+    ontology: OntologyContext | None
+    governance: GovernanceContext | None
+    metrics: tuple[dict, ...]
+    dropped: tuple[str, ...] = ()
+    tokens_estimate: int = 0
+    insufficient_reason: str = ""
+
+
+@runtime_checkable
+class ContextRetriever(Protocol):
+    async def retrieve(self, ctx: RequestContext, *, connection_id: str, question: str,
+                       scope: str = "connection",
+                       current_schema_hash: str | None = None) -> RetrievedContext | None: ...
+
+
+@runtime_checkable
+class ContextComposer(Protocol):
+    async def compose(self, ctx: RequestContext, retrieved: RetrievedContext,
+                      runtime: RuntimeContext, *,
+                      budget_tokens: int = 4000) -> ComposedContext: ...
+
+
+@runtime_checkable
+class ContextCompiler(Protocol):
+    async def compile(self, ctx: RequestContext, composed: ComposedContext, *,
+                      quality: QualityReport, freshness: FreshnessReport,
+                      governance: GovernanceContext | None = None,
+                      skills: tuple[SkillRef, ...] = (),
+                      tools: tuple[ToolRef, ...] = (),
+                      providers: tuple[str, ...] = ()) -> ContextPackage: ...
+
+
 @runtime_checkable
 class GraphRepository(Protocol):
     async def create_node(self, ctx: RequestContext, node: GraphNode) -> str: ...
