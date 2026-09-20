@@ -46,6 +46,12 @@ export interface Conversation {
   messages: { role: string; content: string; message_type?: string }[];
 }
 
+export interface ConversationSummary {
+  id: string;
+  title: string | null;
+  updated_at?: string;
+}
+
 export interface Prompt {
   id: string;
   name: string;

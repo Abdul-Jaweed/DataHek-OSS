@@ -120,7 +120,7 @@ class SqliteConversationStore:
                 [*params, limit + 1],
             ).fetchall()
         items = [dict(r) for r in rows[:limit]]
-        next_cursor = rows[limit]["id"] if len(rows) > limit else None
+        next_cursor = items[-1]["id"] if len(rows) > limit and items else None
         return {"items": items, "next_cursor": next_cursor}
 
     # ── async API ──

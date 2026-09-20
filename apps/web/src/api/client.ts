@@ -1,4 +1,4 @@
-import { ApiError, ApiErrorBody, type Connection, type ConnectionCreate, type Conversation, type EvaluationReport, type Health, type Prompt } from './types';
+import { ApiError, ApiErrorBody, type Connection, type ConnectionCreate, type Conversation, type ConversationSummary, type EvaluationReport, type Health, type Prompt } from './types';
 
 const API_KEY_STORAGE = 'datahek-api-key';
 
@@ -51,6 +51,10 @@ export const api = {
 
   createConversation: (title?: string) => request<{ id: string; title: string | null }>('/conversations', { method: 'POST', body: JSON.stringify({ title: title ?? null }) }),
   getConversation: (id: string) => request<Conversation>(`/conversations/${id}`),
+  listConversations: (cursor?: string) =>
+    request<{ items: ConversationSummary[]; next_cursor: string | null }>(
+      `/conversations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+    ),
 
   getLlmSettings: () => request<{ base_url: string; model: string; api_key_set: boolean }>('/settings/llm'),
   saveLlmSettings: (body: { base_url?: string; api_key?: string; model?: string }) =>

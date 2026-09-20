@@ -41,8 +41,10 @@ Both backends implement the same contracts (`ConnectionManager`, `ConversationSt
 - `datahek/defaults/pg.py` owns connection handling and schema initialization for all PG stores
   (`connections`, `conversations`, `messages`, `prompts`, `evaluation_runs`, `approvals`,
   `checkpoints`, plus semantic metrics).
-- Versioned migration tooling is **not yet implemented**; schema changes are applied idempotently by
-  `init_schema()`. Introducing migrations is a tracked follow-up.
+- Versioned migrations are implemented in `defaults/pg.py`: an ordered `_MIGRATIONS` list tracked in
+  the `schema_migrations` table, applied at startup under a PostgreSQL advisory lock. Migration 1 is
+  the idempotent baseline schema, so databases created before migration tracking are adopted in
+  place. Add new schema changes as new numbered migrations — never edit an applied migration.
 - Connection credentials in PostgreSQL can be encrypted at rest via `DATAHEK_ENCRYPTION_KEY`
   (Fernet). See ADR-013.
 

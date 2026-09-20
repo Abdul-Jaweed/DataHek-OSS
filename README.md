@@ -199,7 +199,10 @@ optionally `DATAHEK_METADATA_REDIS_URL`):
 
 - **PostgreSQL** — when `DATAHEK_METADATA_URL` is set, connections,
   conversations, prompt templates, and evaluation runs are stored in
-  PostgreSQL. The schema is created automatically at API startup.
+  PostgreSQL. Versioned schema migrations run automatically at API startup
+  under an advisory lock and are tracked in the `schema_migrations` table
+  (baseline migration 1 is idempotent, so pre-existing databases are adopted
+  in place).
   `DATAHEK_ENCRYPTION_KEY` encrypts stored connection settings at rest
   (any non-empty string); without it, settings are stored as plain JSON.
   This encryption-at-rest guarantee covers PostgreSQL connection settings

@@ -1102,6 +1102,16 @@ def create_app(container=None) -> FastAPI:
         await conversations.create(ctx, conv_id, title=req.title)
         return {"id": conv_id, "title": req.title}
 
+    @app.get("/conversations")
+    async def list_conversations(cursor: str | None = None, limit: int = 50,
+                                 _identity=Depends(_require_auth)):
+        from datahek.contracts.misc import ConversationStore
+
+        conversations: ConversationStore = c.resolve(ConversationStore)
+        ctx = RequestContext(source="api")
+        return await conversations.list_by_project(ctx, ctx.project_id, cursor=cursor,
+                                                   limit=min(limit, 200))
+
     @app.get("/conversations/{conversation_id}")
     async def get_conversation(conversation_id: str, _identity=Depends(_require_auth)):
         from datahek.contracts.misc import ConversationStore

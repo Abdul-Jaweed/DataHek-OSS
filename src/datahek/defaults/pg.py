@@ -12,7 +12,20 @@ def metadata_config() -> MetadataConfig:
     return config_from_env(MetadataConfig, prefix="DATAHEK_METADATA_")
 
 
-_SCHEMA_SQL = """
+_SCHEMA_MIGRATIONS_SQL = """
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version INTEGER PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+"""
+
+_MIGRATION_LOCK_KEY = "datahek.schema_migrations"
+
+# Versioned, forward-only migrations. Version 1 is the baseline schema and is
+# idempotent, so databases created before migration tracking was introduced are
+# upgraded in place on the next startup.
+_MIGRATIONS: list[tuple[int, str]] = [
+    (1, """
 CREATE TABLE IF NOT EXISTS connections (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, provider TEXT NOT NULL,
   org_id TEXT NOT NULL, project_id TEXT NOT NULL,
@@ -55,7 +68,13 @@ CREATE TABLE IF NOT EXISTS checkpoints (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE checkpoints ADD COLUMN IF NOT EXISTS forked_from TEXT;
-"""
+"""),
+]
+
+
+def pending_migrations(applied: set[int]) -> list[int]:
+    """Migration versions not yet applied, in order (pure helper)."""
+    return [version for version, _ in _MIGRATIONS if version not in applied]
 
 
 class PgMetadata:
@@ -67,9 +86,22 @@ class PgMetadata:
         return psycopg.connect(self._url, connect_timeout=10, autocommit=True)
 
     async def init_schema(self) -> None:
+        """Apply pending schema migrations under an advisory lock."""
         conn = await self.connect()
         try:
-            conn.execute(_SCHEMA_SQL)
+            conn.execute("SELECT pg_advisory_lock(hashtext(%s))", (_MIGRATION_LOCK_KEY,))
+            try:
+                conn.execute(_SCHEMA_MIGRATIONS_SQL)
+                applied = {row[0] for row in
+                           conn.execute("SELECT version FROM schema_migrations").fetchall()}
+                statements = dict(_MIGRATIONS)
+                for version in pending_migrations(applied):
+                    with conn.transaction():
+                        conn.execute(statements[version])
+                        conn.execute("INSERT INTO schema_migrations (version) VALUES (%s)",
+                                     (version,))
+            finally:
+                conn.execute("SELECT pg_advisory_unlock(hashtext(%s))", (_MIGRATION_LOCK_KEY,))
         finally:
             conn.close()
 

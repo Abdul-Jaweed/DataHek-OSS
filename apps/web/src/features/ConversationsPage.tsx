@@ -1,30 +1,54 @@
 import { useEffect, useState } from 'react';
 import { ChatCircleText, ClockCounterClockwise } from '@phosphor-icons/react';
 import { api } from '../api/client';
-import type { Conversation } from '../api/types';
+import type { ConversationSummary } from '../api/types';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { EmptyState } from '../components/ui/empty-state';
 import { Skeleton } from '../components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
 
+function fmtUpdated(value?: string): string {
+  return value ? value.slice(0, 19).replace('T', ' ') : '';
+}
+
 export function ConversationsPage() {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.createConversation('probe')
-      .then(() => api.getConversation('__list__'))
+    api
+      .listConversations()
+      .then((page) => {
+        setConversations(page.items);
+        setCursor(page.next_cursor);
+      })
       .catch(() => setConversations([]))
       .finally(() => setLoading(false));
   }, []);
+
+  const loadMore = async () => {
+    if (!cursor) return;
+    setLoadingMore(true);
+    try {
+      const page = await api.listConversations(cursor);
+      setConversations((prev) => [...prev, ...page.items]);
+      setCursor(page.next_cursor);
+    } catch {
+      /* keep the current page on failure */
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-5xl p-6 sm:p-10">
       <div className="mb-6">
         <h1 className="text-[21px] font-extrabold tracking-[-0.02em] text-foreground">Conversations</h1>
-        <p className="text-sm text-muted">Multi-turn sessions persisted in SQLite</p>
+        <p className="text-sm text-muted">Every saved chat session — inspect or continue in Chat</p>
       </div>
 
       {loading && (
@@ -49,9 +73,10 @@ export function ConversationsPage() {
               <ClockCounterClockwise size={20} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-foreground">{c.title ?? 'Untitled'}</p>
+              <p className="truncate text-sm font-semibold text-foreground">{c.title ?? 'Untitled session'}</p>
               <p className="mt-0.5 truncate font-mono text-xs text-muted">
-                {c.messages.length} message{c.messages.length === 1 ? '' : 's'} · {c.id.slice(-8)}
+                {fmtUpdated(c.updated_at) && `${fmtUpdated(c.updated_at)} · `}
+                {c.id.slice(-8)}
               </p>
             </div>
             <Button variant="ghost" size="sm" icon={<ChatCircleText size={16} />} onClick={() => navigate('/chat')}>
@@ -60,6 +85,14 @@ export function ConversationsPage() {
           </Card>
         ))}
       </div>
+
+      {cursor && (
+        <div className="mt-4 flex justify-center">
+          <Button variant="secondary" loading={loadingMore} onClick={loadMore}>
+            Load more
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

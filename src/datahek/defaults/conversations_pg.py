@@ -97,5 +97,5 @@ class PostgresConversationStore:
         finally:
             conn.close()
         items = [{"id": r[0], "title": r[1]} for r in rows[:limit]]
-        next_cursor = rows[limit][0] if len(rows) > limit else None
+        next_cursor = items[-1]["id"] if len(rows) > limit and items else None
         return {"items": items, "next_cursor": next_cursor}
