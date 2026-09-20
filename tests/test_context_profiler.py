@@ -134,6 +134,37 @@ class TestSchemaProfiler(unittest.TestCase):
         self.assertEqual(full.envelope.kind.value, "profile")
         self.assertEqual(full.envelope.provenance.value, "database")
 
+    def test_all_null_column_gets_no_roles(self):
+        class _AllNullStatus(_ProfileProvider):
+            async def compile_and_execute(self, client, plan, ctx):
+                aggregates = plan.nodes[0].aggregates
+                values = {"n": 100}
+                for agg in aggregates:
+                    if agg.alias == "n":
+                        continue
+                    index = int(agg.alias.split("_")[1])
+                    column = plan_table_columns[index]
+                    if column == "status":
+                        values[agg.alias] = 0
+                    elif agg.alias.startswith("nn_"):
+                        values[agg.alias] = 95 if column == "card_number" else 100
+                    elif agg.alias.startswith("dc_"):
+                        values[agg.alias] = self.DISTINCT[column]
+                    else:
+                        values[agg.alias] = None
+                return {"columns": [{"name": a.alias, "type": "Any"} for a in aggregates],
+                        "rows": [tuple(values[a.alias] for a in aggregates)]}
+
+        registry = ProviderRegistry()
+        registry.register(_AllNullStatus())
+        profiler = SchemaProfiler(Engine(registry))
+        profile = asyncio.run(profiler.profile(
+            RequestContext(source="api"), _conn(), _CATALOG))
+        status = {c.name: c for c in profile.tables["orders"]}["status"]
+        self.assertEqual(status.null_ratio, 1.0)
+        self.assertIsNone(status.uniqueness_ratio)
+        self.assertEqual(status.role_candidates, ())
+
     def test_zero_rows_table(self):
         class _Empty(_ProfileProvider):
             async def compile_and_execute(self, client, plan, ctx):

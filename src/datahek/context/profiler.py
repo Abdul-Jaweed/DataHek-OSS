@@ -133,8 +133,11 @@ class SchemaProfiler:
             distinct = int(distinct_raw) if distinct_raw is not None else None
             null_ratio = 1.0 - (non_null / total) if total else 0.0
             uniqueness = (distinct / non_null) if distinct is not None and non_null else None
-            roles, confidence = _role_candidates(family, distinct, uniqueness,
-                                                 null_ratio, sensitive)
+            if non_null:
+                roles, confidence = _role_candidates(family, distinct, uniqueness,
+                                                     null_ratio, sensitive)
+            else:
+                roles, confidence = (), {}
             profiles.append(ColumnProfile(
                 name=name,
                 row_count=total,
