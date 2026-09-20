@@ -51,7 +51,8 @@ class OntologyEnricher:
         self._model = model
 
     async def propose(self, schema: SchemaContext, taxonomy: TaxonomyContext,
-                      *, metrics: tuple[dict, ...] = ()) -> OntologyContext:
+                      *, metrics: tuple[dict, ...] = (),
+                      validated: tuple = ()) -> OntologyContext:
         generated_at = datetime.now(timezone.utc).isoformat()
         schema_lines = []
         for table in schema.tables:
@@ -60,8 +61,14 @@ class OntologyEnricher:
         metric_lines = [
             f"- {m.get('name')} = {m.get('aggregate', '')}({m.get('column', '')}) "
             f"on {m.get('table', '')}" for m in metrics]
+        validated_lines = [
+            f"- concept: {item.name} — {item.description}" if isinstance(item, OntologyConcept)
+            else f"- relationship: {item.subject} {item.kind} {item.object}"
+            for item in validated]
         user = ("Tables:\n" + "\n".join(schema_lines)
-                + ("\n\nMetrics:\n" + "\n".join(metric_lines) if metric_lines else ""))
+                + ("\n\nMetrics:\n" + "\n".join(metric_lines) if metric_lines else "")
+                + ("\n\nAlready validated (treat as fixed, do not re-propose):\n"
+                   + "\n".join(validated_lines) if validated_lines else ""))
         try:
             response = await self._model.complete({
                 "messages": [{"role": "system", "content": _PROMPT},

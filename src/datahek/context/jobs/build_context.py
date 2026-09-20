@@ -21,6 +21,7 @@ from datahek.contracts.context import (
     FreshnessReport,
     LifecycleState,
     QualityReport,
+    ValidationStatus,
 )
 from datahek.kernel.context import RequestContext
 
@@ -130,9 +131,20 @@ class ContextBuildJob:
 
         ontology = None
         if enrichment and self._enricher is not None and taxonomy is not None:
+            prior_artifact = await self._registry_service.active_artifact(
+                ctx, connection_id=connection.id, scope="connection",
+                kind=ArtifactKind.ONTOLOGY)
+            validated_priors: tuple = ()
+            if prior_artifact is not None:
+                validated_priors = tuple(
+                    item for item in (list(prior_artifact.concepts)
+                                      + list(prior_artifact.relationships))
+                    if item.validation in (ValidationStatus.APPROVED,
+                                           ValidationStatus.EDITED))
             ontology, stage = await self._stage(
                 "ENRICH",
-                lambda: self._enricher.propose(schema, taxonomy, metrics=tuple(metrics)))
+                lambda: self._enricher.propose(schema, taxonomy, metrics=tuple(metrics),
+                                               validated=validated_priors))
             if stage.status == "failed":
                 stage = StageResult(stage.name, "degraded", stage.duration_ms, stage.detail)
                 warnings.append(f"enrichment failed (continuing without proposals): "

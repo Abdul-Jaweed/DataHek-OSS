@@ -77,7 +77,11 @@ class _FakeProvider:
 
 
 class _FakeEnricher:
-    async def propose(self, schema, taxonomy, *, metrics=()):
+    def __init__(self):
+        self.validated_seen: tuple = ()
+
+    async def propose(self, schema, taxonomy, *, metrics=(), validated=()):
+        self.validated_seen = tuple(validated)
         from datahek.contracts.context import ArtifactEnvelope, TrustLevel
 
         envelope = ArtifactEnvelope(
@@ -94,7 +98,7 @@ class _FakeEnricher:
 
 
 class _BrokenEnricher:
-    async def propose(self, schema, taxonomy, *, metrics=()):
+    async def propose(self, schema, taxonomy, *, metrics=(), validated=()):
         raise RuntimeError("model down")
 
 
@@ -198,6 +202,54 @@ class TestBuildJob(_Base):
         enrich = next(s for s in result.stages if s.name == "ENRICH")
         self.assertEqual(enrich.status, "degraded")
         self.assertTrue(any("enrich" in warning for warning in result.warnings))
+
+    def test_validated_proposals_are_passed_to_reenrichment(self):
+        from datahek.context.snapshot import build_schema_context
+        from datahek.contracts.context import (
+            ArtifactEnvelope,
+            FreshnessReport,
+            OntologyConcept,
+            OntologyContext,
+            ProvenanceSource,
+            QualityReport,
+            QualityState,
+            TrustLevel,
+        )
+
+        envelope = ArtifactEnvelope(
+            kind=ArtifactKind.ONTOLOGY, schema_version=1,
+            provenance=ProvenanceSource.LLM, trust=TrustLevel.PROPOSED,
+            validation=ValidationStatus.PENDING, confidence=0.6,
+            generated_at="2026-09-21T00:00:00Z")
+        context_envelope = ArtifactEnvelope(
+            kind=ArtifactKind.SCHEMA, schema_version=1,
+            provenance=ProvenanceSource.DATABASE, trust=TrustLevel.STRUCTURAL,
+            validation=ValidationStatus.NOT_REQUIRED, confidence=1.0,
+            generated_at="2026-09-21T00:00:00Z")
+        validated_concept = OntologyConcept(
+            name="Order", kind="entity", maps_to=("orders",), attributes=(),
+            provenance=ProvenanceSource.HUMAN_VALIDATED,
+            validation=ValidationStatus.APPROVED, confidence=0.9)
+        self.call(self.registry_service.publish(
+            self.ctx, connection_id="conn1", scope="connection", schema_hash="seed",
+            artifacts={
+                ArtifactKind.SCHEMA: build_schema_context(_CATALOG, database="appdb"),
+                ArtifactKind.ONTOLOGY: OntologyContext(
+                    envelope=envelope, concepts=(validated_concept,), relationships=()),
+            },
+            quality=QualityReport(state=QualityState.SUFFICIENT, schema_completeness=1.0,
+                                  profiling_coverage=1.0, semantic_confidence=0.5,
+                                  relationship_coverage=0.0, granularity_confidence=0.0,
+                                  human_validation=1.0, freshness_score=1.0,
+                                  governance_coverage=0.0),
+            freshness=FreshnessReport(state="fresh", age_seconds=0,
+                                      schema_hash_matches=True,
+                                      permission_version_matches=True)))
+
+        enricher = _FakeEnricher()
+        self.call(self.job(enricher=enricher).run(self.ctx, _conn(), self.provider,
+                                                  skip_if_current=False))
+        self.assertIn("Order", [item.name for item in enricher.validated_seen])
 
     def test_no_profile_path_still_publishes(self):
         result = self.call(self.job(profiler=False).run(self.ctx, _conn(), self.provider))

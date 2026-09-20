@@ -6,6 +6,7 @@ import unittest
 from datahek.contracts.context import (
     ArtifactEnvelope,
     ArtifactKind,
+    OntologyConcept,
     ProfileContext,
     ProvenanceSource,
     TrustLevel,
@@ -41,8 +42,10 @@ def _taxonomy():
 class _FakeModel:
     def __init__(self, content):
         self._content = content
+        self.requests: list = []
 
     async def complete(self, request):
+        self.requests.append(request)
         if isinstance(self._content, Exception):
             raise self._content
 
@@ -110,6 +113,19 @@ class TestOntologyEnricher(unittest.TestCase):
         context = self._propose(_FakeModel(RuntimeError("model down")))
         self.assertEqual(context.concepts, ())
         self.assertIn("unavailable", context.envelope.warnings[0])
+
+    def test_validated_items_appear_in_prompt(self):
+        model = _FakeModel(_payload())
+        enricher = OntologyEnricher(model)
+        validated = OntologyConcept(
+            name="Order", kind="entity", maps_to=("orders",), attributes=(),
+            provenance=ProvenanceSource.HUMAN_VALIDATED,
+            validation=ValidationStatus.APPROVED, confidence=0.9,
+            description="confirmed order")
+        asyncio.run(enricher.propose(_schema(), _taxonomy(), validated=(validated,)))
+        user_message = model.requests[0]["messages"][-1]["content"]
+        self.assertIn("Already validated", user_message)
+        self.assertIn("Order", user_message)
 
 
 if __name__ == "__main__":
