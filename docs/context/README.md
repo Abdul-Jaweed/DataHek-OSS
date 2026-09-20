@@ -20,7 +20,7 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 | M6 | Graph abstraction + Neo4j adapter | **Complete** |
 | M7 | Schema Knowledge Graph | **Complete** |
 | M8 | Context Registry, persistence, versioning | **Complete** |
-| M9 | Human semantic validation | Pending |
+| M9 | Human semantic validation | **Complete** |
 | M10 | Retrieval, composer, compiler | Pending |
 | M11 | SQL agent integration | Pending |
 | M12 | Testing, observability, security hardening | Pending |
@@ -54,6 +54,8 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
   build-job mapping (M8)
 - [`provenance.md`](provenance.md) — sources, trust levels, validation status, recording points,
   rules (M8)
+- [`validation.md`](validation.md) — reviewable items, decisions, quality effect, re-proposal
+  discipline (M9)
 - [`ADR/`](ADR/) — 13 architecture decision records (subsystem boundary, persistent vs runtime,
   schema KG, Neo4j, graph abstraction, registry, package model, human validation, freshness, change
   detection, storage split, multi-tenancy, LLM vs deterministic)
@@ -96,6 +98,12 @@ with tenant-scoped reads, `ContextRegistryService` publish/version/supersede/inv
 the lifecycle state machine, and the staged `ContextBuildJob` (introspect → profile → topology →
 granularity → taxonomy → enrich → graph → quality → publish) with retries, degradation, and
 skip-if-current. Verified live: InsForge ACTIVE v1 → `current` → rebuild v2 SUPERSEDED.
+
+M9 delivered in code: `context/validation.py` (pending-items listing and approve/edit/reject
+decisions that publish a new `HUMAN_VALIDATED` version), `active_artifact` on the registry
+service, enricher `validated=` priors wired through the build job so reviewed items are never
+re-proposed, and a corrected `human_validation` quality dimension that counts all reviewable
+items (ontology, taxonomy, grain).
 
 Subsystem specifications produced with their implementation milestones:
 `taxonomy.md` / `ontology.md` / `topology.md` / `granularity.md` / `semantic-enrichment.md` (M5),
