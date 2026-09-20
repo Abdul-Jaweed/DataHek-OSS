@@ -19,7 +19,7 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 | M5 | Taxonomy, ontology, topology, granularity | **Complete** |
 | M6 | Graph abstraction + Neo4j adapter | **Complete** |
 | M7 | Schema Knowledge Graph | **Complete** |
-| M8 | Context Registry, persistence, versioning | Pending |
+| M8 | Context Registry, persistence, versioning | **Complete** |
 | M9 | Human semantic validation | Pending |
 | M10 | Retrieval, composer, compiler | Pending |
 | M11 | SQL agent integration | Pending |
@@ -50,6 +50,10 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 - [`neo4j.md`](neo4j.md) — Neo4j deployment, schema, safety rules, and licensing notes (M6)
 - [`knowledge-graph-schema.md`](knowledge-graph-schema.md) — node/edge catalogue, id scheme,
   idempotency/pruning, degraded behavior, example reads (M7)
+- [`lifecycle.md`](lifecycle.md) — states, legal transitions, publish ordering, invalidation,
+  build-job mapping (M8)
+- [`provenance.md`](provenance.md) — sources, trust levels, validation status, recording points,
+  rules (M8)
 - [`ADR/`](ADR/) — 13 architecture decision records (subsystem boundary, persistent vs runtime,
   schema KG, Neo4j, graph abstraction, registry, package model, human validation, freshness, change
   detection, storage split, multi-tenancy, LLM vs deterministic)
@@ -85,6 +89,13 @@ inferred joins), granularity, taxonomy annotations, metrics, and ontology into t
 stable ids, vocabulary-only edges, version/provenance stamps, idempotent rebuilds, per-connection
 pruning, and `DEGRADED` reports when the backend is unavailable. Verified live against Neo4j with
 the InsForge artifacts (48 nodes, 47 edges, idempotent, ~30 ms reads).
+
+M8 delivered in code: typed JSON serialization (artifacts, records, packages), quality and
+freshness evaluators, SQLite and PostgreSQL `ContextRegistry`/`ContextStore` (PG migration v2)
+with tenant-scoped reads, `ContextRegistryService` publish/version/supersede/invalidate through
+the lifecycle state machine, and the staged `ContextBuildJob` (introspect → profile → topology →
+granularity → taxonomy → enrich → graph → quality → publish) with retries, degradation, and
+skip-if-current. Verified live: InsForge ACTIVE v1 → `current` → rebuild v2 SUPERSEDED.
 
 Subsystem specifications produced with their implementation milestones:
 `taxonomy.md` / `ontology.md` / `topology.md` / `granularity.md` / `semantic-enrichment.md` (M5),
