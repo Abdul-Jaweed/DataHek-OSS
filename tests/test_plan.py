@@ -1,4 +1,4 @@
-"""Logical plan model (ADR-003) — versioned, serializable, provider-agnostic."""
+"""Logical plan model (ADR-006) — versioned, serializable, provider-agnostic."""
 import unittest
 
 from datahek.engine.plan import Aggregate, LogicalPlan, ReadNode, WriteNode, validate_plan

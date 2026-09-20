@@ -24,8 +24,7 @@ from datahek.connectors.duckdb import DuckDBProvider
 from datahek.connectors.mysql import MySQLProvider
 from datahek.connectors.postgres import PostgresProvider
 from datahek.connectors.sqlite import SQLiteProvider
-from datahek.contracts.misc import ApprovalService, CheckpointStore
-from datahek.defaults.approvals import LocalApprovalService
+from datahek.contracts.misc import ApprovalService, CheckpointStore, EntitlementService
 from datahek.defaults.approvals_pg import PostgresApprovalService
 from datahek.defaults.approvals_sqlite import SqliteApprovalService
 from datahek.defaults.checkpoints import SqliteCheckpointStore
@@ -98,7 +97,9 @@ def build_default_container() -> Container:
         c.register(ConversationStore, SqliteConversationStore(), singleton=True)
         c.register(PromptStore, SqlitePromptStore(), singleton=True)
         c.register(SemanticStore, SqliteSemanticStore(), singleton=True)
-    c.register(EntitlementProvider, EntitlementProvider(), singleton=True)
+    entitlements = EntitlementProvider()
+    c.register(EntitlementProvider, entitlements, singleton=True)
+    c.register(EntitlementService, entitlements, singleton=True)
     c.register(LocalMetrics, LocalMetrics(), singleton=True)
     c.register(SavedQueryStore, SqliteSavedQueryStore(), singleton=True)
     return c

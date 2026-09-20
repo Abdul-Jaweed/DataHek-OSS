@@ -96,12 +96,12 @@ class TestExtensionRegistry(unittest.TestCase):
 class TestEntitlements(unittest.TestCase):
     def test_static_defaults(self):
         p = EntitlementProvider()
-        self.assertTrue(p.check("mcp.servers", 3))
-        self.assertFalse(p.check("mcp.servers", 4))
-        self.assertTrue(p.check("prompt.templates", 3))
-        self.assertFalse(p.check("prompt.templates", 4))
-        self.assertTrue(p.check("connections", 5))
-        self.assertTrue(p.check("projects", 1))
+        self.assertTrue(p.allows("mcp.servers", 3))
+        self.assertFalse(p.allows("mcp.servers", 4))
+        self.assertTrue(p.allows("prompt.templates", 3))
+        self.assertFalse(p.allows("prompt.templates", 4))
+        self.assertTrue(p.allows("connections", 5))
+        self.assertTrue(p.allows("projects", 1))
 
     def test_resource_limits(self):
         limits = ResourceLimits(mcp_servers=3, prompt_templates=3, connections=5,

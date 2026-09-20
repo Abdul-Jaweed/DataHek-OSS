@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-252%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-475%20passing-brightgreen.svg)](#testing)
 [![Version](https://img.shields.io/badge/version-0.2.0-orange.svg)](https://github.com/Abdul-Jaweed/DataHek-OSS)
 [![MCP](https://img.shields.io/badge/MCP-fastmcp-38BDF8.svg)](#mcp-server)
 
@@ -61,7 +61,7 @@ question → schema discovery → logical plan → validation → guardrails
 
 - **Docker** (recommended) — for the containerized quick start
 - Or Python **3.12+** with a virtual environment — to run from source
-- A ClickHouse, PostgreSQL, MySQL, or SQLite database
+- A ClickHouse, PostgreSQL, MySQL, SQLite, or DuckDB database
 - An OpenAI-compatible LLM endpoint (configured in the web UI, or via environment)
 
 ---
@@ -176,6 +176,10 @@ python -m datahek.mcp_server    # streamable HTTP on :8001
 | `DATAHEK_MASK_MODE` | `redact` | Sensitive-column masking strategy: `redact` · `hash` · `partial` |
 | `DATAHEK_MASK_SALT` | `datahek` | Salt for the `hash` masking strategy |
 | `DATAHEK_MCP_TOOL_TIMEOUT` | `120` | Seconds before an MCP tool call is stopped |
+| `DATAHEK_MCP_TOKENS` | *(empty)* | Per-client MCP bearer tokens (`token,other:scopeA\|scopeB`); empty disables MCP auth |
+| `DATAHEK_MCP_REQUIRED_SCOPES` | *(empty)* | Scopes every MCP token must carry when MCP auth is enabled |
+| `DATAHEK_SCHEDULER_POLL_SECONDS` | `30` | Scheduler tick interval for saved-query schedules |
+| `DATAHEK_DEFAULT_LIMIT` | `10` | Fallback SQL `LIMIT` when the planner does not specify one |
 | `DATAHEK_LOG_FORMAT` | `text` | `json` emits one structured log object per line |
 | `DATAHEK_SUGGESTIONS` | `off` | `on` = propose follow-up questions after each answer |
 | `DATAHEK_MAX_QUESTION_CHARS` | `2000` | Maximum accepted question length |
@@ -230,25 +234,32 @@ compose stack. Leave the URLs unset to keep the zero-dependency SQLite defaults.
 └──────────────┬────────────────┘
                │  RequestContext (tenant-aware)
 ┌──────────────▼────────────────┐
-│  Engine (ADR-003)             │
+│  Data plane (ADR-006)         │
 │  schema discovery → plan      │
 │  → guardrails → audit         │
 │  → execute → mask → explain   │
 └──────────────┬────────────────┘
       ┌────────┼────────┬────────┐
       ▼        ▼        ▼        ▼
- ClickHouse PostgreSQL MySQL  SQLite
+ ClickHouse PostgreSQL MySQL SQLite/DuckDB
  (connectors compile the same LogicalPlan)
+
+Control plane (OSS baseline): connections · conversations · prompts ·
+semantics · approvals · checkpoints · entitlements — all tenant-aware
 ```
+
+The three planes are architectural responsibilities, not repositories: the data plane works with
+data, the control plane manages the platform, and the experience plane is how users and systems
+interact. Enterprise adds implementations in the control plane; it never forks the data plane.
 
 | Component | Path |
 |---|---|
-| Platform kernel | `datahek/kernel/` — config, ids, context, errors, events, DI, entitlements |
-| Contracts (Enterprise extension points) | `datahek/contracts/` — auth, tenancy, policy, audit, secrets, providers, guardrails, models, reasoner, evaluation |
-| Engine | `datahek/engine/` — LogicalPlan, guardrails, executor, masking, planner, reasoner, schema, compile |
-| OSS defaults | `datahek/defaults/` — local auth/policy/tenancy, JSONL audit, SQLite conversations, OpenAI-compatible model, evaluator, dataset runner |
-| Connectors | `datahek/connectors/` — ClickHouse, PostgreSQL, MySQL, SQLite |
-| Surfaces | `datahek/api/` (FastAPI), `datahek/cli.py`, `datahek/mcp_server.py`, `apps/web/` (React web UI) |
+| Platform kernel | `src/datahek/kernel/` — config, ids, context, errors, events, DI, capabilities, entitlements |
+| Contracts (Enterprise extension points) | `src/datahek/contracts/` — auth, tenancy, policy, audit, secrets, providers, guardrails, models, reasoner, evaluation |
+| Engine | `src/datahek/engine/` — LogicalPlan, guardrails, executor, masking, planner, reasoner, schema, compile |
+| OSS defaults | `src/datahek/defaults/` — local auth/policy/tenancy, JSONL audit, SQLite conversations, OpenAI-compatible model, evaluator, dataset runner |
+| Connectors | `src/datahek/connectors/` — ClickHouse, PostgreSQL, MySQL, SQLite, DuckDB |
+| Surfaces | `src/datahek/api/` (FastAPI), `src/datahek/cli.py`, `src/datahek/mcp_server.py`, `apps/web/` (React web UI) |
 
 ---
 
@@ -283,10 +294,10 @@ python notebooks/_build.py      # re-execute all notebooks (CI-style)
 ## 🧪 Testing
 
 ```bash
-python -m unittest discover tests   # 252 tests
+python -m unittest discover tests   # 475 tests
 ```
 
-Coverage: kernel foundations, contracts conformance, logical plans, guardrails, engine (audit/masking/evaluation), schema discovery, planner, reasoner, conversations, auth, entitlements, API (connections, login, LLM settings), CLI, MCP, streaming, web UI, datasets, all four connectors.
+Coverage: kernel foundations, contracts conformance, logical plans, guardrails, engine (audit/masking/evaluation), schema discovery, planner, reasoner, conversations, auth, entitlements, API (connections, login, LLM settings), CLI, MCP, streaming, web UI, datasets, all five connectors.
 
 ---
 
@@ -302,19 +313,22 @@ Coverage: kernel foundations, contracts conformance, logical plans, guardrails, 
 
 All contributions to OSS packages are licensed under Apache-2.0 (DCO).
 
+Architecture decisions are recorded as ADRs in [`docs/adr/`](docs/adr/README.md) before major
+features land — see the index for what is accepted, proposed, and open.
+
 ---
 
 ## 🗺️ Roadmap
 
 - ✅ Platform kernel + contracts · JOINs (AST join model · validation · policy coverage) · vertical slice (ClickHouse) · API/CLI/MCP/web surfaces · streaming · conversations · reasoner · evaluation + datasets · masking · entitlements · connectors (ClickHouse, PostgreSQL, MySQL, SQLite, live-verified) · Docker · local auth + login · connection test/delete · React web UI · runtime LLM settings
-- 🔜 CI workflow · visualization engine · enterprise operations
+- 🔜 CI workflow rollout (file ready in `.github/workflows/`; needs a `workflow`-scoped token) · visualization engine · enterprise operations
 - 🔒 **Enterprise** (separate repo): SSO/SCIM, multi-tenancy, policy engine, centralized audit, admin console — built as implementations of the OSS contracts
 
 ---
 
 ## 📄 License
 
-[Apache-2.0](LICENSE) — © 2026 DataHek. Enterprise modules (separate repository) are proprietary; see the licensing ADR for the open-core boundary.
+[Apache-2.0](LICENSE) — © 2026 DataHek. Enterprise modules (separate repository) are proprietary; see [ADR-002](docs/adr/ADR-002-open-core-licensing.md) for the open-core boundary.
 
 ## 🙏 Acknowledgements
 

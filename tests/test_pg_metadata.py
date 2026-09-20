@@ -3,7 +3,7 @@ import unittest
 
 PG_URL = os.environ.get("DATAHEK_TEST_PG_URL")
 if not PG_URL:
-    PG_URL = "postgresql://datahek:datahek@localhost:55432/datahek"  # docker test container
+    PG_URL = "postgresql://datahek:datahek@localhost:5433/datahek"  # docker compose postgres service
 
 
 @unittest.skipUnless(os.environ.get("DATAHEK_TEST_PG_URL"), "postgres test container not running")

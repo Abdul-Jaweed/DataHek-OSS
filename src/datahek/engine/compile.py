@@ -1,4 +1,4 @@
-"""Shared plan → SQL compiler (ADR-003).
+"""Shared plan → SQL compiler (ADR-006).
 
 The LogicalPlan compiles to provider SQL; dialect differences live in the
 provider, the node model is shared. Supports the common SELECT shape with

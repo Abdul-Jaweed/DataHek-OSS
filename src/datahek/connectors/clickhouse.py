@@ -1,6 +1,6 @@
 """ClickHouse connector — schema introspection, plan → SQL compilation, execution.
 
-The core stays dialect-free; ClickHouse specifics live here (ADR-003).
+The core stays dialect-free; ClickHouse specifics live here (ADR-006).
 """
 import asyncio
 from typing import Any

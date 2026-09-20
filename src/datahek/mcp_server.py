@@ -5,7 +5,7 @@ Tools:
   data.table_schema(connection, table) — columns of a table
   data.ask(question, connection)   — full pipeline: plan → guardrails → execute → explain
 
-Every tool runs the identical RequestContext(source="mcp") pipeline as the
+Every tool runs the identical _mcp_context() pipeline as the
 API/CLI — MCP is never a privileged bypass (05-security-model).
 
 Usage:
@@ -25,11 +25,10 @@ from datahek.engine.reasoner import Reasoner
 from datahek.engine.schema import SchemaService
 from datahek.kernel.errors import DatahekError, ErrorCode
 from datahek.kernel.context import RequestContext
-from datahek.kernel.errors import DatahekError
 
 logger = logging.getLogger(__name__)
 
-SERVER_NAME = "data-vault"
+SERVER_NAME = "datahek"
 
 
 async def run_guarded(coro, timeout_s: float = 120.0):
@@ -86,8 +85,25 @@ def build_mcp_server(container=None) -> FastMCP:
     engine: Engine = c.resolve(Engine)
     reasoner: Reasoner = c.resolve(Reasoner)
 
+    def _mcp_context() -> RequestContext:
+        """Normalized MCP request context — carries token identity when MCP auth is on."""
+        try:
+            from fastmcp.server.dependencies import get_access_token
+
+            token = get_access_token()
+        except Exception:
+            token = None
+        if token is None:
+            return RequestContext(source="mcp")
+        return RequestContext(
+            source="mcp",
+            user_id=getattr(token, "client_id", None) or "mcp-client",
+            authenticated=True,
+            permissions=frozenset(getattr(token, "scopes", None) or ()),
+        )
+
     async def _connection(name_or_id: str):
-        ctx = RequestContext(source="mcp")
+        ctx = _mcp_context()
         conns = await conn_mgr.list_connections(ctx)
         for conn in conns:
             if conn.name == name_or_id or conn.id == name_or_id:
@@ -156,7 +172,7 @@ def build_mcp_server(container=None) -> FastMCP:
     async def data_list_connections() -> str:
         """List available connections (name, provider, database — never credentials)."""
         async def run():
-            ctx = RequestContext(source="mcp")
+            ctx = _mcp_context()
             conns = await conn_mgr.list_connections(ctx)
             if not conns:
                 return "No connections configured"
@@ -169,7 +185,7 @@ def build_mcp_server(container=None) -> FastMCP:
         async def run():
             from datahek.contracts.semantics import SemanticStore
 
-            ctx = RequestContext(source="mcp")
+            ctx = _mcp_context()
             metrics = await c.resolve(SemanticStore).list(ctx)
             if not metrics:
                 return "No metrics defined"
@@ -189,7 +205,7 @@ def build_mcp_server(container=None) -> FastMCP:
             from datahek.contracts.saved import SavedQueryStore
             from datahek.engine.plan import LogicalPlan
 
-            ctx = RequestContext(source="mcp")
+            ctx = _mcp_context()
             saved = await c.resolve(SavedQueryStore).get(ctx, name_or_id)
             if saved is None:
                 found = [q for q in await c.resolve(SavedQueryStore).list_queries(ctx)
@@ -245,7 +261,7 @@ def build_mcp_server(container=None) -> FastMCP:
             from datahek.contracts.misc import CheckpointStore
             from datahek.engine.plan import LogicalPlan
 
-            ctx = RequestContext(source="mcp")
+            ctx = _mcp_context()
             item = await c.resolve(CheckpointStore).get(ctx, checkpoint_id)
             if item is None:
                 return f"Checkpoint '{checkpoint_id}' not found"

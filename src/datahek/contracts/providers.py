@@ -1,4 +1,4 @@
-"""Data provider contract — the engine routes LogicalPlans to providers (ADR-003)."""
+"""Data provider contract — the engine routes LogicalPlans to providers (ADR-005, ADR-006)."""
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable

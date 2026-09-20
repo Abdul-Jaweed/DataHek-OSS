@@ -1,16 +1,13 @@
-"""DataHek OSS API — health, connections, ask, conversations, evaluations, web UI."""
+"""DataHek OSS API — the platform's REST surface (health, connections, ask, conversations, evaluations)."""
 import logging
 import os
 import time
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-
-import logging
 
 from datahek import __version__
 from datahek.contracts.auth import AuthProvider
@@ -143,6 +140,22 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
+def _request_context(req, identity=None) -> RequestContext:
+    """Normalized request context — carries identity when authentication is on (ADR-004)."""
+    if identity is not None and identity.authenticated:
+        return RequestContext(
+            source="api",
+            user_id=identity.user_id,
+            authenticated=True,
+            roles=identity.roles,
+            permissions=identity.permissions,
+            approval_id=req.approval_id,
+            question=req.question,
+        )
+    return RequestContext(source="api", user_id=req.user_id, approval_id=req.approval_id,
+                          question=req.question)
+
+
 async def _conversation_history(conversations, ctx, conversation_id: str | None,
                                 limit: int = 6) -> list[dict] | None:
     """Recent turns for planner context (best-effort; never fails a request)."""
@@ -260,12 +273,11 @@ def create_app(container=None) -> FastAPI:
             raise DatahekError(ErrorCode.NOT_FOUND, f"Prompt '{req.prompt_id}' not found")
         return tpl["content"]
 
-    async def _ask_pipeline(req, c, conn_mgr, registry, planner, engine, reasoner, entitlements):
+    async def _ask_pipeline(req, c, conn_mgr, registry, planner, engine, reasoner, identity=None):
         from datahek.contracts.misc import ConversationStore
         from datahek.contracts.prompts import PromptStore
 
-        ctx = RequestContext(source="api", user_id=req.user_id, approval_id=req.approval_id,
-                                 question=req.question)
+        ctx = _request_context(req, identity)
         conn = await conn_mgr.get_connection(ctx, req.connection_id)
         provider = registry.get(conn.provider)
 
@@ -391,7 +403,7 @@ def create_app(container=None) -> FastAPI:
                 req = AskRequest(question=saved["question"], connection_id=saved["connection_id"])
                 try:
                     answer = await _ask_pipeline(req, c, conn_mgr, registry, planner, engine,
-                                                 reasoner, entitlements)
+                                                 reasoner)
                 except Exception as exc:
                     return {"status": "error", "detail": str(exc)[:200]}
                 if answer.get("clarification"):
@@ -681,7 +693,8 @@ def create_app(container=None) -> FastAPI:
         if saved is None:
             raise DatahekError(ErrorCode.NOT_FOUND, f"Saved query '{query_id}' not found")
         req = AskRequest(question=saved["question"], connection_id=saved["connection_id"])
-        return await _ask_pipeline(req, c, conn_mgr, registry, planner, engine, reasoner, entitlements)
+        return await _ask_pipeline(req, c, conn_mgr, registry, planner, engine, reasoner,
+                                   identity=_identity)
 
     @app.delete("/saved-queries/{query_id}", status_code=204)
     async def delete_saved_query(query_id: str, _identity=Depends(_require_auth)):
@@ -737,7 +750,8 @@ def create_app(container=None) -> FastAPI:
 
         req = AskRequest(question=item["question"], connection_id=item["connection_id"],
                          conversation_id=item.get("conversation_id"))
-        answer = await _ask_pipeline(req, c, conn_mgr, registry, planner, engine, reasoner, entitlements)
+        answer = await _ask_pipeline(req, c, conn_mgr, registry, planner, engine, reasoner,
+                                     identity=_identity)
         # re-save the newest checkpoint with lineage (best-effort)
         try:
             newest = (await store.list(ctx, limit=1)) or [None]
@@ -845,12 +859,26 @@ def create_app(container=None) -> FastAPI:
     @app.post("/approvals/{approval_id}/decide")
     async def decide_approval(approval_id: str, req: ApprovalDecisionRequest,
                               _identity=Depends(_require_auth)):
+        from datahek.contracts.audit import AuditEvent, AuditSink
         from datahek.contracts.misc import ApprovalService
 
         service = c.resolve(ApprovalService)
         mapped = "approved" if req.decision == "approve" else "rejected"
         await service.decide(approval_id, mapped, req.actor)
-        return {"approval_id": approval_id, "status": await service.status(approval_id)}
+        status = await service.status(approval_id)
+        if c.has(AuditSink):
+            try:
+                await c.resolve(AuditSink).record(AuditEvent(
+                    event_type="approval.decision",
+                    actor=req.actor,
+                    action=mapped,
+                    resource_ref=approval_id,
+                    decision=mapped.upper(),
+                    payload={"status": status},
+                ))
+            except Exception as exc:
+                logger.warning("Approval decision audit failed: %s", exc)
+        return {"approval_id": approval_id, "status": status}
 
     @app.get("/checkpoints")
     async def list_checkpoints(limit: int = 20, _identity=Depends(_require_auth)):
@@ -908,8 +936,8 @@ def create_app(container=None) -> FastAPI:
 
     @app.post("/ask")
     async def ask(req: AskRequest, _identity=Depends(_require_auth)):
-        answer = await _ask_pipeline(req, c, conn_mgr, registry, planner, engine, reasoner, entitlements)
-        return answer
+        return await _ask_pipeline(req, c, conn_mgr, registry, planner, engine, reasoner,
+                                   identity=_identity)
 
     @app.post("/ask/stream")
     async def ask_stream(req: AskRequest, _identity=Depends(_require_auth)):
@@ -917,8 +945,7 @@ def create_app(container=None) -> FastAPI:
         from fastapi.responses import StreamingResponse
         import json as _json
 
-        ctx = RequestContext(source="api", user_id=req.user_id, approval_id=req.approval_id,
-                                 question=req.question)
+        ctx = _request_context(req, _identity)
         conn = await conn_mgr.get_connection(ctx, req.connection_id)
         provider = registry.get(conn.provider)
 

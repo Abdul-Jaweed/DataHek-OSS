@@ -145,8 +145,6 @@ class Engine:
         approved = False
         if decision.decision == "REQUIRE_APPROVAL":
             if self.approvals is not None and ctx.approval_id:
-                from datahek.defaults.approvals import LocalApprovalService  # noqa: F401 (documents expected impl surface)
-
                 status = await self.approvals.status(ctx.approval_id)
                 if status == "approved":
                     consume = getattr(self.approvals, "consume", None)

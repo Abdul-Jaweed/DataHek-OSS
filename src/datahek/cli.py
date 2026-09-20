@@ -14,7 +14,6 @@ from datahek.engine.planner import Planner
 from datahek.kernel.errors import DatahekError, ErrorCode
 from datahek.contracts.connections import Connection, ConnectionManager
 from datahek.kernel.context import RequestContext
-from datahek.kernel.errors import DatahekError
 
 
 def build_cli_container():

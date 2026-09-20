@@ -1,16 +1,17 @@
-"""Logical plan model (ADR-003) — versioned, serializable, provider-agnostic.
+"""Logical plan model (ADR-006) — versioned, serializable, provider-agnostic.
 
 The agent emits LogicalPlans; providers compile them. Guardrails operate on
 the plan. Write nodes are structurally separated — read-only is enforced by
 construction.
 """
+import os
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from datahek.kernel.errors import DatahekError, ErrorCode
 
 PLAN_VERSION = 1
-DEFAULT_LIMIT = 10
+DEFAULT_LIMIT = int(os.environ.get("DATAHEK_DEFAULT_LIMIT", "10"))
 
 
 @dataclass(frozen=True)

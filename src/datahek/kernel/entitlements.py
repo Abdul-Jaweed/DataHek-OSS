@@ -1,5 +1,11 @@
-"""Entitlements — limits are defaults, never hardcoded restrictions."""
+"""Entitlements — limits are defaults, never hardcoded restrictions.
+
+Implements the EntitlementService contract: commercial limits flow through
+this layer, never through scattered feature checks.
+"""
 from dataclasses import dataclass, fields
+
+from datahek.kernel.context import RequestContext
 
 _OSS_LIMITS: dict[str, int] = {
     "mcp.servers": 3,
@@ -43,8 +49,18 @@ class EntitlementProvider:
     def all_limits(self) -> dict[str, int]:
         return dict(self._limits)
 
-    def check(self, capability: str, current: int) -> bool:
+    def allows(self, capability: str, current: int) -> bool:
+        """Creation-time check: is the current count within the configured limit?"""
         limit = self._limits.get(capability)
         if limit is None:
             return True
         return current <= limit
+
+    async def check(self, ctx: RequestContext, capability: str) -> bool:
+        """Contract: the capability is available under this provider's edition."""
+        return True
+
+    async def limits(self, ctx: RequestContext, resource: str) -> dict[str, int]:
+        """Contract: configured limits for a resource family."""
+        prefix = f"{resource}."
+        return {k: v for k, v in self._limits.items() if k == resource or k.startswith(prefix)}
