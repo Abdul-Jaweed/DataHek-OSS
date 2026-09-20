@@ -296,7 +296,7 @@ python notebooks/_build.py      # re-execute all notebooks (CI-style)
 
 ## 🐳 Prebuilt images (GHCR) & docs site
 
-- **Container images**: `.github/workflows/docker.yml` (kept locally — pushing workflow files needs a `workflow`-scoped token) builds and publishes `ghcr.io/<owner>/datahek-oss` on version tags. To run from a prebuilt image, set `image: ghcr.io/abdul-jaweed/datahek-oss:latest` on the `api`/`mcp` services and `docker compose up -d` (no `--build`).
+- **Container images**: `.github/workflows/ci.yml` (kept locally — pushing workflow files needs a `workflow`-scoped token) runs the Python suite and the web build on every push/PR, and on version tags publishes `ghcr.io/<owner>/datahek-oss` (api/mcp) and `ghcr.io/<owner>/datahek-oss-web`. To run from prebuilt images, set `image: ghcr.io/abdul-jaweed/datahek-oss:latest` on the `api`/`mcp` services and `image: ghcr.io/abdul-jaweed/datahek-oss-web:latest` on `web`, then `docker compose up -d` (no `--build`).
 - **Docs site**: `docs-site/index.html` — deploy via Pages (branch `main`, folder `/docs-site`) or serve with `python -m http.server 8080 --directory docs-site`.
 
 ## 🧪 Testing
@@ -331,7 +331,7 @@ features land — see the index for what is accepted, proposed, and open.
 ## 🗺️ Roadmap
 
 - ✅ Platform kernel + contracts · JOINs (AST join model · validation · policy coverage) · vertical slice (ClickHouse) · API/CLI/MCP/web surfaces · streaming · conversations · reasoner · evaluation + datasets · masking · entitlements · connectors (ClickHouse, PostgreSQL, MySQL, SQLite, live-verified) · Docker · local auth + login · connection test/delete · React web UI · runtime LLM settings
-- 🔜 CI workflow rollout (file ready in `.github/workflows/`; needs a `workflow`-scoped token) · visualization engine · enterprise operations
+- 🔜 CI landing (workflow ready at `.github/workflows/ci.yml`; needs a repo token with `workflow` scope) · visualization engine · enterprise operations
 - 🔒 **Enterprise** (separate repo): SSO/SCIM, multi-tenancy, policy engine, centralized audit, admin console — built as implementations of the OSS contracts
 
 ---
