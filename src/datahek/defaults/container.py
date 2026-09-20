@@ -24,9 +24,18 @@ from datahek.connectors.duckdb import DuckDBProvider
 from datahek.connectors.mysql import MySQLProvider
 from datahek.connectors.postgres import PostgresProvider
 from datahek.connectors.sqlite import SQLiteProvider
-from datahek.contracts.context import ContextRegistry, ContextStore
+from datahek.contracts.context import (
+    ContextCompiler,
+    ContextComposer,
+    ContextRegistry,
+    ContextRetriever,
+    ContextStore,
+)
 from datahek.contracts.misc import ApprovalService, CheckpointStore, EntitlementService
 from datahek.context.registry import ContextRegistryService
+from datahek.context.compiler import PackageContextCompiler
+from datahek.context.composer import BudgetContextComposer
+from datahek.context.retriever import ContextRetrieverService
 from datahek.defaults.context_store import SqliteContextRegistry, SqliteContextStore
 from datahek.defaults.context_store_pg import PostgresContextRegistry, PostgresContextStore
 from datahek.defaults.approvals_pg import PostgresApprovalService
@@ -113,6 +122,12 @@ def build_default_container() -> Container:
     c.register(ContextRegistryService,
                ContextRegistryService(c.resolve(ContextRegistry), c.resolve(ContextStore)),
                singleton=True)
+    c.register(ContextRetriever,
+               ContextRetrieverService(c.resolve(ContextRegistry), c.resolve(ContextStore),
+                                       semantic_store=c.resolve(SemanticStore)),
+               singleton=True)
+    c.register(ContextComposer, BudgetContextComposer(), singleton=True)
+    c.register(ContextCompiler, PackageContextCompiler(), singleton=True)
     entitlements = EntitlementProvider()
     c.register(EntitlementProvider, entitlements, singleton=True)
     c.register(EntitlementService, entitlements, singleton=True)
