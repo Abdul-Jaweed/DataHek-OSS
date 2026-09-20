@@ -1,5 +1,23 @@
+import os
 import unittest
 import uuid
+
+
+class TestModelConfig(unittest.TestCase):
+    def test_default_timeout_supports_slow_planning_calls(self):
+        from datahek.defaults.models import ModelConfig
+
+        self.assertGreaterEqual(ModelConfig().timeout_s, 120.0)
+
+    def test_timeout_is_env_overridable(self):
+        from datahek.kernel.config import config_from_env
+        from datahek.defaults.models import ModelConfig
+
+        os.environ["LLM_TIMEOUT_S"] = "45"
+        try:
+            self.assertEqual(config_from_env(ModelConfig, prefix="LLM_").timeout_s, 45.0)
+        finally:
+            os.environ.pop("LLM_TIMEOUT_S", None)
 
 
 class TestSessionHeader(unittest.TestCase):

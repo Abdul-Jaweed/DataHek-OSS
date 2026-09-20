@@ -23,7 +23,7 @@ class ModelConfig(Config):
     base_url: str = "https://opencode.ai/zen/go/v1"
     api_key: str = ""
     model: str = "mimo-v2.5"
-    timeout_s: float = 60.0
+    timeout_s: float = 120.0
 
 
 class OpenAICompatibleModelProvider(ModelProvider):

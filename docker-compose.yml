@@ -49,6 +49,7 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-https://opencode.ai/zen/go/v1}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-mimo-v2.5}
+      LLM_TIMEOUT_S: ${LLM_TIMEOUT_S:-120}
       DATAHEK_DB_PATH: /app/data/datahek.db
       DATAHEK_AUDIT_PATH: /app/data/datahek-audit.jsonl
       DATAHEK_METADATA_URL: postgresql://datahek:${POSTGRES_PASSWORD:-datahek}@postgres:5432/datahek
@@ -109,6 +110,7 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-https://opencode.ai/zen/go/v1}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-mimo-v2.5}
+      LLM_TIMEOUT_S: ${LLM_TIMEOUT_S:-120}
       DATAHEK_DB_PATH: /app/data/datahek.db
       DATAHEK_AUDIT_PATH: /app/data/datahek-audit.jsonl
       DATAHEK_METADATA_URL: postgresql://datahek:${POSTGRES_PASSWORD:-datahek}@postgres:5432/datahek

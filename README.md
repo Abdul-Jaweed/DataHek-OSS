@@ -168,6 +168,7 @@ python -m datahek.mcp_server    # streamable HTTP on :8001
 | Variable | Default | Purpose |
 |---|---|---|
 | `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | env or UI Settings | OpenAI-compatible endpoint (the web UI form overrides at runtime) |
+| `LLM_TIMEOUT_S` | `120` | Per-request model timeout in seconds (raise for slow gateways) |
 | `DATAHEK_DB_PATH` | `datahek.db` | SQLite conversation store |
 | `DATAHEK_AUDIT_PATH` | `datahek-audit.jsonl` | Audit trail (JSONL) |
 | `DATAHEK_AUTH_MODE` | `none` | `none` or `local` (enforce API keys) |
