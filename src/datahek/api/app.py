@@ -122,6 +122,26 @@ class PromptRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=4_000)
 
 
+class ContextBuildRequest(BaseModel):
+    enrichment: bool = False
+
+
+class ContextPreviewRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=10_000)
+
+
+class ContextDecisionRequest(BaseModel):
+    kind: str = Field(..., min_length=1, max_length=32)
+    index: int = Field(..., ge=0)
+    action: str = Field(..., pattern="^(approve|edit|reject)$")
+    section: str = Field("", max_length=32)
+    patch: dict[str, Any] | None = None
+
+
+class ContextValidateRequest(BaseModel):
+    decisions: list[ContextDecisionRequest] = Field(..., min_length=1)
+
+
 def _json_safe(value: Any) -> Any:
     """Coerce driver values (datetime, date, Decimal, bytes) to JSON-safe types."""
     import datetime as _dt
@@ -553,6 +573,128 @@ def create_app(container=None) -> FastAPI:
             "entitlements": entitlements.all_limits(),
             "providers": registry.ids(),
         }
+
+    @app.get("/connections/{connection_id}/context")
+    async def get_connection_context(connection_id: str, _identity=Depends(_require_auth)):
+        from datahek.context.registry import ContextRegistryService
+        from datahek.context.serialization import record_to_dict
+
+        record = await c.resolve(ContextRegistryService).active(
+            RequestContext(source="api"), connection_id=connection_id, scope="connection")
+        return {"context": record_to_dict(record) if record is not None else None}
+
+    @app.get("/connections/{connection_id}/context/versions")
+    async def get_connection_context_versions(connection_id: str, limit: int = 20,
+                                              _identity=Depends(_require_auth)):
+        from datahek.contracts.context import ContextRegistry
+        from datahek.context.serialization import record_to_dict
+
+        records = await c.resolve(ContextRegistry).versions(
+            RequestContext(source="api"), connection_id=connection_id, scope="connection")
+        newest = sorted(records, key=lambda record: record.version, reverse=True)
+        return {"versions": [record_to_dict(record)
+                             for record in newest[:min(max(limit, 1), 100)]]}
+
+    @app.get("/connections/{connection_id}/context/pending")
+    async def get_connection_context_pending(connection_id: str,
+                                             _identity=Depends(_require_auth)):
+        from dataclasses import asdict
+
+        from datahek.context.validation import ContextValidationService
+
+        items = await c.resolve(ContextValidationService).list_pending(
+            RequestContext(source="api"), connection_id=connection_id)
+        return {"items": [asdict(item) for item in items]}
+
+    @app.post("/connections/{connection_id}/context/validate")
+    async def validate_connection_context(connection_id: str, req: ContextValidateRequest,
+                                          _identity=Depends(_require_auth)):
+        from datahek.contracts.context import ArtifactKind
+        from datahek.context.serialization import record_to_dict
+        from datahek.context.validation import ContextValidationService, ValidationDecision
+
+        decisions = []
+        for item in req.decisions:
+            try:
+                kind = ArtifactKind(item.kind)
+            except ValueError as exc:
+                raise DatahekError(
+                    ErrorCode.VALIDATION,
+                    f"Unknown artifact kind '{item.kind}'") from exc
+            decisions.append(ValidationDecision(kind, item.index, item.action,
+                                                section=item.section, patch=item.patch))
+        record = await c.resolve(ContextValidationService).apply(
+            RequestContext(source="api"), connection_id=connection_id,
+            decisions=tuple(decisions))
+        await _audit_event(c, "context.validate", "validate", actor=_actor(_identity),
+                           resource_ref=record.context_id,
+                           payload={"connection": connection_id,
+                                    "decisions": len(decisions)})
+        return {"context": record_to_dict(record)}
+
+    @app.post("/connections/{connection_id}/context/preview")
+    async def preview_connection_context(connection_id: str, req: ContextPreviewRequest,
+                                         _identity=Depends(_require_auth)):
+        from datahek.contracts.context import (
+            ContextCompiler,
+            ContextComposer,
+            ContextRetriever,
+            RuntimeContext,
+        )
+
+        ctx = RequestContext(source="api")
+        retrieved = await c.resolve(ContextRetriever).retrieve(
+            ctx, connection_id=connection_id, question=req.question)
+        if retrieved is None:
+            raise DatahekError(ErrorCode.NOT_FOUND,
+                               f"No active context for connection '{connection_id}'")
+        composed = await c.resolve(ContextComposer).compose(
+            ctx, retrieved, RuntimeContext(question=req.question))
+        package = await c.resolve(ContextCompiler).compile(
+            ctx, composed, quality=retrieved.quality, freshness=retrieved.freshness)
+        return {
+            "context_id": package.context_id,
+            "version": package.version,
+            "schema_hash": package.schema_hash,
+            "stale": retrieved.stale,
+            "tables": [{"name": table.name, "columns": len(table.columns)}
+                       for table in package.schema],
+            "metrics": [str(metric.get("name", "")) for metric in package.semantics.metrics],
+            "tokens": package.budget.tokens_estimate,
+            "dropped": list(package.degraded),
+            "insufficient": package.quality.details.get("insufficient_reason", ""),
+            "trust": package.trust.value,
+            "quality": package.quality.state.value,
+        }
+
+    @app.post("/connections/{connection_id}/context/build")
+    async def build_connection_context(connection_id: str, req: ContextBuildRequest,
+                                       _identity=Depends(_require_auth)):
+        from dataclasses import asdict
+
+        from datahek.context.jobs.build_context import ContextBuildJob
+
+        ctx = RequestContext(source="api")
+        connection = await conn_mgr.get_connection(ctx, connection_id)
+        provider = registry.get(connection.provider)
+        result = await c.resolve(ContextBuildJob).run(
+            ctx, connection, provider, enrichment=req.enrichment)
+        await _audit_event(c, "context.build", "build", actor=_actor(_identity),
+                           resource_ref=result.context_id or connection_id,
+                           payload={"connection": connection_id, "state": result.state,
+                                    "enrichment": req.enrichment})
+        return asdict(result)
+
+    @app.get("/contexts/{context_id}")
+    async def get_context_record(context_id: str, _identity=Depends(_require_auth)):
+        from datahek.contracts.context import ContextRegistry
+        from datahek.context.serialization import record_to_dict
+
+        record = await c.resolve(ContextRegistry).get(RequestContext(source="api"), context_id)
+        if record is None:
+            raise DatahekError(ErrorCode.NOT_FOUND, f"Context '{context_id}' not found")
+        return {"context": record_to_dict(record),
+                "artifact_kinds": [kind.value for kind in record.artifact_kinds]}
 
     @app.post("/auth/login")
     async def auth_login(req: LoginRequest, _identity=None):

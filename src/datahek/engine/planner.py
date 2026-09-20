@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass, field
 
 from datahek.contracts.connections import Connection
+from datahek.contracts.context import ContextPackage, QualityState, RuntimeContext
 from datahek.contracts.models import ModelProvider, ModelProviderError, ModelRequest
 from datahek.contracts.providers import DataProvider
 from datahek.contracts.secrets import SecretsProvider
@@ -84,6 +85,33 @@ def build_schema_summary(catalog: SchemaCatalog) -> str:
             cols += f", … (+{hidden} more columns)"
         rows = f" (~{t.row_count} rows)" if t.row_count is not None else ""
         lines.append(f"- {t.name}{rows}: {cols}")
+    return "\n".join(lines) or "(no tables found)"
+
+
+def build_context_summary(package: ContextPackage) -> str:
+    """Render the compiled context package as the planner's schema block."""
+    lines = []
+    for table in package.schema[:MAX_TABLES_IN_PROMPT]:
+        visible = table.columns[:MAX_COLUMNS_IN_PROMPT]
+        cols = ", ".join(f"{c.name}:{c.data_type}" for c in visible)
+        hidden = len(table.columns) - len(visible)
+        if hidden > 0:
+            cols += f", … (+{hidden} more columns)"
+        lines.append(f"- {table.name}: {cols}")
+    if len(package.schema) > MAX_TABLES_IN_PROMPT:
+        lines.append(f"… (+{len(package.schema) - MAX_TABLES_IN_PROMPT} more tables)")
+    grains = [grain.statement for grain in package.granularity if grain.statement]
+    if grains:
+        lines.append("\nGrain (one row means):")
+        lines.extend(f"- {statement}" for statement in grains)
+    joins = [f"{edge.left} = {edge.right} ({edge.kind}, {edge.cardinality})"
+             for edge in package.topology]
+    if joins:
+        lines.append("\nKnown join relationships:")
+        lines.extend(f"- {join}" for join in joins)
+    restricted = list(package.governance.restricted_columns)
+    if restricted:
+        lines.append(f"\nRestricted columns (never select): {', '.join(restricted)}")
     return "\n".join(lines) or "(no tables found)"
 
 
@@ -201,13 +229,35 @@ def _format_history(history: list[dict] | None, max_chars: int = 2000,
 class Planner:
     def __init__(self, model: ModelProvider, schema_service: SchemaService,
                  max_attempts: int = MAX_PLAN_ATTEMPTS, skills=None,
-                 secrets: SecretsProvider | None = None, metrics=None):
+                 secrets: SecretsProvider | None = None, metrics=None,
+                 retriever=None, composer=None, compiler=None):
         self._model = model
         self._schema_service = schema_service
         self._max_attempts = max_attempts
         self._skills = skills
         self._secrets = secrets
         self._metrics = metrics
+        self._context_retriever = retriever
+        self._context_composer = composer
+        self._context_compiler = compiler
+
+    async def _compile_context(self, question: str, ctx: RequestContext,
+                               connection: Connection) -> ContextPackage | None:
+        if (self._context_retriever is None or self._context_composer is None
+                or self._context_compiler is None):
+            return None
+        try:
+            retrieved = await self._context_retriever.retrieve(
+                ctx, connection_id=connection.id, question=question)
+            if retrieved is None:
+                return None
+            composed = await self._context_composer.compose(
+                ctx, retrieved, RuntimeContext(question=question))
+            return await self._context_compiler.compile(
+                ctx, composed, quality=retrieved.quality, freshness=retrieved.freshness)
+        except Exception as exc:
+            logger.warning("Context layer unavailable, using live schema: %s", exc)
+            return None
 
     async def plan(
         self,
@@ -228,22 +278,42 @@ class Planner:
 
         if self._secrets is not None:
             connection = await _resolve_secrets(connection, self._secrets)
-        catalog = await self._schema_service.get_catalog(ctx, connection, provider)
-        tables = self._schema_service.tables(catalog)
-        columns = self._schema_service.columns(catalog)
-        schema_summary = build_schema_summary(catalog)
+
+        catalog = None
+        package = await self._compile_context(question, ctx, connection)
+        if package is not None and package.quality.state is QualityState.INSUFFICIENT:
+            return PlanResult(
+                plan=None,
+                clarification=("The available context for this connection is insufficient to "
+                               "plan safely. Please review the connection context or rephrase."),
+                confidence=0.2)
+        if package is not None:
+            tables = {table.name for table in package.schema}
+            columns = {table.name: {c.name for c in table.columns} for table in package.schema}
+            column_types = {table.name: {c.name: c.data_type for c in table.columns}
+                            for table in package.schema}
+            schema_summary = build_context_summary(package)
+            metric_block = _format_metrics(list(package.semantics.metrics), question) \
+                if package.semantics.metrics else ""
+        else:
+            catalog = await self._schema_service.get_catalog(ctx, connection, provider)
+            tables = self._schema_service.tables(catalog)
+            columns = self._schema_service.columns(catalog)
+            column_types = self._schema_service.column_types(catalog)
+            schema_summary = build_schema_summary(catalog)
+            metric_block = ""
+            if self._metrics is not None:
+                try:
+                    metric_block = _format_metrics(await self._metrics.list(ctx), question)
+                except Exception as exc:
+                    logger.warning("Metric catalog unavailable: %s", exc)
 
         skill_prompt = ""
         if self._skills is not None:
             from datahek.engine.skills import build_skill_prompt
+            if catalog is None:
+                catalog = await self._schema_service.get_catalog(ctx, connection, provider)
             skill_prompt = build_skill_prompt(self._skills.match(question, catalog))
-
-        metric_block = ""
-        if self._metrics is not None:
-            try:
-                metric_block = _format_metrics(await self._metrics.list(ctx), question)
-            except Exception as exc:
-                logger.warning("Metric catalog unavailable: %s", exc)
 
         feedback = None
         for attempt in range(self._max_attempts):
@@ -264,7 +334,7 @@ class Planner:
             try:
                 parsed = _normalize_join_refs(parsed, columns)
                 validate_plan(parsed, tables, columns, dialect=_dialect_of(provider),
-                              column_types=self._schema_service.column_types(catalog))
+                              column_types=column_types)
                 sources: list[str] = []
                 for n in parsed.nodes:
                     if hasattr(n, "source"):

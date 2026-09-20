@@ -35,7 +35,12 @@ from datahek.contracts.misc import ApprovalService, CheckpointStore, Entitlement
 from datahek.context.registry import ContextRegistryService
 from datahek.context.compiler import PackageContextCompiler
 from datahek.context.composer import BudgetContextComposer
+from datahek.context.enrichment import OntologyEnricher
+from datahek.context.graph.builder import SchemaGraphBuilder
+from datahek.context.jobs.build_context import ContextBuildJob
+from datahek.context.profiler import SchemaProfiler
 from datahek.context.retriever import ContextRetrieverService
+from datahek.context.validation import ContextValidationService
 from datahek.defaults.context_store import SqliteContextRegistry, SqliteContextStore
 from datahek.defaults.context_store_pg import PostgresContextRegistry, PostgresContextStore
 from datahek.defaults.approvals_pg import PostgresApprovalService
@@ -128,6 +133,10 @@ def build_default_container() -> Container:
                singleton=True)
     c.register(ContextComposer, BudgetContextComposer(), singleton=True)
     c.register(ContextCompiler, PackageContextCompiler(), singleton=True)
+    c.register(ContextValidationService,
+               ContextValidationService(c.resolve(ContextRegistry), c.resolve(ContextStore),
+                                        c.resolve(ContextRegistryService)),
+               singleton=True)
     entitlements = EntitlementProvider()
     c.register(EntitlementProvider, entitlements, singleton=True)
     c.register(EntitlementService, entitlements, singleton=True)
@@ -173,6 +182,9 @@ def build_app_container() -> Container:
         schema_service=c.resolve(SchemaService),
         secrets=c.resolve(SecretsProvider),
         metrics=c.resolve(SemanticStore),
+        retriever=c.resolve(ContextRetriever),
+        composer=c.resolve(ContextComposer),
+        compiler=c.resolve(ContextCompiler),
     ), singleton=True)
     c.register(Reasoner, lambda: ModelReasoner(model=c.resolve(ModelProvider)), singleton=True)
     c.register(Verifier, lambda: ModelVerifier(c.resolve(ModelProvider)), singleton=True)
@@ -193,5 +205,14 @@ def build_app_container() -> Container:
         policy=c.resolve(PolicyEngine),
         approvals=c.resolve(ApprovalService),
         rate_limit=int(os.environ.get("DATAHEK_RATE_LIMIT_PER_MINUTE", "120")),
+    ), singleton=True)
+    c.register(ContextBuildJob, lambda: ContextBuildJob(
+        schema_service=c.resolve(SchemaService),
+        registry_service=c.resolve(ContextRegistryService),
+        profiler=SchemaProfiler(c.resolve(Engine)),
+        enricher=OntologyEnricher(c.resolve(ModelProvider)),
+        graph_builder=(SchemaGraphBuilder(c.resolve(GraphRepository))
+                       if c.has(GraphRepository) else None),
+        domain=os.environ.get("DATAHEK_CONTEXT_DOMAIN", "General"),
     ), singleton=True)
     return c
