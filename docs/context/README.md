@@ -13,8 +13,8 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 | Milestone | Deliverable | State |
 |---|---|---|
 | M1 | Repository analysis + research | **Complete** |
-| M2 | Architecture, context model, SRD, ADRs, diagrams | **Complete — in review** |
-| M3 | Context domain model + contracts | Pending |
+| M2 | Architecture, context model, SRD, ADRs, diagrams | **Complete** |
+| M3 | Context domain model + contracts | **Complete** |
 | M4 | Schema discovery + profiling | Pending |
 | M5 | Taxonomy, ontology, topology, granularity | Pending |
 | M6 | Graph abstraction + Neo4j adapter | Pending |
@@ -41,6 +41,12 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 - [`ADR/`](ADR/) — 13 architecture decision records (subsystem boundary, persistent vs runtime,
   schema KG, Neo4j, graph abstraction, registry, package model, human validation, freshness, change
   detection, storage split, multi-tenancy, LLM vs deterministic)
+
+M3 delivered in code: `contracts/context.py` (all enums, artifact schemas, `ContextPackage`,
+`ContextRecord`, graph models, and the `ContextRegistry`/`ContextStore`/`GraphRepository`
+protocols), `context/lifecycle.py` (legal-transition state machine), `context/hashing.py`
+(canonical SHA-256 schema hashing), `context/provenance.py` (trust ordering and authority rules) —
+with 25 tests across the four modules.
 
 Subsystem specifications produced with their implementation milestones: `schema-profiling.md` (M4),
 `taxonomy.md` / `ontology.md` / `topology.md` / `granularity.md` / `semantic-enrichment.md` (M5),
