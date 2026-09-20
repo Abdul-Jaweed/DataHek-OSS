@@ -21,7 +21,7 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 | M7 | Schema Knowledge Graph | **Complete** |
 | M8 | Context Registry, persistence, versioning | **Complete** |
 | M9 | Human semantic validation | **Complete** |
-| M10 | Retrieval, composer, compiler | Pending |
+| M10 | Retrieval, composer, compiler | **Complete** |
 | M11 | SQL agent integration | Pending |
 | M12 | Testing, observability, security hardening | Pending |
 
@@ -56,6 +56,10 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
   rules (M8)
 - [`validation.md`](validation.md) — reviewable items, decisions, quality effect, re-proposal
   discipline (M9)
+- [`context-retrieval.md`](context-retrieval.md) — deterministic bounded selection, caps, stale
+  signaling (M10)
+- [`context-composition.md`](context-composition.md) — budget model, ordered degradation,
+  deterministic compilation, trust floor (M10)
 - [`ADR/`](ADR/) — 13 architecture decision records (subsystem boundary, persistent vs runtime,
   schema KG, Neo4j, graph abstraction, registry, package model, human validation, freshness, change
   detection, storage split, multi-tenancy, LLM vs deterministic)
@@ -104,6 +108,15 @@ decisions that publish a new `HUMAN_VALIDATED` version), `active_artifact` on th
 service, enricher `validated=` priors wired through the build job so reviewed items are never
 re-proposed, and a corrected `human_validation` quality dimension that counts all reviewable
 items (ontology, taxonomy, grain).
+
+M10 delivered in code: `context/retriever.py` (deterministic question-token selection with table/
+column caps, join-edge and slice filtering, governance pass-through, stale flag),
+`context/composer.py` (token-budget composition with the documented drop order and metric
+relevance pruning), `context/compiler.py` (deterministic `ContextPackage` with semantics summary,
+trust floor, and fail-closed insufficient override), and container registration of the
+`ContextRetriever`/`ContextComposer`/`ContextCompiler` protocols. Verified live against InsForge:
+selection → 995-token composition → `structural`-trust package; 1-token budget produced an
+`INSUFFICIENT` package with `reason=budget`.
 
 Subsystem specifications produced with their implementation milestones:
 `taxonomy.md` / `ontology.md` / `topology.md` / `granularity.md` / `semantic-enrichment.md` (M5),
