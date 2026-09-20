@@ -89,7 +89,8 @@ def _join_paths(tables: tuple[str, ...], edges: tuple[JoinEdge, ...],
             current, path, visited = queue.popleft()
             if len(path) >= max_depth:
                 continue
-            for neighbor, edge in sorted(adjacency.get(current, []), key=_edge_ref):
+            for neighbor, edge in sorted(adjacency.get(current, []),
+                                         key=lambda item: _edge_ref(item[1])):
                 if neighbor in visited:
                     continue
                 next_path = path + (_edge_ref(edge),)
