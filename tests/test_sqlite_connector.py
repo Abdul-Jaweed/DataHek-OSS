@@ -109,5 +109,39 @@ class TestRegistryIntegration(unittest.TestCase):
             real.close()
 
 
+class TestSQLiteConstraintIntrospection(unittest.TestCase):
+    def test_constraints_captured(self):
+        import tempfile
+        from pathlib import Path
+
+        p = SQLiteProvider()
+        with tempfile.TemporaryDirectory() as d:
+            path = str(Path(d) / "app.db")
+            real = sqlite3.connect(path)
+            real.execute(
+                "CREATE TABLE customers (id INTEGER PRIMARY KEY, email TEXT NOT NULL)")
+            real.execute(
+                "CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL, "
+                "amount REAL DEFAULT 0, status TEXT, "
+                "FOREIGN KEY (customer_id) REFERENCES customers(id))")
+            real.execute("CREATE INDEX idx_orders_status ON orders(status)")
+            real.commit()
+            cat = asyncio.run(p.introspect(RequestContext(source="api"), _conn(path), "c1:app.db"))
+            real.close()
+
+        orders = next(t for t in cat.tables if t.name == "orders")
+        self.assertEqual(orders.primary_key, ("id",))
+        self.assertEqual(orders.foreign_keys, (("customer_id", "customers.id"),))
+        self.assertIn("idx_orders_status", orders.indexes)
+        by_name = {c.name: c for c in orders.columns}
+        self.assertTrue(by_name["id"].is_primary_key)
+        self.assertTrue(by_name["customer_id"].is_foreign_key)
+        self.assertEqual(by_name["customer_id"].references, "customers.id")
+        self.assertFalse(by_name["customer_id"].nullable)
+        self.assertTrue(by_name["status"].nullable)
+        self.assertEqual(by_name["amount"].default, "0")
+        self.assertEqual([c.ordinal for c in orders.columns], [0, 1, 2, 3])
+
+
 if __name__ == "__main__":
     unittest.main()

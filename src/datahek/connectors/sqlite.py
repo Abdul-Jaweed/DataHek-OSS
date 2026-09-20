@@ -48,8 +48,29 @@ class SQLiteProvider(DataProvider):
             cur = client.execute(_TABLES_SQL)
             names = [row[0] for row in (cur.fetchall() or [])]
             for name in names:
-                cols = client.execute(f'PRAGMA table_info("{name}")').fetchall()
-                columns = [ColumnMeta(name=row[1], data_type=row[2]) for row in cols]
+                info = client.execute(f'PRAGMA table_info("{name}")').fetchall()
+                fks = client.execute(f'PRAGMA foreign_key_list("{name}")').fetchall()
+                foreign_keys = tuple(sorted(
+                    (row[3], f"{row[2]}.{row[4]}") for row in fks))
+                fk_refs = {column: ref for column, ref in foreign_keys}
+                indexes = tuple(sorted(
+                    row[1] for row in client.execute(f'PRAGMA index_list("{name}")').fetchall()))
+                primary_key = tuple(
+                    row[1] for row in sorted(
+                        (r for r in info if r[5]), key=lambda r: r[5]))
+                columns = [
+                    ColumnMeta(
+                        name=row[1],
+                        data_type=row[2],
+                        nullable=not row[3],
+                        default=row[4],
+                        is_primary_key=bool(row[5]),
+                        is_foreign_key=row[1] in fk_refs,
+                        references=fk_refs.get(row[1]),
+                        ordinal=row[0],
+                    )
+                    for row in info
+                ]
                 row_count = None
                 if len(tables) < MAX_INTROSPECT_TABLES:
                     try:
@@ -57,7 +78,9 @@ class SQLiteProvider(DataProvider):
                         row_count = rows[0][0] if rows else None
                     except Exception:
                         row_count = None
-                tables.append(TableMeta(name=name, columns=columns, row_count=row_count))
+                tables.append(TableMeta(
+                    name=name, columns=columns, row_count=row_count,
+                    primary_key=primary_key, foreign_keys=foreign_keys, indexes=indexes))
             return SchemaCatalog(source=source, tables=tables)
         finally:
             await self.close(client)

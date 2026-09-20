@@ -20,6 +20,11 @@ class ColumnMeta:
     nullable: bool = True
     description: str | None = None
     semantic_tags: frozenset[str] = field(default_factory=frozenset)
+    default: str | None = None
+    is_primary_key: bool = False
+    is_foreign_key: bool = False
+    references: str | None = None
+    ordinal: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -28,6 +33,11 @@ class ColumnMeta:
             "nullable": self.nullable,
             "description": self.description,
             "semantic_tags": sorted(self.semantic_tags),
+            "default": self.default,
+            "is_primary_key": self.is_primary_key,
+            "is_foreign_key": self.is_foreign_key,
+            "references": self.references,
+            "ordinal": self.ordinal,
         }
 
     @classmethod
@@ -38,6 +48,11 @@ class ColumnMeta:
             nullable=data.get("nullable", True),
             description=data.get("description"),
             semantic_tags=frozenset(data.get("semantic_tags", [])),
+            default=data.get("default"),
+            is_primary_key=data.get("is_primary_key", False),
+            is_foreign_key=data.get("is_foreign_key", False),
+            references=data.get("references"),
+            ordinal=data.get("ordinal", 0),
         )
 
 
@@ -48,6 +63,9 @@ class TableMeta:
     kind: str = "table"
     row_count: int | None = None
     sensitive_tags: frozenset[str] = field(default_factory=frozenset)
+    primary_key: tuple[str, ...] = ()
+    foreign_keys: tuple[tuple[str, str], ...] = ()
+    indexes: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         return {
@@ -56,6 +74,9 @@ class TableMeta:
             "row_count": self.row_count,
             "columns": [c.to_dict() for c in self.columns],
             "sensitive_tags": sorted(self.sensitive_tags),
+            "primary_key": list(self.primary_key),
+            "foreign_keys": [list(fk) for fk in self.foreign_keys],
+            "indexes": list(self.indexes),
         }
 
     @classmethod
@@ -66,6 +87,9 @@ class TableMeta:
             row_count=data.get("row_count"),
             columns=[ColumnMeta.from_dict(c) for c in data.get("columns", [])],
             sensitive_tags=frozenset(data.get("sensitive_tags", [])),
+            primary_key=tuple(data.get("primary_key", [])),
+            foreign_keys=tuple(tuple(fk) for fk in data.get("foreign_keys", [])),
+            indexes=tuple(data.get("indexes", [])),
         )
 
 
