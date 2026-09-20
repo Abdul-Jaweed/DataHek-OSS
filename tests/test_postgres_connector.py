@@ -86,20 +86,41 @@ class TestPostgresClient(unittest.TestCase):
             return mock.Mock(fetchall=lambda: result)
 
         client.execute.side_effect = [
-            cursor([("orders",), ("customers",)]),                      # tables
-            cursor([("region", "text"), ("total_amount", "numeric")]),  # columns (orders)
-            cursor([(100,)]),                                           # row count
-            cursor([("id", "integer")]),                                # columns (customers)
-            cursor([(50,)]),                                            # row count
+            cursor([("orders",), ("customers",)]),                       # tables
+            cursor([("id", "integer", "NO", None, 1),
+                    ("customer_id", "integer", "NO", None, 2),
+                    ("status", "text", "YES", None, 3)]),                # columns (orders)
+            cursor([("id",)]),                                            # pk (orders)
+            cursor([("customer_id", "customers", "id")]),                 # fk (orders)
+            cursor([("orders_pkey",), ("idx_orders_status",)]),           # indexes (orders)
+            cursor([(100,)]),                                             # row count (orders)
+            cursor([("id", "integer", "NO", None, 1)]),                   # columns (customers)
+            cursor([("id",)]),                                            # pk (customers)
+            cursor([]),                                                   # fk (customers)
+            cursor([("customers_pkey",)]),                                # indexes (customers)
+            cursor([(50,)]),                                              # row count (customers)
         ]
         with mock.patch.object(PostgresProvider, "connect", return_value=client):
             cat = asyncio.run(p.introspect(RequestContext(source="api"), _conn(), "c1:appdb"))
         self.assertEqual([t.name for t in cat.tables], ["orders", "customers"])
-        self.assertEqual([c.name for c in cat.tables[0].columns], ["region", "total_amount"])
+        self.assertEqual([c.name for c in cat.tables[0].columns],
+                         ["id", "customer_id", "status"])
         self.assertEqual(cat.tables[0].row_count, 100)
+        orders = cat.tables[0]
+        self.assertEqual(orders.primary_key, ("id",))
+        self.assertEqual(orders.foreign_keys, (("customer_id", "customers.id"),))
+        self.assertIn("idx_orders_status", orders.indexes)
+        by_name = {c.name: c for c in orders.columns}
+        self.assertTrue(by_name["id"].is_primary_key)
+        self.assertTrue(by_name["customer_id"].is_foreign_key)
+        self.assertEqual(by_name["customer_id"].references, "customers.id")
+        self.assertFalse(by_name["customer_id"].nullable)
+        self.assertTrue(by_name["status"].nullable)
+        self.assertEqual(by_name["status"].ordinal, 3)
         sql_used = [c.args[0] for c in client.execute.call_args_list]
         self.assertTrue(any("information_schema.tables" in s for s in sql_used))
         self.assertTrue(any("information_schema.columns" in s for s in sql_used))
+        self.assertTrue(any("pg_indexes" in s for s in sql_used))
 
     def test_compile_and_execute(self):
         p = PostgresProvider()
