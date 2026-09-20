@@ -48,6 +48,8 @@ Rules:
 - Use "count_distinct" for distinct counting on SQL dialects (renders COUNT(DISTINCT col)).
 - Set "limit": if the user specifies a row count, use it; otherwise default to 10.
   For grouped or time-series results, set the number of rows the result naturally needs.
+- Match named entities to the column that represents them: service names belong in service-name
+  columns, event categories belong in event-type columns.
 - Never apply sum or avg to boolean columns; count true values with count(*) plus a WHERE condition.
 - Only join columns whose types are compatible (see the schema summary); otherwise return a clarification.
 - If the question is ambiguous or no table matches, return
