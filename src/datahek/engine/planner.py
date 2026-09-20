@@ -21,7 +21,7 @@ from datahek.kernel.context import RequestContext
 logger = logging.getLogger(__name__)
 
 MAX_TABLES_IN_PROMPT = 15
-MAX_COLUMNS_IN_PROMPT = 12
+MAX_COLUMNS_IN_PROMPT = 64
 MAX_PLAN_ATTEMPTS = 2
 
 _PLAN_SYSTEM_PROMPT = """\
@@ -73,7 +73,11 @@ class PlanResult:
 def build_schema_summary(catalog: SchemaCatalog) -> str:
     lines = []
     for t in catalog.tables[:MAX_TABLES_IN_PROMPT]:
-        cols = ", ".join(c.name for c in t.columns[:MAX_COLUMNS_IN_PROMPT])
+        visible = t.columns[:MAX_COLUMNS_IN_PROMPT]
+        cols = ", ".join(f"{c.name}:{c.data_type}" for c in visible)
+        hidden = len(t.columns) - len(visible)
+        if hidden > 0:
+            cols += f", … (+{hidden} more columns)"
         rows = f" (~{t.row_count} rows)" if t.row_count is not None else ""
         lines.append(f"- {t.name}{rows}: {cols}")
     return "\n".join(lines) or "(no tables found)"

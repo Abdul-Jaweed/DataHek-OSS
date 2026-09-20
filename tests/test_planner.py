@@ -79,6 +79,27 @@ class TestBuildSchemaSummary(unittest.TestCase):
         self.assertIn("duration_ms", summary)
         self.assertIn("metrics", summary)
 
+    def test_summary_includes_column_types(self):
+        summary = build_schema_summary(_catalog())
+        self.assertIn("duration_ms:UInt32", summary)
+
+    def test_summary_covers_wide_tables(self):
+        from datahek.engine.schema import ColumnMeta, SchemaCatalog, TableMeta
+
+        columns = [ColumnMeta(name=f"col_{i}", data_type="text") for i in range(40)]
+        catalog = SchemaCatalog(source="wide", tables=[TableMeta(name="wide", columns=columns)])
+        summary = build_schema_summary(catalog)
+        self.assertIn("col_39", summary)
+        self.assertNotIn("more columns", summary)
+
+    def test_summary_notes_truncation_past_cap(self):
+        from datahek.engine.schema import ColumnMeta, SchemaCatalog, TableMeta
+
+        columns = [ColumnMeta(name=f"col_{i}", data_type="text") for i in range(70)]
+        catalog = SchemaCatalog(source="wide", tables=[TableMeta(name="wide", columns=columns)])
+        summary = build_schema_summary(catalog)
+        self.assertIn("(+6 more columns)", summary)
+
     def test_summary_has_no_llm_prompt_noise(self):
         summary = build_schema_summary(_catalog())
         self.assertNotIn("system prompt", summary.lower())
