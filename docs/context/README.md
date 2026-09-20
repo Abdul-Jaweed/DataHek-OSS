@@ -18,7 +18,7 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 | M4 | Schema discovery + profiling | **Complete** |
 | M5 | Taxonomy, ontology, topology, granularity | **Complete** |
 | M6 | Graph abstraction + Neo4j adapter | **Complete** |
-| M7 | Schema Knowledge Graph | Pending |
+| M7 | Schema Knowledge Graph | **Complete** |
 | M8 | Context Registry, persistence, versioning | Pending |
 | M9 | Human semantic validation | Pending |
 | M10 | Retrieval, composer, compiler | Pending |
@@ -48,6 +48,8 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 - [`graph-abstraction.md`](graph-abstraction.md) — the replaceable graph contract and its shared
   test suite (M6)
 - [`neo4j.md`](neo4j.md) — Neo4j deployment, schema, safety rules, and licensing notes (M6)
+- [`knowledge-graph-schema.md`](knowledge-graph-schema.md) — node/edge catalogue, id scheme,
+  idempotency/pruning, degraded behavior, example reads (M7)
 - [`ADR/`](ADR/) — 13 architecture decision records (subsystem boundary, persistent vs runtime,
   schema KG, Neo4j, graph abstraction, registry, package model, human validation, freshness, change
   detection, storage split, multi-tenancy, LLM vs deterministic)
@@ -77,6 +79,12 @@ M6 delivered in code: `context/graph/vocabulary.py` (ADR-003 controlled relation
 tenant-scoped, vocabulary-validated, MERGE-idempotent, bounded reads), a shared
 `GraphRepositoryContract` suite that both adapters pass against live instances, the optional
 `[graph]` extra, container registration behind `DATAHEK_NEO4J_URL`, and a compose `graph` profile.
+
+M7 delivered in code: `context/graph/builder.py` — projects schema, profile, topology (FK and
+inferred joins), granularity, taxonomy annotations, metrics, and ontology into the graph with
+stable ids, vocabulary-only edges, version/provenance stamps, idempotent rebuilds, per-connection
+pruning, and `DEGRADED` reports when the backend is unavailable. Verified live against Neo4j with
+the InsForge artifacts (48 nodes, 47 edges, idempotent, ~30 ms reads).
 
 Subsystem specifications produced with their implementation milestones:
 `taxonomy.md` / `ontology.md` / `topology.md` / `granularity.md` / `semantic-enrichment.md` (M5),
