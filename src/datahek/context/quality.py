@@ -60,14 +60,23 @@ def _granularity_confidence(granularity: GranularityContext | None) -> float:
                  / len(granularity.grains), 4)
 
 
-def _human_validation(ontology: OntologyContext | None) -> float:
-    if ontology is None:
+def _human_validation(ontology: OntologyContext | None,
+                      taxonomy: TaxonomyContext | None,
+                      granularity: GranularityContext | None) -> float:
+    items = []
+    if ontology is not None:
+        items.extend(ontology.concepts)
+        items.extend(ontology.relationships)
+    if taxonomy is not None:
+        items.extend(taxonomy.nodes)
+    if granularity is not None:
+        items.extend(granularity.grains)
+    reviewable = [item for item in items
+                  if item.validation is not ValidationStatus.NOT_REQUIRED]
+    if not reviewable:
         return 1.0
-    proposals = list(ontology.concepts) + list(ontology.relationships)
-    if not proposals:
-        return 1.0
-    validated = [item for item in proposals if item.validation in _VALIDATED_STATUSES]
-    return round(len(validated) / len(proposals), 4)
+    validated = [item for item in reviewable if item.validation in _VALIDATED_STATUSES]
+    return round(len(validated) / len(reviewable), 4)
 
 
 def _freshness_score(freshness: FreshnessReport | None) -> float:
@@ -89,7 +98,7 @@ def evaluate_quality(*, schema: SchemaContext,
     semantic_confidence = _semantic_confidence(ontology)
     relationship_coverage = _relationship_coverage(schema, topology)
     granularity_confidence = _granularity_confidence(granularity)
-    human_validation = _human_validation(ontology)
+    human_validation = _human_validation(ontology, taxonomy, granularity)
     freshness_score = _freshness_score(freshness)
     governance_coverage = 1.0 if governance is not None else 0.0
 

@@ -18,6 +18,8 @@ from datahek.contracts.context import (
     QualityState,
     SchemaContext,
     TableSchema,
+    TaxonomyContext,
+    TaxonomyNode,
     TrustLevel,
     ValidationStatus,
 )
@@ -79,11 +81,24 @@ class TestQuality(unittest.TestCase):
     def test_validated_proposals_raise_state(self):
         report = evaluate_quality(
             schema=_schema(), profiles=_profiles(),
-            topology=self._topology(), granularity=self._granularity(),
+            topology=self._topology(),
+            granularity=self._granularity(ValidationStatus.APPROVED),
             governance=self._governance(), freshness=self._freshness(),
             ontology=_ontology(validation=ValidationStatus.APPROVED, confidence=0.9))
         self.assertEqual(report.human_validation, 1.0)
         self.assertEqual(report.state, QualityState.VALIDATED)
+
+    def test_human_validation_counts_rule_derived_items(self):
+        report = evaluate_quality(
+            schema=_schema(), profiles=_profiles(),
+            topology=self._topology(), granularity=self._granularity(),
+            taxonomy=TaxonomyContext(
+                envelope=_envelope(ArtifactKind.TAXONOMY, ProvenanceSource.SYSTEM),
+                nodes=(TaxonomyNode(path=("d", "orders"), members=("orders",),
+                                    node_kind="subdomain", provenance=ProvenanceSource.SYSTEM,
+                                    validation=ValidationStatus.PENDING, confidence=0.8),)),
+            ontology=_ontology(validation=ValidationStatus.APPROVED))
+        self.assertAlmostEqual(report.human_validation, 1 / 3, places=4)
 
     @staticmethod
     def _topology():
@@ -96,11 +111,11 @@ class TestQuality(unittest.TestCase):
                             provenance=ProvenanceSource.DATABASE, confidence=1.0),))
 
     @staticmethod
-    def _granularity():
+    def _granularity(validation=ValidationStatus.PENDING):
         return GranularityContext(
             envelope=_envelope(ArtifactKind.GRANULARITY),
             grains=(GrainStatement(table="orders", statement="1 row = 1 Order",
-                                   confidence=0.9),),
+                                   validation=validation, confidence=0.9),),
             metric_grains=())
 
     @staticmethod
