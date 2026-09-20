@@ -52,6 +52,17 @@ class TestMcpAuth(unittest.TestCase):
             os.environ.pop("DATAHEK_MCP_TOKENS", None)
             os.environ.pop("DATAHEK_MCP_REQUIRED_SCOPES", None)
 
+    def test_tool_scope_enforcement(self):
+        from datahek.mcp_server import missing_scope, parse_tool_scopes
+
+        required = parse_tool_scopes("data.ask:ask,data.replay_checkpoint:replay|audit")
+        self.assertEqual(required["data.ask"], frozenset({"ask"}))
+        self.assertEqual(required["data.replay_checkpoint"], frozenset({"replay", "audit"}))
+        self.assertFalse(missing_scope("data.ask", frozenset({"ask"}), required))
+        self.assertTrue(missing_scope("data.replay_checkpoint", frozenset({"replay"}), required))
+        self.assertFalse(missing_scope("data.list_tables", frozenset(), required))
+        self.assertFalse(missing_scope("data.ask", frozenset(), {}))
+
     def test_server_builds_with_auth(self):
         os.environ["DATAHEK_MCP_TOKENS"] = "tok:read"
         try:

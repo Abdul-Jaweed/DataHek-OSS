@@ -178,6 +178,7 @@ python -m datahek.mcp_server    # streamable HTTP on :8001
 | `DATAHEK_MCP_TOOL_TIMEOUT` | `120` | Seconds before an MCP tool call is stopped |
 | `DATAHEK_MCP_TOKENS` | *(empty)* | Per-client MCP bearer tokens (`token,other:scopeA\|scopeB`); empty disables MCP auth |
 | `DATAHEK_MCP_REQUIRED_SCOPES` | *(empty)* | Scopes every MCP token must carry when MCP auth is enabled |
+| `DATAHEK_MCP_TOOL_SCOPES` | *(empty)* | Per-tool scopes (`data.ask:ask,data.replay_checkpoint:replay\|audit`); denied calls are audited |
 | `DATAHEK_SCHEDULER_POLL_SECONDS` | `30` | Scheduler tick interval for saved-query schedules |
 | `DATAHEK_DEFAULT_LIMIT` | `10` | Fallback SQL `LIMIT` when the planner does not specify one |
 | `DATAHEK_LOG_FORMAT` | `text` | `json` emits one structured log object per line |

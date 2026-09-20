@@ -218,6 +218,32 @@ async def _audit_output_redactions(c, ctx, connection, categories: list[str]) ->
         logging.getLogger("datahek.api").warning("Output redaction audit failed: %s", exc)
 
 
+async def _audit_event(c, event_type: str, action: str, actor: str = "anonymous",
+                       resource_ref: str | None = None, decision: str = "ALLOW",
+                       payload: dict | None = None) -> None:
+    """Record a platform audit event (best-effort)."""
+    from datahek.contracts.audit import AuditEvent, AuditSink
+
+    if not c.has(AuditSink):
+        return
+    try:
+        await c.resolve(AuditSink).record(AuditEvent(
+            event_type=event_type,
+            actor=actor,
+            action=action,
+            resource_ref=resource_ref,
+            decision=decision,
+            payload=payload or {},
+        ))
+    except Exception as exc:
+        logger.warning("Audit write failed (%s/%s): %s", event_type, action, exc)
+
+
+def _actor(identity) -> str:
+    """Audit actor: authenticated user id, else anonymous."""
+    return identity.user_id if identity is not None and identity.authenticated else "anonymous"
+
+
 def _validate_aggregate(aggregate: str) -> None:
     from datahek.engine.plan import _DEFAULT_FUNCTIONS
 
@@ -466,9 +492,13 @@ def create_app(container=None) -> FastAPI:
             if header.lower().startswith("bearer "):
                 token = header[7:].strip()
         if not token:
+            await _audit_event(c, "auth.failure", "authenticate", decision="DENY",
+                               payload={"reason": "missing_api_key", "path": request.url.path})
             raise DatahekError(ErrorCode.UNAUTHORIZED, "API key required")
         ident = await auth_provider.authenticate_api_key(token)
         if not ident.authenticated:
+            await _audit_event(c, "auth.failure", "authenticate", decision="DENY",
+                               payload={"reason": "invalid_api_key", "path": request.url.path})
             raise DatahekError(ErrorCode.UNAUTHORIZED, "Invalid API key")
         return ident
 
@@ -529,6 +559,8 @@ def create_app(container=None) -> FastAPI:
         """Local login: returns the API token for subsequent requests (X-API-Key)."""
         ident = await auth_provider.authenticate(req.username, req.password)
         if not ident.authenticated:
+            await _audit_event(c, "auth.failure", "login", actor=req.username, decision="DENY",
+                               payload={"reason": "invalid_credentials"})
             raise DatahekError(ErrorCode.UNAUTHORIZED, "Invalid username or password")
         return {
             "token": req.password,
@@ -586,6 +618,8 @@ def create_app(container=None) -> FastAPI:
             settings=req.settings,
         )
         await conn_mgr.add(ctx, conn)
+        await _audit_event(c, "connection.create", "create", actor=_actor(_identity),
+                           resource_ref=conn.id, payload={"provider": conn.provider, "name": conn.name})
         return {
             "id": conn.id, "name": conn.name, "provider": conn.provider,
             "host": conn.host, "port": conn.port, "database": conn.database,
@@ -654,6 +688,8 @@ def create_app(container=None) -> FastAPI:
             existing = await conn_mgr.get_connection(ctx, connection_id)
             patch["settings"] = {**existing.settings, **req.settings}
         updated = await conn_mgr.update(ctx, connection_id, patch)
+        await _audit_event(c, "connection.update", "update", actor=_actor(_identity),
+                           resource_ref=connection_id, payload={"provider": updated.provider})
         return {
             "id": updated.id, "name": updated.name, "provider": updated.provider,
             "host": updated.host, "port": updated.port, "database": updated.database,
@@ -663,6 +699,8 @@ def create_app(container=None) -> FastAPI:
     async def delete_connection(connection_id: str, _identity=Depends(_require_auth)):
         ctx = RequestContext(source="api")
         await conn_mgr.remove(ctx, connection_id)
+        await _audit_event(c, "connection.delete", "delete", actor=_actor(_identity),
+                           resource_ref=connection_id)
 
     @app.post("/saved-queries", status_code=201)
     async def create_saved_query(req: SavedQueryRequest, _identity=Depends(_require_auth)):
@@ -675,6 +713,8 @@ def create_app(container=None) -> FastAPI:
                            org_id=ctx.organization_id, project_id=ctx.project_id)
         store = c.resolve(SavedQueryStore)
         await store.create(ctx, query)
+        await _audit_event(c, "saved_query.create", "create", actor=_actor(_identity),
+                           resource_ref=query.id, payload={"name": query.name})
         return await store.get(ctx, query.id)
 
     @app.get("/saved-queries")
@@ -705,6 +745,8 @@ def create_app(container=None) -> FastAPI:
         if await store.get(ctx, query_id) is None:
             raise DatahekError(ErrorCode.NOT_FOUND, f"Saved query '{query_id}' not found")
         await store.delete(ctx, query_id)
+        await _audit_event(c, "saved_query.delete", "delete", actor=_actor(_identity),
+                           resource_ref=query_id)
 
     @app.post("/schedules", status_code=201)
     async def create_schedule(req: ScheduleRequest, _identity=Depends(_require_auth)):
@@ -719,6 +761,9 @@ def create_app(container=None) -> FastAPI:
                             interval_seconds=req.interval_seconds,
                             org_id=ctx.organization_id, project_id=ctx.project_id)
         await store.create_schedule(ctx, schedule)
+        await _audit_event(c, "schedule.create", "create", actor=_actor(_identity),
+                           resource_ref=schedule.id,
+                           payload={"saved_query_id": schedule.saved_query_id})
         return await store.get_schedule(ctx, schedule.id)
 
     @app.get("/schedules")
@@ -736,6 +781,8 @@ def create_app(container=None) -> FastAPI:
         if await store.get_schedule(ctx, schedule_id) is None:
             raise DatahekError(ErrorCode.NOT_FOUND, f"Schedule '{schedule_id}' not found")
         await store.delete_schedule(ctx, schedule_id)
+        await _audit_event(c, "schedule.delete", "delete", actor=_actor(_identity),
+                           resource_ref=schedule_id)
 
     @app.post("/checkpoints/{checkpoint_id}/fork")
     async def fork_checkpoint(checkpoint_id: str, _identity=Depends(_require_auth)):
@@ -812,6 +859,8 @@ def create_app(container=None) -> FastAPI:
         )
         store = c.resolve(SemanticStore)
         await store.create(ctx, metric)
+        await _audit_event(c, "metric.create", "create", actor=_actor(_identity),
+                           resource_ref=metric.id, payload={"name": metric.name})
         return await store.get(ctx, metric.id)
 
     @app.put("/semantics/{metric_id}")
@@ -827,6 +876,8 @@ def create_app(container=None) -> FastAPI:
             "name": req.name, "table": req.table, "aggregate": req.aggregate,
             "column": req.column, "filter": req.filter, "description": req.description,
         })
+        await _audit_event(c, "metric.update", "update", actor=_actor(_identity),
+                           resource_ref=metric_id, payload={"name": req.name})
         return await store.get(ctx, metric_id)
 
     @app.delete("/semantics/{metric_id}", status_code=204)
@@ -838,6 +889,8 @@ def create_app(container=None) -> FastAPI:
         if await store.get(ctx, metric_id) is None:
             raise DatahekError(ErrorCode.NOT_FOUND, f"Metric '{metric_id}' not found")
         await store.delete(ctx, metric_id)
+        await _audit_event(c, "metric.delete", "delete", actor=_actor(_identity),
+                           resource_ref=metric_id)
 
     @app.get("/approvals")
     async def list_approvals(_identity=Depends(_require_auth)):
@@ -859,25 +912,15 @@ def create_app(container=None) -> FastAPI:
     @app.post("/approvals/{approval_id}/decide")
     async def decide_approval(approval_id: str, req: ApprovalDecisionRequest,
                               _identity=Depends(_require_auth)):
-        from datahek.contracts.audit import AuditEvent, AuditSink
         from datahek.contracts.misc import ApprovalService
 
         service = c.resolve(ApprovalService)
         mapped = "approved" if req.decision == "approve" else "rejected"
         await service.decide(approval_id, mapped, req.actor)
         status = await service.status(approval_id)
-        if c.has(AuditSink):
-            try:
-                await c.resolve(AuditSink).record(AuditEvent(
-                    event_type="approval.decision",
-                    actor=req.actor,
-                    action=mapped,
-                    resource_ref=approval_id,
-                    decision=mapped.upper(),
-                    payload={"status": status},
-                ))
-            except Exception as exc:
-                logger.warning("Approval decision audit failed: %s", exc)
+        await _audit_event(c, "approval.decision", mapped, actor=req.actor,
+                           resource_ref=approval_id, decision=mapped.upper(),
+                           payload={"status": status})
         return {"approval_id": approval_id, "status": status}
 
     @app.get("/checkpoints")
@@ -1091,6 +1134,8 @@ def create_app(container=None) -> FastAPI:
             )
         pid = entity_id("prompt")
         await prompts.create(ctx, pid, name=req.name, content=req.content)
+        await _audit_event(c, "prompt.create", "create", actor=_actor(_identity),
+                           resource_ref=pid, payload={"name": req.name})
         return {"id": pid, "name": req.name, "content": req.content}
 
     @app.get("/prompts")
@@ -1119,6 +1164,8 @@ def create_app(container=None) -> FastAPI:
         if await prompts.get(ctx, prompt_id) is None:
             raise DatahekError(ErrorCode.NOT_FOUND, f"Prompt '{prompt_id}' not found")
         await prompts.delete(ctx, prompt_id)
+        await _audit_event(c, "prompt.delete", "delete", actor=_actor(_identity),
+                           resource_ref=prompt_id)
 
     @app.get("/evaluations")
     async def evaluations(_identity=Depends(_require_auth)):

@@ -74,6 +74,27 @@ def build_mcp_auth():
     return StaticTokenVerifier(tokens=tokens, required_scopes=required or None)
 
 
+def parse_tool_scopes(raw: str) -> dict[str, frozenset[str]]:
+    """Parse DATAHEK_MCP_TOOL_SCOPES: "tool:scopeA|scopeB,tool2:scopeC"."""
+    required: dict[str, frozenset[str]] = {}
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        tool, _, scope_str = entry.partition(":")
+        scopes = frozenset(s for s in scope_str.split("|") if s)
+        if tool and scopes:
+            required[tool] = scopes
+    return required
+
+
+def missing_scope(tool: str, permissions: frozenset[str],
+                  required: dict[str, frozenset[str]]) -> bool:
+    """True when the token lacks a scope the tool requires (all listed scopes are required)."""
+    needed = required.get(tool)
+    return bool(needed) and not needed.issubset(permissions)
+
+
 def build_mcp_server(container=None) -> FastMCP:
     from datahek.defaults.container import build_app_container
 
@@ -117,6 +138,37 @@ def build_mcp_server(container=None) -> FastMCP:
         timeout = float(os.environ.get("DATAHEK_MCP_TOOL_TIMEOUT", "120"))
         return await run_guarded(coro, timeout_s=timeout)
 
+    tool_scopes = parse_tool_scopes(os.environ.get("DATAHEK_MCP_TOOL_SCOPES", ""))
+
+    async def _audit_mcp(name: str, ctx: RequestContext, decision: str,
+                         payload: dict | None = None) -> None:
+        from datahek.contracts.audit import AuditEvent, AuditSink
+
+        if not c.has(AuditSink):
+            return
+        try:
+            await c.resolve(AuditSink).record(AuditEvent(
+                event_type="mcp.tool",
+                actor=ctx.user_id,
+                action=name,
+                resource_ref=ctx.connection_id,
+                decision=decision,
+                tenant={"org": ctx.organization_id, "project": ctx.project_id},
+                payload=payload or {},
+            ))
+        except Exception as exc:
+            logger.warning("MCP tool audit failed: %s", exc)
+
+    async def _run_tool(name: str, coro):
+        ctx = _mcp_context()
+        if missing_scope(name, ctx.permissions, tool_scopes):
+            await _audit_mcp(name, ctx, "DENY", {"reason": "missing_scope"})
+            return f"Error: access denied — token lacks the scope required for '{name}'"
+        result = await _safe(coro)
+        outcome = "ERROR" if isinstance(result, str) and result.startswith("Error:") else "ALLOW"
+        await _audit_mcp(name, ctx, outcome)
+        return result
+
     mcp = FastMCP(
         SERVER_NAME,
         instructions="DataHek OSS data tools — read-only, natural-language data access.",
@@ -133,7 +185,7 @@ def build_mcp_server(container=None) -> FastMCP:
             if not catalog.tables:
                 return "No tables found"
             return "\n".join(f"{t.name} ({t.row_count or '?'} rows)" for t in catalog.tables)
-        return await _safe(run())
+        return await _run_tool("data.list_tables", run())
 
     @mcp.tool(name="data.table_schema")
     async def data_table_schema(connection: str, table: str) -> str:
@@ -148,7 +200,7 @@ def build_mcp_server(container=None) -> FastMCP:
                         return f"{table}: (no columns)"
                     return "\n".join(f"{col.name} {col.data_type}" for col in t.columns)
             return f"Table '{table}' not found"
-        return await _safe(run())
+        return await _run_tool("data.table_schema", run())
 
     @mcp.tool(name="data.ask")
     async def data_ask(question: str, connection: str) -> str:
@@ -166,7 +218,7 @@ def build_mcp_server(container=None) -> FastMCP:
             for row in result.rows:
                 lines.append("  " + ", ".join(f"{c}={v}" for c, v in zip(columns, row)))
             return "\n".join(lines)
-        return await _safe(run())
+        return await _run_tool("data.ask", run())
 
     @mcp.tool(name="data.list_connections")
     async def data_list_connections() -> str:
@@ -177,7 +229,7 @@ def build_mcp_server(container=None) -> FastMCP:
             if not conns:
                 return "No connections configured"
             return "\n".join(f"{c.name} | {c.provider} | {c.database or '-'}" for c in conns)
-        return await _safe(run())
+        return await _run_tool("data.list_connections", run())
 
     @mcp.tool(name="data.list_metrics")
     async def data_list_metrics() -> str:
@@ -193,7 +245,7 @@ def build_mcp_server(container=None) -> FastMCP:
                 f"{m['name']} = {m['aggregate']}({m['column']}) on {m['table']}"
                 + (f" where {m['filter']}" if m.get("filter") else "")
                 for m in metrics)
-        return await _safe(run())
+        return await _run_tool("data.list_metrics", run())
 
     @mcp.tool(name="data.run_saved_query")
     async def data_run_saved_query(name_or_id: str) -> str:
@@ -252,7 +304,7 @@ def build_mcp_server(container=None) -> FastMCP:
             for row in result.rows:
                 lines.append("  " + ", ".join(f"{cc}={v}" for cc, v in zip(cols, row)))
             return "\n".join(lines)
-        return await _safe(run())
+        return await _run_tool("data.run_saved_query", run())
 
     @mcp.tool(name="data.replay_checkpoint")
     async def data_replay_checkpoint(checkpoint_id: str) -> str:
@@ -285,7 +337,7 @@ def build_mcp_server(container=None) -> FastMCP:
             for row in raw["rows"]:
                 lines.append("  " + ", ".join(f"{c}={v}" for c, v in zip(cols, row)))
             return "\n".join(lines)
-        return await _safe(run())
+        return await _run_tool("data.replay_checkpoint", run())
 
     return mcp
 
