@@ -22,7 +22,7 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 | M8 | Context Registry, persistence, versioning | **Complete** |
 | M9 | Human semantic validation | **Complete** |
 | M10 | Retrieval, composer, compiler | **Complete** |
-| M11 | SQL agent integration | Pending |
+| M11 | SQL agent integration | **Complete** |
 | M12 | Testing, observability, security hardening | Pending |
 
 ## Documents
@@ -60,6 +60,7 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
   signaling (M10)
 - [`context-composition.md`](context-composition.md) — budget model, ordered degradation,
   deterministic compilation, trust floor (M10)
+- [`api.md`](api.md) — context REST endpoints, planner integration rules, deferred items (M11)
 - [`ADR/`](ADR/) — 13 architecture decision records (subsystem boundary, persistent vs runtime,
   schema KG, Neo4j, graph abstraction, registry, package model, human validation, freshness, change
   detection, storage split, multi-tenancy, LLM vs deterministic)
@@ -117,6 +118,15 @@ trust floor, and fail-closed insufficient override), and container registration 
 `ContextRetriever`/`ContextComposer`/`ContextCompiler` protocols. Verified live against InsForge:
 selection → 995-token composition → `structural`-trust package; 1-token budget produced an
 `INSUFFICIENT` package with `reason=budget`.
+
+M11 delivered in code: planner integration (`Planner` takes the retriever/composer/compiler;
+compiled packages replace the ad-hoc schema/metric assembly, `INSUFFICIENT` fails closed with a
+clarification, and any context-layer failure degrades to the live catalog — FR-019/FR-020), the
+context REST surface in `api/app.py` (status, synchronous build, versions, pending, validate,
+preview, record detail), container registration of `ContextValidationService` and
+`ContextBuildJob`, and `docs/context/api.md`. Verified live against InsForge through an in-process
+TestClient: build → preview (995 tokens, `structural`) → 9 pending → approval v2 → `POST /ask`
+answered from context-compiled planning.
 
 Subsystem specifications produced with their implementation milestones:
 `taxonomy.md` / `ontology.md` / `topology.md` / `granularity.md` / `semantic-enrichment.md` (M5),

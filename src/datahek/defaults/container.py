@@ -147,6 +147,8 @@ def build_default_container() -> Container:
 
 def build_app_container() -> Container:
     """OSS composition for the API surface: engine + planner + schema + model."""
+    from datahek.contracts.context import GraphRepository
+
     c = build_default_container()
 
     registry = ProviderRegistry()
