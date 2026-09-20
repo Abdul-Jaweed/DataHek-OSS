@@ -24,7 +24,11 @@ from datahek.connectors.duckdb import DuckDBProvider
 from datahek.connectors.mysql import MySQLProvider
 from datahek.connectors.postgres import PostgresProvider
 from datahek.connectors.sqlite import SQLiteProvider
+from datahek.contracts.context import ContextRegistry, ContextStore
 from datahek.contracts.misc import ApprovalService, CheckpointStore, EntitlementService
+from datahek.context.registry import ContextRegistryService
+from datahek.defaults.context_store import SqliteContextRegistry, SqliteContextStore
+from datahek.defaults.context_store_pg import PostgresContextRegistry, PostgresContextStore
 from datahek.defaults.approvals_pg import PostgresApprovalService
 from datahek.defaults.approvals_sqlite import SqliteApprovalService
 from datahek.defaults.checkpoints import SqliteCheckpointStore
@@ -97,11 +101,18 @@ def build_default_container() -> Container:
         c.register(SemanticStore, PostgresSemanticStore(pg), singleton=True)
         c.register(ApprovalService, PostgresApprovalService(pg), singleton=True)
         c.register(CheckpointStore, PostgresCheckpointStore(pg), singleton=True)
+        c.register(ContextRegistry, PostgresContextRegistry(pg), singleton=True)
+        c.register(ContextStore, PostgresContextStore(pg), singleton=True)
     else:
         c.register(ConnectionManager, LocalConnectionManager(), singleton=True)
         c.register(ConversationStore, SqliteConversationStore(), singleton=True)
         c.register(PromptStore, SqlitePromptStore(), singleton=True)
         c.register(SemanticStore, SqliteSemanticStore(), singleton=True)
+        c.register(ContextRegistry, SqliteContextRegistry(), singleton=True)
+        c.register(ContextStore, SqliteContextStore(), singleton=True)
+    c.register(ContextRegistryService,
+               ContextRegistryService(c.resolve(ContextRegistry), c.resolve(ContextStore)),
+               singleton=True)
     entitlements = EntitlementProvider()
     c.register(EntitlementProvider, entitlements, singleton=True)
     c.register(EntitlementService, entitlements, singleton=True)

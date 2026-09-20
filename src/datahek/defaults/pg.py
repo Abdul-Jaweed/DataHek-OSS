@@ -69,6 +69,33 @@ CREATE TABLE IF NOT EXISTS checkpoints (
 );
 ALTER TABLE checkpoints ADD COLUMN IF NOT EXISTS forked_from TEXT;
 """),
+    (2, """
+CREATE TABLE IF NOT EXISTS context_records (
+  context_id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
+  connection_id TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  state TEXT NOT NULL,
+  schema_hash TEXT NOT NULL,
+  record_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_context_records_scope
+  ON context_records(org_id, connection_id, scope, version);
+CREATE TABLE IF NOT EXISTS context_artifacts (
+  context_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  org_id TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  PRIMARY KEY (context_id, kind)
+);
+CREATE TABLE IF NOT EXISTS context_packages (
+  context_id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL,
+  payload_json TEXT NOT NULL
+);
+"""),
 ]
 
 
