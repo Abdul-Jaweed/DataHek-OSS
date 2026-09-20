@@ -309,6 +309,8 @@ Coverage: kernel foundations, contracts conformance, logical plans, guardrails, 
 
 ### Contributing
 
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, naming conventions, and the ADR process.
+
 1. Fork the repository.
 2. Create a feature branch (`git checkout -b feat/my-feature`).
 3. Write tests first for any behavior change (`python -m unittest tests.test_xxx`).
