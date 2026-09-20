@@ -16,7 +16,7 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 | M2 | Architecture, context model, SRD, ADRs, diagrams | **Complete** |
 | M3 | Context domain model + contracts | **Complete** |
 | M4 | Schema discovery + profiling | **Complete** |
-| M5 | Taxonomy, ontology, topology, granularity | Pending |
+| M5 | Taxonomy, ontology, topology, granularity | **Complete** |
 | M6 | Graph abstraction + Neo4j adapter | Pending |
 | M7 | Schema Knowledge Graph | Pending |
 | M8 | Context Registry, persistence, versioning | Pending |
@@ -38,6 +38,13 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
   `ContextPackage`, quality/freshness reports, versioning rules (M2)
 - [`context-layer-srd.md`](context-layer-srd.md) — purpose, scope, 20 functional requirements with
   acceptance criteria, 10 NFRs, 12 failure modes, milestone traceability (M2)
+- [`topology.md`](topology.md) — FK/inferred edges, cardinality, bounded join paths (M5)
+- [`granularity.md`](granularity.md) — table and metric grain statements (M5)
+- [`taxonomy.md`](taxonomy.md) — role-based classification hierarchy (M5)
+- [`ontology.md`](ontology.md) — concepts, controlled relationship vocabulary, proposal rules (M5)
+- [`semantic-enrichment.md`](semantic-enrichment.md) — the single LLM stage, trust and failure
+  behavior (M5)
+- [`schema-profiling.md`](schema-profiling.md) — deterministic profiling method and privacy rules (M4)
 - [`ADR/`](ADR/) — 13 architecture decision records (subsystem boundary, persistent vs runtime,
   schema KG, Neo4j, graph abstraction, registry, package model, human validation, freshness, change
   detection, storage split, multi-tenancy, LLM vs deterministic)
@@ -54,6 +61,13 @@ nullability/default fields; SQLite PRAGMA and PostgreSQL information_schema capt
 (one batched aggregate plan per table through the guarded engine; null/distinct/uniqueness,
 min/max/avg, role candidates, sensitive-column counts-only policy) — see
 [`schema-profiling.md`](schema-profiling.md).
+
+M5 delivered in code: `context/topology.py` (FK edges, `<entity>_id` inference with type-family
+checks, depth-bounded join paths), `context/granularity.py` (grain statements from PK +
+identifier profiles, metric-grain caveats), `context/taxonomy.py` (role-based
+Domain → Subdomain → Category hierarchy, sensitive columns excluded), and `context/enrichment.py`
+(LLM concept/relationship proposals with controlled vocabularies, schema grounding, and graceful
+failure).
 
 Subsystem specifications produced with their implementation milestones:
 `taxonomy.md` / `ontology.md` / `topology.md` / `granularity.md` / `semantic-enrichment.md` (M5),
