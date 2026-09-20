@@ -15,7 +15,7 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 | M1 | Repository analysis + research | **Complete** |
 | M2 | Architecture, context model, SRD, ADRs, diagrams | **Complete** |
 | M3 | Context domain model + contracts | **Complete** |
-| M4 | Schema discovery + profiling | Pending |
+| M4 | Schema discovery + profiling | **Complete** |
 | M5 | Taxonomy, ontology, topology, granularity | Pending |
 | M6 | Graph abstraction + Neo4j adapter | Pending |
 | M7 | Schema Knowledge Graph | Pending |
@@ -48,7 +48,14 @@ protocols), `context/lifecycle.py` (legal-transition state machine), `context/ha
 (canonical SHA-256 schema hashing), `context/provenance.py` (trust ordering and authority rules) —
 with 25 tests across the four modules.
 
-Subsystem specifications produced with their implementation milestones: `schema-profiling.md` (M4),
+M4 delivered in code: constraint-aware introspection (`ColumnMeta`/`TableMeta` PK/FK/index/
+nullability/default fields; SQLite PRAGMA and PostgreSQL information_schema capture),
+`context/snapshot.py` (catalog → canonical `SchemaContext` + hash), and `context/profiler.py`
+(one batched aggregate plan per table through the guarded engine; null/distinct/uniqueness,
+min/max/avg, role candidates, sensitive-column counts-only policy) — see
+[`schema-profiling.md`](schema-profiling.md).
+
+Subsystem specifications produced with their implementation milestones:
 `taxonomy.md` / `ontology.md` / `topology.md` / `granularity.md` / `semantic-enrichment.md` (M5),
 `graph-abstraction.md` / `neo4j.md` / `knowledge-graph-schema.md` (M6–M7), `lifecycle.md` /
 `provenance.md` (M8), `context-retrieval.md` / `context-composition.md` (M10), `api.md` (M11),
