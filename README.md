@@ -82,13 +82,17 @@ cp .env.example .env        # then edit LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
 docker compose up -d --build
 
 # 4. open the app
-# API docs: http://localhost:8000/docs · web app: cd apps/web && npm install && npm run dev → http://localhost:5173
+# web app: http://localhost:5173 (nginx, production build) · API docs: http://localhost:8000/docs
 ```
 
 | Service | Port | Purpose |
 |---|---|---|
 | `api` | `8000` | REST API, `/docs`, health at `/health` |
 | `mcp` | `8001` | MCP endpoint at `/mcp` |
+| `web` | `5173` | Web app (React build served by nginx, proxies the API) |
+
+For hot-reload frontend development, run `docker compose --profile dev up web-dev`
+(the Vite dev server replaces the production web container) or `cd apps/web && npm run dev`.
 
 - SQLite state and the audit log persist in the `datahek-data` volume.
 - Useful commands: `docker compose logs -f api` · `docker compose down` (keeps data) · `docker compose down -v` (wipes data).

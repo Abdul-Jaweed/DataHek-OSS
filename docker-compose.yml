@@ -76,6 +76,17 @@ services:
     container_name: datahek-oss-web
     depends_on:
       - api
+    ports:
+      - "5173:80"
+
+  web-dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile.web.dev
+    container_name: datahek-oss-web-dev
+    depends_on:
+      - api
     environment:
       API_PROXY_TARGET: http://api:8000
     ports:

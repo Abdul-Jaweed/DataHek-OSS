@@ -14,7 +14,8 @@ uvicorn datahek.api.app:create_app --factory --port 8000
 ```
 
 Frontend: `cd apps/web && npm install && npm run dev` (Vite proxies the API on :8000).
-Full stack: `docker compose up -d --build`.
+Full stack: `docker compose up -d --build` serves the production web build; use
+`docker compose --profile dev up web-dev` for the hot-reload dev server in Docker.
 
 ## Before you start
 
