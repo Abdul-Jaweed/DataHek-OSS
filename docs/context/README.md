@@ -17,7 +17,7 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 | M3 | Context domain model + contracts | **Complete** |
 | M4 | Schema discovery + profiling | **Complete** |
 | M5 | Taxonomy, ontology, topology, granularity | **Complete** |
-| M6 | Graph abstraction + Neo4j adapter | Pending |
+| M6 | Graph abstraction + Neo4j adapter | **Complete** |
 | M7 | Schema Knowledge Graph | Pending |
 | M8 | Context Registry, persistence, versioning | Pending |
 | M9 | Human semantic validation | Pending |
@@ -45,6 +45,9 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 - [`semantic-enrichment.md`](semantic-enrichment.md) — the single LLM stage, trust and failure
   behavior (M5)
 - [`schema-profiling.md`](schema-profiling.md) — deterministic profiling method and privacy rules (M4)
+- [`graph-abstraction.md`](graph-abstraction.md) — the replaceable graph contract and its shared
+  test suite (M6)
+- [`neo4j.md`](neo4j.md) — Neo4j deployment, schema, safety rules, and licensing notes (M6)
 - [`ADR/`](ADR/) — 13 architecture decision records (subsystem boundary, persistent vs runtime,
   schema KG, Neo4j, graph abstraction, registry, package model, human validation, freshness, change
   detection, storage split, multi-tenancy, LLM vs deterministic)
@@ -68,6 +71,12 @@ identifier profiles, metric-grain caveats), `context/taxonomy.py` (role-based
 Domain → Subdomain → Category hierarchy, sensitive columns excluded), and `context/enrichment.py`
 (LLM concept/relationship proposals with controlled vocabularies, schema grounding, and graceful
 failure).
+
+M6 delivered in code: `context/graph/vocabulary.py` (ADR-003 controlled relationship types),
+`context/graph/memory.py` (deterministic adapter), `context/graph/neo4j.py` (Cypher confined here;
+tenant-scoped, vocabulary-validated, MERGE-idempotent, bounded reads), a shared
+`GraphRepositoryContract` suite that both adapters pass against live instances, the optional
+`[graph]` extra, container registration behind `DATAHEK_NEO4J_URL`, and a compose `graph` profile.
 
 Subsystem specifications produced with their implementation milestones:
 `taxonomy.md` / `ontology.md` / `topology.md` / `granularity.md` / `semantic-enrichment.md` (M5),
