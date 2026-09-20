@@ -25,9 +25,10 @@ docs/frontend/
 # vite cache
 .vite/
 
-# local-only (not pushed), except ADRs (referenced by code and README)
+# local-only (not pushed), except engineering docs (referenced by code and README)
 docs/*
 !docs/adr/
+!docs/context/
 
 # notebook scratch
 notebooks/*.db
