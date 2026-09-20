@@ -93,3 +93,10 @@ class ContextRegistryService:
     async def active(self, ctx: RequestContext, *, connection_id: str,
                      scope: str) -> ContextRecord | None:
         return await self._registry.active(ctx, connection_id=connection_id, scope=scope)
+
+    async def active_artifact(self, ctx: RequestContext, *, connection_id: str, scope: str,
+                              kind: ArtifactKind) -> ContextArtifact | None:
+        active = await self._registry.active(ctx, connection_id=connection_id, scope=scope)
+        if active is None:
+            return None
+        return await self._store.get(ctx, active.context_id, kind)
