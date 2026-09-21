@@ -203,6 +203,18 @@ class TestDateTruncExpressions(unittest.TestCase):
         self.assertNotIn("events.date_trunc", sql)
 
 
+class TestSelfJoinRejected(unittest.TestCase):
+    def test_self_join_is_rejected(self):
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="events", columns=["service"],
+            joins=[Join(table="events", on_left="span_id", on_right="parent_span_id")])])
+        with self.assertRaises(DatahekError) as caught:
+            validate_plan(plan, tables={"events"}, columns={"events": {"service"}},
+                          dialect="postgres")
+        self.assertEqual(caught.exception.code, ErrorCode.PLAN_INVALID)
+        self.assertIn("Self-joins", str(caught.exception))
+
+
 class TestTypeAwareValidation(unittest.TestCase):
     def _validate(self, plan, types):
         validate_plan(plan, tables=set(types), columns={t: set(c) for t, c in types.items()},

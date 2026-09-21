@@ -228,6 +228,12 @@ def validate_plan(
         # join tables must exist in the schema
         join_tables = {j.table for j in node.joins}
         for j in node.joins:
+            if j.table == node.source:
+                raise DatahekError(
+                    ErrorCode.PLAN_INVALID,
+                    f"Self-joins are not supported: '{j.table}' is already the source table",
+                    details={"table": j.table, "source": node.source},
+                )
             if j.table not in tables:
                 raise DatahekError(
                     ErrorCode.PLAN_INVALID,
