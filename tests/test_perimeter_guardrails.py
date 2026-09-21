@@ -208,3 +208,80 @@ class TestPolicyGuardrailTenantContext(unittest.TestCase):
             RequestContext(source="api"), {"plan": plan}))
         self.assertEqual(result.decision, "ALLOW")
         self.assertEqual(result.policy_version, "v10")
+
+
+class TestPipelinePreservesAllowReason(unittest.TestCase):
+    def test_informative_allow_result_is_returned(self):
+        import asyncio
+
+        from datahek.contracts.guardrails import GuardrailResult
+        from datahek.engine.guardrails import GuardrailPipeline
+        from datahek.kernel.context import RequestContext
+
+        class _Informative:
+            name = "policy"
+            stage = "plan"
+            enabled = True
+
+            async def run(self, ctx, payload):
+                return GuardrailResult(decision="ALLOW", reason="policy exception exc-1",
+                                       policy_version="v7")
+
+        class _Quiet:
+            name = "other"
+            stage = "plan"
+            enabled = True
+
+            async def run(self, ctx, payload):
+                return GuardrailResult(decision="ALLOW", reason="ok")
+
+        pipeline = GuardrailPipeline([_Informative(), _Quiet()])
+        result = asyncio.run(pipeline.run(RequestContext(source="api"), {}))
+        self.assertEqual(result.reason, "policy exception exc-1")
+        self.assertEqual(result.policy_version, "v7")
+
+    def test_default_when_no_information(self):
+        import asyncio
+
+        from datahek.contracts.guardrails import GuardrailResult
+        from datahek.engine.guardrails import GuardrailPipeline
+        from datahek.kernel.context import RequestContext
+
+        class _Quiet:
+            name = "other"
+            stage = "plan"
+            enabled = True
+
+            async def run(self, ctx, payload):
+                return GuardrailResult(decision="ALLOW", reason="ok")
+
+        pipeline = GuardrailPipeline([_Quiet()])
+        result = asyncio.run(pipeline.run(RequestContext(source="api"), {}))
+        self.assertEqual(result.reason, "ok")
+
+    def test_first_informative_allow_wins_over_later(self):
+        import asyncio
+
+        from datahek.contracts.guardrails import GuardrailResult
+        from datahek.engine.guardrails import GuardrailPipeline
+        from datahek.kernel.context import RequestContext
+
+        class _Policy:
+            name = "policy"
+            stage = "plan"
+            enabled = True
+
+            async def run(self, ctx, payload):
+                return GuardrailResult(decision="ALLOW", reason="policy exception exc-9")
+
+        class _Complexity:
+            name = "complexity"
+            stage = "plan"
+            enabled = True
+
+            async def run(self, ctx, payload):
+                return GuardrailResult(decision="ALLOW", reason="limit capped")
+
+        pipeline = GuardrailPipeline([_Policy(), _Complexity()])
+        result = asyncio.run(pipeline.run(RequestContext(source="api"), {}))
+        self.assertEqual(result.reason, "policy exception exc-9")

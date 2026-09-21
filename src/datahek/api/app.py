@@ -399,7 +399,7 @@ def create_app(container=None) -> FastAPI:
         result = await engine.execute(ctx, plan_result.plan, conn)
         columns = [c["name"] for c in result.columns]
         rows = [dict(zip(columns, [_json_safe(v) for v in row])) for row in result.rows]
-        await _save_checkpoint(c, ctx, req, plan_result.plan, result)
+        await _save_checkpoint(c, ctx, req, result.plan or plan_result.plan, result)
 
         follow_ups: dict[str, Any] = {
             "explanation": reasoner.explain(req.question, result, plan_result.plan, ctx)}
@@ -1117,11 +1117,12 @@ def create_app(container=None) -> FastAPI:
         return {"approval_id": approval_id, "status": status}
 
     @app.get("/checkpoints")
-    async def list_checkpoints(limit: int = 20, _identity=Depends(_require_auth)):
+    async def list_checkpoints(request: Request, limit: int = 20,
+                               _identity=Depends(_require_auth)):
         from datahek.contracts.misc import CheckpointStore
 
         store = c.resolve(CheckpointStore)
-        items = await store.list(RequestContext(source="api"), limit=min(limit, 100))
+        items = await store.list(_request_context(request, _identity), limit=min(limit, 100))
         return [{k: v for k, v in item.items() if k != "plan"} for item in items]
 
     @app.get("/checkpoints/{checkpoint_id}")
@@ -1255,7 +1256,7 @@ def create_app(container=None) -> FastAPI:
             columns = [c["name"] for c in result.columns]
             rows = [dict(zip(columns, [_json_safe(v) for v in row])) for row in result.rows]
 
-            await _save_checkpoint(c, ctx, req, plan_result.plan, result)
+            await _save_checkpoint(c, ctx, req, result.plan or plan_result.plan, result)
             yield ev({"type": "start", "conversation_id": req.conversation_id, "columns": columns, "row_count": result.row_count})
             yield ev({"type": "progress", "stage": "explaining", "message": "Generating answer…"})
             stream_redactions: set[str] = set()

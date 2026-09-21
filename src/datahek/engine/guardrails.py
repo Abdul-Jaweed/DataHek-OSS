@@ -16,13 +16,17 @@ class GuardrailPipeline:
         self.guardrails.append(guardrail)
 
     async def run(self, ctx: RequestContext, payload: dict) -> GuardrailResult:
+        last_allow = GuardrailResult(decision="ALLOW", reason="ok")
         for g in self.guardrails:
             if not g.enabled:
                 continue
             result = await g.run(ctx, payload)
             if result.decision != "ALLOW":
                 return result
-        return GuardrailResult(decision="ALLOW", reason="ok")
+            if last_allow.reason == "ok" and (result.reason != "ok"
+                                              or result.policy_version or result.evidence):
+                last_allow = result
+        return last_allow
 
 
 class PlanReadOnlyGuardrail(Guardrail):
@@ -83,13 +87,18 @@ class PolicyGuardrail(Guardrail):
             "roles": sorted(ctx.roles),
             "org": ctx.organization_id,
             "user_id": ctx.user_id,
+            "workspace_id": ctx.workspace_id,
+            "project_id": ctx.project_id,
             "action": payload.get("action") or "query",
         }
         decision = await self._policy.evaluate(context)
         action = decision.get("action", "ALLOW")
         policy_version = decision.get("policy_version")
-        if action == "ALLOW":
-            return GuardrailResult(decision="ALLOW", reason=decision.get("reason", "ok"),
+        filters = decision.get("filters") or []
+        if action in ("ALLOW", "FILTER"):
+            return GuardrailResult(decision="FILTER" if filters else "ALLOW",
+                                   reason=decision.get("reason", "ok"),
+                                   evidence={"filters": filters} if filters else {},
                                    policy_version=policy_version)
         return GuardrailResult(decision=action, reason=decision.get("reason", action),
                                score=1.0, policy_version=policy_version)

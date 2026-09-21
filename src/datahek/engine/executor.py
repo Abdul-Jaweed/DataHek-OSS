@@ -13,9 +13,30 @@ from datahek.engine.guardrails import (GuardrailPipeline, InputGuardrail, PlanCo
                                         PlanReadOnlyGuardrail, PolicyGuardrail, RateLimitGuardrail)
 from datahek.contracts.misc import ApprovalRequest, ApprovalService
 from datahek.contracts.policy import PolicyEngine
-from datahek.engine.plan import LogicalPlan, validate_plan
+from datahek.engine.plan import LogicalPlan, ReadNode, validate_plan
 from datahek.kernel.context import RequestContext
 from datahek.kernel.errors import DatahekError, ErrorCode
+
+
+def apply_row_filters(plan: LogicalPlan, filters: list[dict]) -> LogicalPlan:
+    """Append row-level predicates to matching read nodes (plans are frozen)."""
+    from dataclasses import replace
+
+    if not filters:
+        return plan
+    nodes = []
+    for node in plan.nodes:
+        source = getattr(node, "source", None)
+        predicates = [str(item.get("predicate") or item.get("filter") or "")
+                      for item in filters
+                      if item.get("table") in (source, "*")]
+        predicates = [predicate for predicate in predicates if predicate]
+        if isinstance(node, ReadNode) and predicates:
+            combined = " AND ".join(f"({predicate})" for predicate in predicates)
+            existing = node.filter
+            node = replace(node, filter=f"({existing}) AND {combined}" if existing else combined)
+        nodes.append(node)
+    return replace(plan, nodes=nodes)
 
 
 class ProviderRegistry:
@@ -48,6 +69,7 @@ class QueryResult:
     row_count: int = 0
     truncated: bool = False
     execution: ExecutionInfo | None = None
+    plan: LogicalPlan | None = None
 
 
 logger = logging.getLogger(__name__)
@@ -130,18 +152,31 @@ class Engine:
                           column_types=self.schema_service.column_types(catalog))
 
         payload: dict[str, Any] = {"plan": plan, "capabilities": provider.capabilities,
-                                   "question": getattr(ctx, "question", None)}
+                                   "question": getattr(ctx, "question", None),
+                                   "roles": sorted(ctx.roles),
+                                   "org": ctx.organization_id,
+                                   "user_id": ctx.user_id}
         decision: GuardrailResult = await self.guardrails.run(ctx, payload)
+
+        policy_decision = decision
+        applied_filters: list[dict] = []
+        if decision.decision == "FILTER":
+            applied_filters = list(decision.evidence.get("filters") or [])
+            plan = apply_row_filters(plan, applied_filters)
+            decision = GuardrailResult(decision="ALLOW", reason=decision.reason,
+                                       policy_version=decision.policy_version)
 
         await self._audit(ctx, AuditEvent(
             event_type="guardrail.decision",
             actor=ctx.user_id,
             action="execute",
             resource_ref=connection.id,
-            decision=decision.decision,
-            policy_version=decision.policy_version,
+            decision=policy_decision.decision,
+            policy_version=policy_decision.policy_version,
             tenant={"org": ctx.organization_id, "project": ctx.project_id},
-            payload={"guardrail": decision.reason, "plan_sources": [n.source for n in plan.nodes if hasattr(n, "source")]},
+            payload={"guardrail": policy_decision.reason,
+                     "plan_sources": [n.source for n in plan.nodes if hasattr(n, "source")],
+                     "filters": applied_filters or None},
         ))
         approved = False
         if decision.decision == "REQUIRE_APPROVAL":
@@ -240,6 +275,7 @@ class Engine:
             row_count=len(rows),
             truncated=truncated,
             execution=ExecutionInfo(provider_id=provider.provider_id, duration_ms=duration_ms),
+            plan=plan,
         )
         if self.masking_policy is not None and self.schema_service is not None:
             catalog = await self.schema_service.get_catalog(ctx, connection, provider)
