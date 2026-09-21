@@ -5,6 +5,7 @@ the plan. Write nodes are structurally separated — read-only is enforced by
 construction.
 """
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -12,6 +13,19 @@ from datahek.kernel.errors import DatahekError, ErrorCode
 
 PLAN_VERSION = 1
 DEFAULT_LIMIT = int(os.environ.get("DATAHEK_DEFAULT_LIMIT", "10"))
+
+_DATE_TRUNC = re.compile(
+    r"^\s*date_trunc\s*\(\s*'(year|quarter|month|week|day|hour|minute)'\s*,\s*"
+    r"([A-Za-z_][A-Za-z0-9_.]*)\s*\)\s*$", re.IGNORECASE)
+_DATE_TRUNC_DIALECTS = frozenset({"postgres", "duckdb", "clickhouse"})
+
+
+def date_trunc_parts(expression: str) -> tuple[str, str] | None:
+    """Return (unit, column) for a whitelisted DATE_TRUNC expression, else None."""
+    match = _DATE_TRUNC.match(expression or "")
+    if match is None:
+        return None
+    return match.group(1).lower(), match.group(2)
 
 
 @dataclass(frozen=True)
@@ -178,6 +192,17 @@ def validate_plan(
         def _resolve(col: str, default_table: str, context: str) -> None:
             if col == "*" and node.aggregates:
                 return  # count(*)-style: dropped by the compiler when aggregating
+            truncated = date_trunc_parts(col)
+            if truncated is not None:
+                unit, inner = truncated
+                if dialect is not None and dialect not in _DATE_TRUNC_DIALECTS:
+                    raise DatahekError(
+                        ErrorCode.PLAN_INVALID,
+                        f"DATE_TRUNC is not supported on dialect '{dialect}'",
+                        details={"dialect": dialect},
+                    )
+                _resolve(inner, default_table, context)
+                return
             if "." in col:
                 table, _, bare = col.partition(".")
                 if table not in join_tables and table != node.source:

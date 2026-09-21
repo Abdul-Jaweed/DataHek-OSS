@@ -4,13 +4,15 @@ The LogicalPlan compiles to provider SQL; dialect differences live in the
 provider, the node model is shared. Supports the common SELECT shape with
 optional joins for ClickHouse, PostgreSQL, MySQL, and SQLite.
 """
-from datahek.engine.plan import DEFAULT_LIMIT, LogicalPlan, ReadNode
+from datahek.engine.plan import DEFAULT_LIMIT, LogicalPlan, ReadNode, date_trunc_parts
 from datahek.kernel.errors import DatahekError, ErrorCode
 
 
 def _qualified(column: str, base: str, has_joins: bool) -> str:
     """Qualify a bare column with the base table when the query joins."""
     if not has_joins or "." in column or column == "*":
+        return column
+    if date_trunc_parts(column) is not None:
         return column
     return f"{base}.{column}"
 

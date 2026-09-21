@@ -130,6 +130,14 @@ class OpenAICompatibleModelProvider(ModelProvider):
             return ModelProviderError("model provider unreachable")
         return e
 
+    @staticmethod
+    def _is_transient(e: Exception) -> bool:
+        import httpx
+
+        if isinstance(e, (httpx.TimeoutException, httpx.TransportError)):
+            return True
+        return isinstance(e, httpx.HTTPStatusError) and e.response.status_code >= 500
+
     async def complete(self, request: ModelRequest) -> ModelResponse:
         payload: dict[str, Any] = {
             "model": self._config.model,
@@ -142,13 +150,20 @@ class OpenAICompatibleModelProvider(ModelProvider):
         if request.get("response_format") == "json_object":
             payload["response_format"] = {"type": "json_object"}
 
-        try:
-            data = await self._post(payload)
-        except Exception as e:
-            converted = self._convert_error(e)
-            if converted is not e:
-                raise converted from e
-            raise
+        for attempt in range(2):
+            try:
+                data = await self._post(payload)
+                break
+            except Exception as e:
+                if attempt == 0 and self._is_transient(e):
+                    import asyncio
+
+                    await asyncio.sleep(2.0)
+                    continue
+                converted = self._convert_error(e)
+                if converted is not e:
+                    raise converted from e
+                raise
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as e:

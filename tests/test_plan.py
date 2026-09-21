@@ -161,6 +161,48 @@ class TestDialectFunctionValidation(unittest.TestCase):
                           columns={"traces": {"service", "duration_ms"}}, dialect="postgres")
 
 
+class TestDateTruncExpressions(unittest.TestCase):
+    TABLES = {"events"}
+    COLUMNS = {"events": {"event_time", "service"}}
+
+    def _plan(self, columns, group_by):
+        return LogicalPlan(nodes=[ReadNode(source="events", columns=columns,
+                                           group_by=group_by)])
+
+    def test_accepted_on_postgres(self):
+        expression = "DATE_TRUNC('month', event_time)"
+        validate_plan(self._plan([expression], [expression]),
+                      tables=self.TABLES, columns=self.COLUMNS, dialect="postgres")
+
+    def test_rejected_on_unsupported_dialect(self):
+        expression = "date_trunc('month', event_time)"
+        with self.assertRaises(DatahekError) as caught:
+            validate_plan(self._plan([expression], [expression]),
+                          tables=self.TABLES, columns=self.COLUMNS, dialect="sqlite")
+        self.assertEqual(caught.exception.code, ErrorCode.PLAN_INVALID)
+        self.assertIn("DATE_TRUNC", str(caught.exception))
+
+    def test_unknown_inner_column_rejected(self):
+        expression = "date_trunc('month', nope)"
+        with self.assertRaises(DatahekError):
+            validate_plan(self._plan([expression], [expression]),
+                          tables=self.TABLES, columns=self.COLUMNS, dialect="postgres")
+
+    def test_invalid_unit_rejected(self):
+        expression = "date_trunc('fortnight', event_time)"
+        with self.assertRaises(DatahekError):
+            validate_plan(self._plan([expression], [expression]),
+                          tables=self.TABLES, columns=self.COLUMNS, dialect="postgres")
+
+    def test_compiler_keeps_expression_unqualified(self):
+        from datahek.engine.compile import compile_sql
+
+        expression = "date_trunc('month', event_time)"
+        sql = compile_sql(self._plan([expression], [expression]))
+        self.assertIn(expression, sql)
+        self.assertNotIn("events.date_trunc", sql)
+
+
 class TestTypeAwareValidation(unittest.TestCase):
     def _validate(self, plan, types):
         validate_plan(plan, tables=set(types), columns={t: set(c) for t, c in types.items()},

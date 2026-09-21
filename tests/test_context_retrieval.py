@@ -227,12 +227,21 @@ class TestRetrieval(_Base):
         self.assertGreaterEqual(len(retrieved.schema), 1)
         self.assertLessEqual(len(retrieved.schema), 8)
 
+    def test_snake_case_columns_match_question_words(self):
+        retrieved = self.retrieve("created at")
+        names = {table.name for table in retrieved.schema}
+        self.assertEqual(names, {"orders"})
+
 
 class TestTokens(unittest.TestCase):
     def test_stopwords_removed(self):
         tokens = question_tokens("How many orders were there?")
         self.assertIn("orders", tokens)
         self.assertNotIn("how", tokens)
+
+    def test_underscores_split_identifiers(self):
+        self.assertEqual(question_tokens("unified_events error_category"),
+                         frozenset({"unified", "events", "error", "category"}))
 
 
 if __name__ == "__main__":

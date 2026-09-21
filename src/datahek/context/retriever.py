@@ -20,7 +20,7 @@ from datahek.contracts.context import (
 )
 from datahek.kernel.context import RequestContext
 
-_TOKEN = re.compile(r"[a-z0-9_]+")
+_TOKEN = re.compile(r"[a-z0-9]+")
 _STOPWORDS = frozenset({
     "the", "a", "an", "of", "for", "by", "in", "on", "to", "and", "or", "with",
     "per", "how", "many", "what", "which", "show", "me", "top", "last", "this",

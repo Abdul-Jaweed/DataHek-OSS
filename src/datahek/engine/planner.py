@@ -53,6 +53,8 @@ Rules:
   columns, event categories belong in event-type columns.
 - Never apply sum or avg to boolean columns; count true values with count(*) plus a WHERE condition.
 - Only join columns whose types are compatible (see the schema summary); otherwise return a clarification.
+- For time buckets use DATE_TRUNC('<unit>', <time_column>) in both "columns" and
+  "group_by" (units: year, quarter, month, week, day, hour, minute).
 - If the question is ambiguous or no table matches, return
   {"nodes": [], "clarification": "<question for the user>"}.
 """
