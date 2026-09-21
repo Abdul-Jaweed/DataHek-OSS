@@ -420,3 +420,51 @@ class TestConnectionUpdate(unittest.TestCase):
         r = self.client.put(f"/connections/{cid2}", json={"name": "first", "provider": "sqlite"})
         self.assertEqual(r.status_code, 409, r.text)
         self.assertEqual(r.json()["code"], "CONNECTION_EXISTS")
+
+
+class TestRequestContextIdentity(unittest.TestCase):
+    def test_identity_organization_propagates(self):
+        from datahek.api.app import _request_context
+        from datahek.contracts.auth import AuthenticatedIdentity
+        from datahek.kernel.context import RequestContext
+
+        class _EnterpriseIdentity(AuthenticatedIdentity):
+            organization_id: str = "acme"
+
+        class _Req:
+            approval_id = None
+            question = "q"
+            user_id = "anon"
+
+        ctx = _request_context(_Req(), _EnterpriseIdentity(
+            user_id="alice", authenticated=True, roles=frozenset({"admin"}),
+            permissions=frozenset({"connection:query"})))
+        self.assertIsInstance(ctx, RequestContext)
+        self.assertEqual(ctx.organization_id, "acme")
+        self.assertEqual(ctx.user_id, "alice")
+        self.assertTrue(ctx.authenticated)
+
+    def test_plain_identity_defaults_org(self):
+        from datahek.api.app import _request_context
+        from datahek.contracts.auth import AuthenticatedIdentity
+
+        class _Req:
+            approval_id = None
+            question = "q"
+            user_id = "anon"
+
+        ctx = _request_context(_Req(), AuthenticatedIdentity(user_id="bob", authenticated=True))
+        self.assertEqual(ctx.organization_id, "default")
+
+    def test_unauthenticated_uses_request_user(self):
+        from datahek.api.app import _request_context
+        from datahek.contracts.auth import AuthenticatedIdentity
+
+        class _Req:
+            approval_id = None
+            question = "q"
+            user_id = "carol"
+
+        ctx = _request_context(_Req(), AuthenticatedIdentity(user_id="bob", authenticated=False))
+        self.assertEqual(ctx.user_id, "carol")
+        self.assertFalse(ctx.authenticated)

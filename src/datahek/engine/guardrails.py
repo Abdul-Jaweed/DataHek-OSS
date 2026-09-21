@@ -80,12 +80,19 @@ class PolicyGuardrail(Guardrail):
             "plan": plan,
             "table": tables[0] if tables else None,
             "tables": tables,
+            "roles": sorted(ctx.roles),
+            "org": ctx.organization_id,
+            "user_id": ctx.user_id,
+            "action": payload.get("action") or "query",
         }
         decision = await self._policy.evaluate(context)
         action = decision.get("action", "ALLOW")
+        policy_version = decision.get("policy_version")
         if action == "ALLOW":
-            return GuardrailResult(decision="ALLOW", reason=decision.get("reason", "ok"))
-        return GuardrailResult(decision=action, reason=decision.get("reason", action), score=1.0)
+            return GuardrailResult(decision="ALLOW", reason=decision.get("reason", "ok"),
+                                   policy_version=policy_version)
+        return GuardrailResult(decision=action, reason=decision.get("reason", action),
+                               score=1.0, policy_version=policy_version)
 
 
 class RateLimitGuardrail(Guardrail):

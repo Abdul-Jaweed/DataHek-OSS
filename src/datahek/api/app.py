@@ -164,18 +164,21 @@ def _json_safe(value: Any) -> Any:
 
 def _request_context(req, identity=None) -> RequestContext:
     """Normalized request context — carries identity when authentication is on (ADR-004)."""
+    approval_id = getattr(req, "approval_id", None)
+    question = getattr(req, "question", None)
     if identity is not None and identity.authenticated:
         return RequestContext(
             source="api",
             user_id=identity.user_id,
+            organization_id=getattr(identity, "organization_id", "") or "default",
             authenticated=True,
             roles=identity.roles,
             permissions=identity.permissions,
-            approval_id=req.approval_id,
-            question=req.question,
+            approval_id=approval_id,
+            question=question,
         )
-    return RequestContext(source="api", user_id=req.user_id, approval_id=req.approval_id,
-                          question=req.question)
+    return RequestContext(source="api", user_id=getattr(req, "user_id", "anonymous"),
+                          approval_id=approval_id, question=question)
 
 
 async def _conversation_history(conversations, ctx, conversation_id: str | None,
@@ -774,7 +777,8 @@ def create_app(container=None) -> FastAPI:
         return await model_provider.describe()
 
     @app.post("/connections", status_code=201)
-    async def create_connection(req: ConnectionRequest, _identity=Depends(_require_auth)):
+    async def create_connection(request: Request, req: ConnectionRequest,
+                                _identity=Depends(_require_auth)):
         from datahek.contracts.connections import Connection
         from datahek.kernel.ids import entity_id
 
@@ -784,7 +788,7 @@ def create_app(container=None) -> FastAPI:
                 f"Provider '{req.provider}' is not supported",
                 details={"provider": req.provider},
             )
-        ctx = RequestContext(source="api")
+        ctx = _request_context(req, _identity)
         current = len(await conn_mgr.list_connections(ctx))
         limit = entitlements.limit("connections")
         if limit is not None and current >= limit:
@@ -813,8 +817,8 @@ def create_app(container=None) -> FastAPI:
         }
 
     @app.get("/connections")
-    async def list_connections(_identity=Depends(_require_auth)):
-        ctx = RequestContext(source="api")
+    async def list_connections(request: Request, _identity=Depends(_require_auth)):
+        ctx = _request_context(request, _identity)
         conns = await conn_mgr.list_connections(ctx)
         return [{
             "id": c.id, "name": c.name, "provider": c.provider,
@@ -822,7 +826,8 @@ def create_app(container=None) -> FastAPI:
         } for c in conns]
 
     @app.post("/connections/test")
-    async def test_connection(req: ConnectionRequest, _identity=Depends(_require_auth)):
+    async def test_connection(request: Request, req: ConnectionRequest,
+                              _identity=Depends(_require_auth)):
         """Test connectivity for the values as-entered (nothing persisted)."""
         from datahek.contracts.connections import Connection
 
@@ -858,9 +863,9 @@ def create_app(container=None) -> FastAPI:
             }
 
     @app.put("/connections/{connection_id}")
-    async def update_connection(connection_id: str, req: ConnectionRequest,
+    async def update_connection(request: Request, connection_id: str, req: ConnectionRequest,
                                 _identity=Depends(_require_auth)):
-        ctx = RequestContext(source="api")
+        ctx = _request_context(req, _identity)
         if req.provider not in registry.ids():
             raise DatahekError(
                 ErrorCode.UNSUPPORTED_PROVIDER,
@@ -883,8 +888,9 @@ def create_app(container=None) -> FastAPI:
         }
 
     @app.delete("/connections/{connection_id}", status_code=204)
-    async def delete_connection(connection_id: str, _identity=Depends(_require_auth)):
-        ctx = RequestContext(source="api")
+    async def delete_connection(request: Request, connection_id: str,
+                                _identity=Depends(_require_auth)):
+        ctx = _request_context(request, _identity)
         await conn_mgr.remove(ctx, connection_id)
         await _audit_event(c, "connection.delete", "delete", actor=_actor(_identity),
                            resource_ref=connection_id)

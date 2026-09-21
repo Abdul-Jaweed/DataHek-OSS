@@ -163,3 +163,48 @@ class TestApiPerimeter(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPolicyGuardrailTenantContext(unittest.TestCase):
+    def test_tenant_context_reaches_policy_engine(self):
+        import asyncio
+
+        from datahek.engine.guardrails import PolicyGuardrail
+        from datahek.engine.plan import LogicalPlan, ReadNode
+        from datahek.kernel.context import RequestContext
+
+        captured = {}
+
+        class _Engine:
+            async def evaluate(self, context):
+                captured.update(context)
+                return {"action": "DENY", "reason": "blocked by policy",
+                        "policy_version": "v9"}
+
+        plan = LogicalPlan(nodes=[ReadNode(source="payments", columns=["id"])])
+        ctx = RequestContext(source="api", user_id="alice", organization_id="acme",
+                             roles=frozenset({"analyst"}))
+        result = asyncio.run(PolicyGuardrail(_Engine()).run(ctx, {"plan": plan}))
+
+        self.assertEqual(captured["org"], "acme")
+        self.assertEqual(captured["roles"], ["analyst"])
+        self.assertEqual(captured["tables"], ["payments"])
+        self.assertEqual(result.decision, "DENY")
+        self.assertEqual(result.policy_version, "v9")
+
+    def test_allow_carries_policy_version(self):
+        import asyncio
+
+        from datahek.engine.guardrails import PolicyGuardrail
+        from datahek.engine.plan import LogicalPlan, ReadNode
+        from datahek.kernel.context import RequestContext
+
+        class _Engine:
+            async def evaluate(self, context):
+                return {"action": "ALLOW", "reason": "ok", "policy_version": "v10"}
+
+        plan = LogicalPlan(nodes=[ReadNode(source="events", columns=["id"])])
+        result = asyncio.run(PolicyGuardrail(_Engine()).run(
+            RequestContext(source="api"), {"plan": plan}))
+        self.assertEqual(result.decision, "ALLOW")
+        self.assertEqual(result.policy_version, "v10")
