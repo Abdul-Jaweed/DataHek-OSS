@@ -8,6 +8,7 @@ from datahek.defaults.pg import PgMetadata
 from datahek.kernel.context import RequestContext
 
 PG_URL = os.environ.get("DATAHEK_TEST_PG_URL") or "postgresql://datahek:datahek@127.0.0.1:55432/datahek"
+TEST_ORG = "pgtest"
 
 
 def _run(coro):
@@ -23,13 +24,17 @@ class TestPostgresConversationStore(unittest.TestCase):
             await self.pg.init_schema()
             conn = await self.pg.connect()
             try:
-                conn.execute("TRUNCATE messages, conversations, prompts RESTART IDENTITY CASCADE")
+                conn.execute(
+                    "DELETE FROM messages WHERE conversation_id IN"
+                    " (SELECT id FROM conversations WHERE org_id = %s)", (TEST_ORG,))
+                conn.execute("DELETE FROM conversations WHERE org_id = %s", (TEST_ORG,))
+                conn.execute("DELETE FROM prompts WHERE org_id = %s", (TEST_ORG,))
             finally:
                 conn.close()
 
         _run(setup())
         self.store = PostgresConversationStore(self.pg)
-        self.ctx = RequestContext(source="api", user_id="alice")
+        self.ctx = RequestContext(source="api", user_id="alice", organization_id=TEST_ORG)
 
     def test_create_and_get(self):
         _run(self.store.create(self.ctx, "conv_1", title="first"))

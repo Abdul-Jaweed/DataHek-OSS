@@ -1,5 +1,8 @@
 """PgMetadata — shared PostgreSQL access for durable OSS stores (opt-in)."""
+import asyncio
+
 import psycopg
+
 from datahek.kernel.config import Config, config_from_env
 
 
@@ -110,7 +113,9 @@ class PgMetadata:
         self._url = url or cfg.url
 
     async def connect(self) -> psycopg.Connection:
-        return psycopg.connect(self._url, connect_timeout=10, autocommit=True)
+        """Open a connection off the event loop — psycopg.connect blocks."""
+        return await asyncio.to_thread(psycopg.connect, self._url,
+                                       connect_timeout=10, autocommit=True)
 
     async def init_schema(self) -> None:
         """Apply pending schema migrations under an advisory lock."""

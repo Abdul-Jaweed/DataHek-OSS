@@ -4,6 +4,7 @@ Deterministic token overlap against table/column/metric/concept text; no LLM.
 Always bounded (table and column caps) — never the whole store or graph. Stale
 context is returned with ``stale=True`` so callers can warn and queue a rebuild.
 """
+import asyncio
 import re
 
 from datahek.contracts.context import (
@@ -54,10 +55,12 @@ class ContextRetrieverService:
         if active is None:
             return None
         artifacts: dict[ArtifactKind, ContextArtifact] = {}
-        for kind in active.artifact_kinds:
-            artifact = await self._store.get(ctx, active.context_id, kind)
-            if artifact is not None:
-                artifacts[kind] = artifact
+        kinds = list(active.artifact_kinds)
+        if kinds:
+            loaded = await asyncio.gather(
+                *(self._store.get(ctx, active.context_id, kind) for kind in kinds))
+            artifacts = {kind: artifact
+                         for kind, artifact in zip(kinds, loaded) if artifact is not None}
         schema = artifacts.get(ArtifactKind.SCHEMA)
         if not isinstance(schema, SchemaContext):
             return None

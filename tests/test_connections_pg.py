@@ -3,6 +3,7 @@ import os
 import unittest
 
 PG_URL = os.environ.get("DATAHEK_TEST_PG_URL") or "postgresql://datahek:datahek@127.0.0.1:55432/datahek"
+TEST_ORG = "pgtest"
 
 
 @unittest.skipUnless(os.environ.get("DATAHEK_TEST_PG_URL"), "postgres test container not running")
@@ -17,7 +18,7 @@ class TestPostgresConnectionManager(unittest.TestCase):
             await pg.init_schema()
             conn = await pg.connect()
             try:
-                conn.execute("DELETE FROM connections")
+                conn.execute("DELETE FROM connections WHERE org_id = %s", (TEST_ORG,))
             finally:
                 conn.close()
 
@@ -34,9 +35,9 @@ class TestPostgresConnectionManager(unittest.TestCase):
             pg = PgMetadata(url=PG_URL)
             await pg.init_schema()
             mgr = PostgresConnectionManager(pg, encryption_key="test-key-32-bytes-long!!")
-            ctx = RequestContext(source="api")
+            ctx = RequestContext(source="api", organization_id=TEST_ORG)
             conn = Connection(id="c1", name="ch1", provider="clickhouse",
-                              org_id="default", project_id="default",
+                              org_id=TEST_ORG, project_id="default",
                               settings={"password": "s3cret"})
             await mgr.add(ctx, conn)
             got = await mgr.get_connection(ctx, "c1")
@@ -60,14 +61,14 @@ class TestPostgresConnectionManager(unittest.TestCase):
             pg = PgMetadata(url=PG_URL)
             await pg.init_schema()
             mgr = PostgresConnectionManager(pg, encryption_key="test-key-32-bytes-long!!")
-            ctx = RequestContext(source="api")
+            ctx = RequestContext(source="api", organization_id=TEST_ORG)
             conn = Connection(id="dup1", name="dup-name", provider="clickhouse",
-                              org_id="default", project_id="default",
+                              org_id=TEST_ORG, project_id="default",
                               settings={"password": "s3cret"})
             await mgr.add(ctx, conn)
             try:
                 dup = Connection(id="dup2", name="dup-name", provider="clickhouse",
-                                 org_id="default", project_id="default",
+                                 org_id=TEST_ORG, project_id="default",
                                  settings={"password": "other"})
                 with self.assertRaises(DatahekError) as cm:
                     await mgr.add(ctx, dup)
@@ -90,10 +91,10 @@ class TestPostgresConnectionManager(unittest.TestCase):
             pg = PgMetadata(url=PG_URL)
             await pg.init_schema()
             mgr = PostgresConnectionManager(pg, encryption_key="test-key-32-bytes-long!!")
-            ctx = RequestContext(source="api")
+            ctx = RequestContext(source="api", organization_id=TEST_ORG)
             other_ctx = RequestContext(source="api", organization_id="other-org")
             conn = Connection(id="nf1", name="nf-name", provider="clickhouse",
-                              org_id="default", project_id="default",
+                              org_id=TEST_ORG, project_id="default",
                               settings={"password": "s3cret"})
             await mgr.add(ctx, conn)
             try:
@@ -124,9 +125,9 @@ class TestPostgresConnectionManager(unittest.TestCase):
             pg = PgMetadata(url=PG_URL)
             await pg.init_schema()
             mgr = PostgresConnectionManager(pg, encryption_key="test-key-32-bytes-long!!")
-            ctx = RequestContext(source="api")
+            ctx = RequestContext(source="api", organization_id=TEST_ORG)
             conn = Connection(id="enc1", name="enc-name", provider="clickhouse",
-                              org_id="default", project_id="default",
+                              org_id=TEST_ORG, project_id="default",
                               settings={"password": "s3cret", "user": "readonly"})
             await mgr.add(ctx, conn)
             try:
@@ -162,9 +163,9 @@ class TestPostgresConnectionManager(unittest.TestCase):
             pg = PgMetadata(url=PG_URL)
             await pg.init_schema()
             mgr = PostgresConnectionManager(pg, encryption_key=None)
-            ctx = RequestContext(source="api")
+            ctx = RequestContext(source="api", organization_id=TEST_ORG)
             conn = Connection(id="plain1", name="plain-name", provider="clickhouse",
-                              org_id="default", project_id="default",
+                              org_id=TEST_ORG, project_id="default",
                               settings={"password": "s3cret"})
             await mgr.add(ctx, conn)
             try:
@@ -195,9 +196,9 @@ class TestPostgresConnectionManager(unittest.TestCase):
             pg = PgMetadata(url=PG_URL)
             await pg.init_schema()
             mgr = PostgresConnectionManager(pg, encryption_key="test-key-32-bytes-long!!")
-            ctx = RequestContext(source="api")
+            ctx = RequestContext(source="api", organization_id=TEST_ORG)
             conn = Connection(id="sref1", name="sref-name", provider="clickhouse",
-                              org_id="default", project_id="default",
+                              org_id=TEST_ORG, project_id="default",
                               settings={"password": "secret://infisical/prod/datahek/CH_PW"})
             await mgr.add(ctx, conn)
             try:
@@ -221,9 +222,9 @@ class TestPostgresConnectionManager(unittest.TestCase):
             pg = PgMetadata(url=PG_URL)
             await pg.init_schema()
             mgr = PostgresConnectionManager(pg, encryption_key="test-key-32-bytes-long!!")
-            ctx = RequestContext(source="api")
+            ctx = RequestContext(source="api", organization_id=TEST_ORG)
             conn = Connection(id="sref2", name="sref2-name", provider="clickhouse",
-                              org_id="default", project_id="default",
+                              org_id=TEST_ORG, project_id="default",
                               secret_ref=SecretRef(provider="infisical", name="pg_password"),
                               settings={"password": "s3cret"})
             await mgr.add(ctx, conn)
@@ -250,9 +251,9 @@ class TestPostgresConnectionManager(unittest.TestCase):
             pg = PgMetadata(url=PG_URL)
             await pg.init_schema()
             mgr = PostgresConnectionManager(pg, encryption_key="test-key-32-bytes-long!!")
-            ctx = RequestContext(source="api")
+            ctx = RequestContext(source="api", organization_id=TEST_ORG)
             conn = Connection(id="noref1", name="noref-name", provider="clickhouse",
-                              org_id="default", project_id="default",
+                              org_id=TEST_ORG, project_id="default",
                               settings={"password": "s3cret"})
             await mgr.add(ctx, conn)
             try:

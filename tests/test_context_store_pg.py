@@ -60,7 +60,7 @@ class TestPostgresContextStore(unittest.TestCase):
         self.registry = PostgresContextRegistry(self.pg)
         self.store = PostgresContextStore(self.pg)
         self.service = ContextRegistryService(self.registry, self.store)
-        self.ctx = RequestContext(source="cli")
+        self.ctx = RequestContext(source="cli", organization_id="pgtest")
         self.call(self._cleanup())
 
     def tearDown(self):
