@@ -220,6 +220,28 @@ class TestDateTruncExpressions(unittest.TestCase):
         validate_plan(plan, tables=self.TABLES,
                       columns={"events": {"service", "operation"}}, dialect="postgres")
 
+    def test_order_by_aggregate_alias_accepted(self):
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="events", columns=["service"], group_by=["service"],
+            aggregates=[Aggregate(function="count", column="*", alias="n")],
+            order_by=["n DESC"])])
+        validate_plan(plan, tables=self.TABLES, columns=self.COLUMNS, dialect="postgres")
+
+    def test_order_by_select_alias_accepted(self):
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="events", columns=["date_trunc('month', event_time) AS month"],
+            group_by=["date_trunc('month', event_time)"], order_by=["month"])])
+        validate_plan(plan, tables=self.TABLES, columns=self.COLUMNS, dialect="postgres")
+
+    def test_order_by_unknown_reference_rejected(self):
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="events", columns=["service"], group_by=["service"],
+            aggregates=[Aggregate(function="count", column="*", alias="n")],
+            order_by=["month"])])
+        with self.assertRaises(DatahekError) as caught:
+            validate_plan(plan, tables=self.TABLES, columns=self.COLUMNS, dialect="postgres")
+        self.assertIn("ORDER BY", str(caught.exception))
+
 
 class TestSelfJoinRejected(unittest.TestCase):
     def test_self_join_is_rejected(self):

@@ -282,6 +282,23 @@ def validate_plan(
                 ErrorCode.PLAN_INVALID,
                 f"GROUP BY column '{col}' must be in SELECT columns",
             )
+
+        orderable = set(aggregate_aliases)
+        for col in node.columns:
+            orderable.add(_bare(col))
+            alias_match = re.search(r"\s+as\s+([A-Za-z_][A-Za-z0-9_]*)\s*$", col, re.IGNORECASE)
+            if alias_match:
+                orderable.add(alias_match.group(1))
+        for entry in node.order_by:
+            key = re.split(r"\s+", str(entry).strip())[0]
+            if key.isdigit() or date_trunc_parts(entry) is not None:
+                continue
+            if key in orderable or _bare(key) in known:
+                continue
+            raise DatahekError(
+                ErrorCode.PLAN_INVALID,
+                f"ORDER BY '{entry}' is not a selected column or aggregate alias",
+            )
         for agg in node.aggregates:
             if agg.function not in allowed_functions:
                 raise DatahekError(
