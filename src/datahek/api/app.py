@@ -1,4 +1,5 @@
 """DataHek OSS API — the platform's REST surface (health, connections, ask, conversations, evaluations)."""
+import asyncio
 import logging
 import os
 import time
@@ -396,22 +397,35 @@ def create_app(container=None) -> FastAPI:
         columns = [c["name"] for c in result.columns]
         rows = [dict(zip(columns, [_json_safe(v) for v in row])) for row in result.rows]
         await _save_checkpoint(c, ctx, req, plan_result.plan, result)
-        explanation, redactions = sanitize_output(await reasoner.explain(req.question, result, plan_result.plan, ctx))
+
+        follow_ups: dict[str, Any] = {
+            "explanation": reasoner.explain(req.question, result, plan_result.plan, ctx)}
+        if _verifier_enabled() and c.has(Verifier):
+            follow_ups["verification"] = c.resolve(Verifier).verify(req.question, result, ctx)
+        if _suggestions_enabled() and c.has(FollowUpSuggester):
+            follow_ups["suggestions"] = c.resolve(FollowUpSuggester).suggest(
+                req.question, result, ctx)
+        outcomes = await asyncio.gather(*follow_ups.values(), return_exceptions=True)
+        gathered = dict(zip(follow_ups, outcomes))
+        explanation = gathered["explanation"]
+        if isinstance(explanation, BaseException):
+            raise explanation
+        verification = gathered.get("verification")
+        if isinstance(verification, BaseException):
+            logger.warning("Verifier unavailable: %s", verification)
+            verification = None
+        suggestions = gathered.get("suggestions")
+        if isinstance(suggestions, BaseException):
+            logger.warning("Follow-up suggestions unavailable: %s", suggestions)
+            suggestions = None
+        explanation, redactions = sanitize_output(explanation)
         if redactions:
             await _audit_output_redactions(c, ctx, conn, redactions)
         await _record_turn(conversations, ctx, req, explanation, "result")
-        verification = None
-        if _verifier_enabled() and c.has(Verifier):
-            verification = await c.resolve(Verifier).verify(req.question, result, ctx)
         metrics.inc("datahek_ask_results_total", outcome="ok")
         metrics.inc("datahek_rows_returned_total", result.row_count or 0)
-
-        suggestions = None
-        if _suggestions_enabled() and c.has(FollowUpSuggester):
-            found = await c.resolve(FollowUpSuggester).suggest(req.question, result, ctx)
-            suggestions = found or None
         return {
-            "suggestions": suggestions,
+            "suggestions": suggestions or None,
             "verification": verification,
             "redactions": redactions or None,
             "clarification": None,
