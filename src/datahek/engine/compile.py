@@ -63,6 +63,8 @@ def compile_sql(plan: LogicalPlan) -> str:
     if node.group_by:
         grouped = [_qualified(c, node.source, has_joins) for c in node.group_by]
         sql += f" GROUP BY {', '.join(grouped)}"
+    if node.having:
+        sql += f" HAVING {node.having}"
     if node.order_by:
         sql += f" ORDER BY {', '.join(node.order_by)}"
     limit = node.limit or DEFAULT_LIMIT

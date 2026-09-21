@@ -251,6 +251,38 @@ class TestDateTruncExpressions(unittest.TestCase):
             validate_plan(plan, tables=self.TABLES, columns=self.COLUMNS, dialect="postgres")
         self.assertIn("ORDER BY", str(caught.exception))
 
+    def test_having_compiled_after_group_by(self):
+        from datahek.engine.compile import compile_sql
+
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="events", columns=["service"], group_by=["service"],
+            having="count(*) > 1000",
+            aggregates=[Aggregate(function="count", column="*", alias="n")])])
+        sql = compile_sql(plan)
+        self.assertIn("GROUP BY service HAVING count(*) > 1000", sql)
+
+    def test_having_without_aggregates_rejected(self):
+        plan = LogicalPlan(nodes=[ReadNode(source="events", columns=["service"],
+                                           having="count(*) > 1")])
+        with self.assertRaises(DatahekError):
+            validate_plan(plan, tables=self.TABLES, columns=self.COLUMNS, dialect="postgres")
+
+    def test_having_multi_statement_rejected(self):
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="events", columns=["service"], group_by=["service"],
+            having="count(*) > 1; DROP TABLE events",
+            aggregates=[Aggregate(function="count", column="*", alias="n")])])
+        with self.assertRaises(DatahekError):
+            validate_plan(plan, tables=self.TABLES, columns=self.COLUMNS, dialect="postgres")
+
+    def test_aggregate_expression_as_column_rejected(self):
+        plan = LogicalPlan(nodes=[ReadNode(source="events",
+                                           columns=["event_id", "count(*)"])])
+        with self.assertRaises(DatahekError) as caught:
+            validate_plan(plan, tables=self.TABLES,
+                          columns={"events": {"event_id"}}, dialect="postgres")
+        self.assertIn("aggregate", str(caught.exception))
+
 
 class TestSelfJoinRejected(unittest.TestCase):
     def test_self_join_is_rejected(self):

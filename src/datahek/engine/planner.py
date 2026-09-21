@@ -34,6 +34,7 @@ Plan format:
 {"nodes": [
   {"type": "ReadNode", "source": "<base table>", "columns": [...],
    "filter": "<optional SQL predicate>", "group_by": [...],
+   "having": "<optional SQL predicate on aggregate results>",
    "aggregates": [{"function": "<allowed function>", "column": "<column or *>", "alias": "<name>"}],
    "order_by": [...], "limit": <int>,
    "joins": [{"table": "<joined table>", "join_type": "inner|left",
@@ -42,7 +43,11 @@ Plan format:
 
 Rules:
 - Read-only only. Never produce WriteNode.
-- Only use tables and columns present in the schema.
+- Only use tables and columns present in the schema. Never invent column names.
+- If the question names a table or entity that is not in the schema, return a clarification —
+  never substitute a different table.
+- For thresholds on aggregate results use "having" (e.g. HAVING count(*) > 1000); never put an
+  aggregate into "columns" and never reference an aggregate alias in "filter".
 - Use joins ONLY when the question spans multiple related tables (max 2 joins).
 - When joining, reference joined-table columns as "table.column"; plain names target the base table.
 - Only use aggregate functions allowed for the target database dialect (given below).

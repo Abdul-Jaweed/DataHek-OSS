@@ -70,6 +70,7 @@ class ReadNode(PlanNode):
     columns: list[str] = field(default_factory=list)
     filter: str | None = None
     group_by: list[str] = field(default_factory=list)
+    having: str | None = None
     aggregates: list[Aggregate] = field(default_factory=list)
     order_by: list[str] = field(default_factory=list)
     limit: int | None = None
@@ -267,6 +268,13 @@ def validate_plan(
                     )
 
         aggregate_aliases = {agg.alias for agg in node.aggregates}
+        if not node.aggregates:
+            for col in node.columns:
+                if re.search(r"\b(count|sum|avg|min|max)\s*\(", col, re.IGNORECASE):
+                    raise DatahekError(
+                        ErrorCode.PLAN_INVALID,
+                        f"Column '{col}' looks like an aggregate; use the aggregates list",
+                    )
         for col in node.columns:
             if col in aggregate_aliases:
                 continue  # aggregate alias repeated in the select list (LLM noise)
@@ -301,6 +309,18 @@ def validate_plan(
                 ErrorCode.PLAN_INVALID,
                 f"ORDER BY '{entry}' is not a selected column or aggregate alias",
             )
+
+        if node.having is not None:
+            if not node.aggregates:
+                raise DatahekError(
+                    ErrorCode.PLAN_INVALID,
+                    "HAVING requires aggregates in the plan",
+                )
+            if ";" in node.having:
+                raise DatahekError(
+                    ErrorCode.PLAN_INVALID,
+                    "HAVING must be a single predicate",
+                )
         for agg in node.aggregates:
             if agg.function not in allowed_functions:
                 raise DatahekError(
