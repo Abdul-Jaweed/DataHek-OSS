@@ -57,6 +57,8 @@ Rules:
   never set a limit above 1000 — large limits trigger human approval.
 - Match named entities to the column that represents them: service names belong in service-name
   columns, event categories belong in event-type columns.
+- A bare entity name ("for checkout", "for ad") refers to the service-name column when one
+  exists; use operation-name columns only when the question explicitly says operation.
 - Never apply sum or avg to boolean columns; count true values with count(*) plus a WHERE condition.
 - Only join columns whose types are compatible (see the schema summary); otherwise return a clarification.
 - For time buckets use DATE_TRUNC('<unit>', <time_column>) in both "columns" and
