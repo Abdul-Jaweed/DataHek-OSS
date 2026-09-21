@@ -88,6 +88,25 @@ class TestPolicyDefault(unittest.TestCase):
         self.assertEqual(decision["action"], "DENY")
         self.assertIn("finance", decision["reason"])
 
+    def test_large_limit_on_raw_rows_requires_approval(self):
+        from datahek.engine.plan import LogicalPlan, ReadNode
+
+        engine = LocalPolicyEngine(approval_row_limit=1000)
+        plan = LogicalPlan(nodes=[ReadNode(source="events", columns=["service"], limit=5000)])
+        decision = asyncio.run(engine.evaluate({"plan": plan}))
+        self.assertEqual(decision["action"], "REQUIRE_APPROVAL")
+
+    def test_aggregate_plan_ignores_row_limit(self):
+        from datahek.engine.plan import Aggregate, LogicalPlan, ReadNode
+
+        engine = LocalPolicyEngine(approval_row_limit=1000)
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="events", columns=["service"], group_by=["service"],
+            aggregates=[Aggregate(function="count", column="*", alias="n")],
+            limit=1_000_000)])
+        decision = asyncio.run(engine.evaluate({"plan": plan}))
+        self.assertEqual(decision["action"], "ALLOW")
+
 
 class TestAuditDefault(unittest.TestCase):
     def test_jsonl_write(self):

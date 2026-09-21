@@ -16,7 +16,8 @@ DEFAULT_LIMIT = int(os.environ.get("DATAHEK_DEFAULT_LIMIT", "10"))
 
 _DATE_TRUNC = re.compile(
     r"^\s*date_trunc\s*\(\s*'(year|quarter|month|week|day|hour|minute)'\s*,\s*"
-    r"([A-Za-z_][A-Za-z0-9_.]*)\s*\)\s*$", re.IGNORECASE)
+    r"([A-Za-z_][A-Za-z0-9_.]*)\s*\)\s*(?:as\s+[A-Za-z_][A-Za-z0-9_]*\s*)?$",
+    re.IGNORECASE)
 _DATE_TRUNC_DIALECTS = frozenset({"postgres", "duckdb", "clickhouse"})
 
 
@@ -190,8 +191,8 @@ def validate_plan(
         known = columns.get(node.source, set())
 
         def _resolve(col: str, default_table: str, context: str) -> None:
-            if col == "*" and node.aggregates:
-                return  # count(*)-style: dropped by the compiler when aggregating
+            if col == "*":
+                return  # SELECT * (raw row samples) — masking still applies to results
             truncated = date_trunc_parts(col)
             if truncated is not None:
                 unit, inner = truncated
@@ -256,15 +257,26 @@ def validate_plan(
                         details={"on_left": j.on_left, "on_right": j.on_right},
                     )
 
+        aggregate_aliases = {agg.alias for agg in node.aggregates}
         for col in node.columns:
+            if col in aggregate_aliases:
+                continue  # aggregate alias repeated in the select list (LLM noise)
             _resolve(col, node.source, "select")
+
         def _bare(name: str) -> str:
             return name.split(".")[-1]
 
+        def _same_ref(left: str, right: str) -> bool:
+            left_parts = date_trunc_parts(left)
+            right_parts = date_trunc_parts(right)
+            if left_parts is not None and right_parts is not None:
+                return left_parts == right_parts
+            return _bare(left) == _bare(right)
+
         for col in node.group_by:
-            if col in node.columns:
+            if col in node.columns or col in aggregate_aliases:
                 continue
-            if any(_bare(col) == _bare(c) for c in node.columns):
+            if any(_same_ref(col, c) for c in node.columns):
                 continue
             raise DatahekError(
                 ErrorCode.PLAN_INVALID,

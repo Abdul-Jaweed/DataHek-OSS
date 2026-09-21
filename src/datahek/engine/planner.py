@@ -49,6 +49,12 @@ Rules:
 - Use "count_distinct" for distinct counting on SQL dialects (renders COUNT(DISTINCT col)).
 - Set "limit": if the user specifies a row count, use it; otherwise default to 10.
   For grouped or time-series results, set the number of rows the result naturally needs.
+- When returning raw rows (no aggregation), always add an ORDER BY on a stable column
+  (primary key or time column) so repeated runs return the same rows.
+- When ordering by a column with ties (e.g. scores, durations), add the primary key as a
+  secondary ORDER BY so equal values have a stable order.
+- For counts and aggregates use a small "limit" (1 for a single row, 100 for grouped results);
+  never set a limit above 1000 — large limits trigger human approval.
 - Match named entities to the column that represents them: service names belong in service-name
   columns, event categories belong in event-type columns.
 - Never apply sum or avg to boolean columns; count true values with count(*) plus a WHERE condition.

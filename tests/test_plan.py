@@ -202,6 +202,24 @@ class TestDateTruncExpressions(unittest.TestCase):
         self.assertIn(expression, sql)
         self.assertNotIn("events.date_trunc", sql)
 
+    def test_alias_on_expression_and_group_by_matches_by_parts(self):
+        validate_plan(
+            self._plan(["date_trunc('day', event_time) AS event_date"], ["DATE_TRUNC('day', event_time)"]),
+            tables=self.TABLES, columns=self.COLUMNS, dialect="postgres")
+
+    def test_star_select_allowed_without_aggregates(self):
+        validate_plan(self._plan(["*"], []), tables=self.TABLES, columns=self.COLUMNS,
+                      dialect="postgres")
+
+    def test_aggregate_alias_in_select_is_ignored(self):
+        plan = LogicalPlan(nodes=[ReadNode(
+            source="events", columns=["service", "distinct_operations"],
+            group_by=["service"],
+            aggregates=[Aggregate(function="count_distinct", column="operation",
+                                  alias="distinct_operations")])])
+        validate_plan(plan, tables=self.TABLES,
+                      columns={"events": {"service", "operation"}}, dialect="postgres")
+
 
 class TestSelfJoinRejected(unittest.TestCase):
     def test_self_join_is_rejected(self):
