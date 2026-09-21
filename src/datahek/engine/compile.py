@@ -4,7 +4,13 @@ The LogicalPlan compiles to provider SQL; dialect differences live in the
 provider, the node model is shared. Supports the common SELECT shape with
 optional joins for ClickHouse, PostgreSQL, MySQL, and SQLite.
 """
-from datahek.engine.plan import DEFAULT_LIMIT, LogicalPlan, ReadNode, date_trunc_parts
+from datahek.engine.plan import (
+    DEFAULT_LIMIT,
+    LogicalPlan,
+    ReadNode,
+    date_trunc_parts,
+    same_plan_ref,
+)
 from datahek.kernel.errors import DatahekError, ErrorCode
 
 
@@ -33,8 +39,8 @@ def compile_sql(plan: LogicalPlan) -> str:
     if node.aggregates:
         # With aggregates, only grouped columns are valid in SELECT;
         # stray non-grouped columns (e.g. LLM planning noise) are dropped.
-        grouped = set(node.group_by)
-        select_cols = [c for c in select_cols if c in grouped]
+        select_cols = [c for c in select_cols
+                       if any(same_plan_ref(c, grouped) for grouped in node.group_by)]
     select_cols = [_qualified(c, node.source, has_joins) for c in select_cols]
     for agg in node.aggregates:
         col = _qualified(agg.column, node.source, has_joins)

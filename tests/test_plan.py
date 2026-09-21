@@ -207,6 +207,15 @@ class TestDateTruncExpressions(unittest.TestCase):
             self._plan(["date_trunc('day', event_time) AS event_date"], ["DATE_TRUNC('day', event_time)"]),
             tables=self.TABLES, columns=self.COLUMNS, dialect="postgres")
 
+    def test_compiler_keeps_aliased_expression_in_select(self):
+        from datahek.engine.compile import compile_sql
+
+        plan = self._plan(["date_trunc('month', event_time) AS month"],
+                          ["date_trunc('month', event_time)"])
+        sql = compile_sql(plan)
+        self.assertIn("date_trunc('month', event_time) AS month", sql)
+        self.assertIn("GROUP BY date_trunc('month', event_time)", sql)
+
     def test_star_select_allowed_without_aggregates(self):
         validate_plan(self._plan(["*"], []), tables=self.TABLES, columns=self.COLUMNS,
                       dialect="postgres")

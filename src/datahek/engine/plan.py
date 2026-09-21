@@ -29,6 +29,15 @@ def date_trunc_parts(expression: str) -> tuple[str, str] | None:
     return match.group(1).lower(), match.group(2)
 
 
+def same_plan_ref(left: str, right: str) -> bool:
+    """True when two plan references denote the same thing (bare name or expression)."""
+    left_parts = date_trunc_parts(left)
+    right_parts = date_trunc_parts(right)
+    if left_parts is not None and right_parts is not None:
+        return left_parts == right_parts
+    return str(left).split(".")[-1] == str(right).split(".")[-1]
+
+
 @dataclass(frozen=True)
 class PlanNode:
     """Base class for plan nodes."""
@@ -266,17 +275,10 @@ def validate_plan(
         def _bare(name: str) -> str:
             return name.split(".")[-1]
 
-        def _same_ref(left: str, right: str) -> bool:
-            left_parts = date_trunc_parts(left)
-            right_parts = date_trunc_parts(right)
-            if left_parts is not None and right_parts is not None:
-                return left_parts == right_parts
-            return _bare(left) == _bare(right)
-
         for col in node.group_by:
             if col in node.columns or col in aggregate_aliases:
                 continue
-            if any(_same_ref(col, c) for c in node.columns):
+            if any(same_plan_ref(col, c) for c in node.columns):
                 continue
             raise DatahekError(
                 ErrorCode.PLAN_INVALID,
