@@ -59,6 +59,9 @@ Rules:
   columns, event categories belong in event-type columns.
 - A bare entity name ("for checkout", "for ad") refers to the service-name column when one
   exists; use operation-name columns only when the question explicitly says operation.
+- Never guess the meaning of encoded numeric columns (e.g. day_of_week integers, status codes).
+  If the question uses a semantic label ("Mondays") whose encoding is not documented in the
+  schema, return a clarification instead of guessing. Explicit values ("day_of_week = 1") are fine.
 - Never apply sum or avg to boolean columns; count true values with count(*) plus a WHERE condition.
 - Only join columns whose types are compatible (see the schema summary); otherwise return a clarification.
 - For time buckets use DATE_TRUNC('<unit>', <time_column>) in both "columns" and
