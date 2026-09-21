@@ -34,6 +34,3 @@ docs/*
 notebooks/*.db
 notebooks/*.jsonl
 notebooks/__pycache__/
-
-# workflow files need a workflow-scoped token to push
-.github/workflows/
