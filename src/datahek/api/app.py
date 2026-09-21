@@ -55,6 +55,7 @@ _STATUS_BY_CODE = {
     ErrorCode.QUERY_FAILED: 422,
     ErrorCode.MODEL_UNAVAILABLE: 502,
     ErrorCode.QUERY_TIMEOUT: 504,
+    ErrorCode.CONTEXT_UNAVAILABLE: 503,
     ErrorCode.RATE_LIMITED: 429,
 }
 
@@ -623,9 +624,14 @@ def create_app(container=None) -> FastAPI:
                     f"Unknown artifact kind '{item.kind}'") from exc
             decisions.append(ValidationDecision(kind, item.index, item.action,
                                                 section=item.section, patch=item.patch))
-        record = await c.resolve(ContextValidationService).apply(
-            RequestContext(source="api"), connection_id=connection_id,
-            decisions=tuple(decisions))
+        try:
+            record = await c.resolve(ContextValidationService).apply(
+                RequestContext(source="api"), connection_id=connection_id,
+                decisions=tuple(decisions))
+        except Exception:
+            metrics.inc("datahek_context_validations_total", outcome="error")
+            raise
+        metrics.inc("datahek_context_validations_total", outcome="published")
         await _audit_event(c, "context.validate", "validate", actor=_actor(_identity),
                            resource_ref=record.context_id,
                            payload={"connection": connection_id,
@@ -643,15 +649,32 @@ def create_app(container=None) -> FastAPI:
         )
 
         ctx = RequestContext(source="api")
-        retrieved = await c.resolve(ContextRetriever).retrieve(
-            ctx, connection_id=connection_id, question=req.question)
-        if retrieved is None:
-            raise DatahekError(ErrorCode.NOT_FOUND,
-                               f"No active context for connection '{connection_id}'")
-        composed = await c.resolve(ContextComposer).compose(
-            ctx, retrieved, RuntimeContext(question=req.question))
-        package = await c.resolve(ContextCompiler).compile(
-            ctx, composed, quality=retrieved.quality, freshness=retrieved.freshness)
+        started = time.perf_counter()
+        try:
+            retrieved = await c.resolve(ContextRetriever).retrieve(
+                ctx, connection_id=connection_id, question=req.question)
+            if retrieved is None:
+                metrics.inc("datahek_context_retrievals_total", outcome="miss")
+                raise DatahekError(ErrorCode.NOT_FOUND,
+                                   f"No active context for connection '{connection_id}'")
+            composed = await c.resolve(ContextComposer).compose(
+                ctx, retrieved, RuntimeContext(question=req.question))
+            package = await c.resolve(ContextCompiler).compile(
+                ctx, composed, quality=retrieved.quality, freshness=retrieved.freshness)
+        except DatahekError:
+            raise
+        except Exception as exc:
+            metrics.inc("datahek_context_retrievals_total", outcome="error")
+            raise DatahekError(ErrorCode.CONTEXT_UNAVAILABLE, "Context layer unavailable",
+                               details={"reason": str(exc)[:200]}) from exc
+        metrics.observe("datahek_context_retrieval_duration_seconds",
+                        time.perf_counter() - started)
+        insufficient = package.quality.details.get("insufficient_reason", "")
+        metrics.inc("datahek_context_retrievals_total",
+                    outcome="insufficient" if insufficient else "hit")
+        if insufficient:
+            metrics.inc("datahek_context_insufficient_total")
+        metrics.observe("datahek_context_tokens", float(package.budget.tokens_estimate))
         return {
             "context_id": package.context_id,
             "version": package.version,
@@ -662,7 +685,7 @@ def create_app(container=None) -> FastAPI:
             "metrics": [str(metric.get("name", "")) for metric in package.semantics.metrics],
             "tokens": package.budget.tokens_estimate,
             "dropped": list(package.degraded),
-            "insufficient": package.quality.details.get("insufficient_reason", ""),
+            "insufficient": insufficient,
             "trust": package.trust.value,
             "quality": package.quality.state.value,
         }
@@ -677,8 +700,16 @@ def create_app(container=None) -> FastAPI:
         ctx = RequestContext(source="api")
         connection = await conn_mgr.get_connection(ctx, connection_id)
         provider = registry.get(connection.provider)
-        result = await c.resolve(ContextBuildJob).run(
-            ctx, connection, provider, enrichment=req.enrichment)
+        started = time.perf_counter()
+        try:
+            result = await c.resolve(ContextBuildJob).run(
+                ctx, connection, provider, enrichment=req.enrichment)
+        except Exception:
+            metrics.inc("datahek_context_builds_total", outcome="error")
+            raise
+        metrics.observe("datahek_context_build_duration_seconds",
+                        time.perf_counter() - started)
+        metrics.inc("datahek_context_builds_total", outcome=result.state)
         await _audit_event(c, "context.build", "build", actor=_actor(_identity),
                            resource_ref=result.context_id or connection_id,
                            payload={"connection": connection_id, "state": result.state,
