@@ -23,7 +23,7 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 | M9 | Human semantic validation | **Complete** |
 | M10 | Retrieval, composer, compiler | **Complete** |
 | M11 | SQL agent integration | **Complete** |
-| M12 | Testing, observability, security hardening | Pending |
+| M12 | Testing, observability, security hardening | **Complete** |
 
 ## Documents
 
@@ -61,6 +61,12 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 - [`context-composition.md`](context-composition.md) — budget model, ordered degradation,
   deterministic compilation, trust floor (M10)
 - [`api.md`](api.md) — context REST endpoints, planner integration rules, deferred items (M11)
+- [`security.md`](security.md) — credential/sensitive-value hygiene, tenant isolation, untrusted
+  content, failure paths (M12)
+- [`multi-tenancy.md`](multi-tenancy.md) — ownership model and enforcement points (M12)
+- [`observability.md`](observability.md) — metrics catalogue, audit events, non-goals (M12)
+- [`testing-strategy.md`](testing-strategy.md) — test levels, conventions, FR→test coverage map
+  (M12)
 - [`ADR/`](ADR/) — 13 architecture decision records (subsystem boundary, persistent vs runtime,
   schema KG, Neo4j, graph abstraction, registry, package model, human validation, freshness, change
   detection, storage split, multi-tenancy, LLM vs deterministic)
@@ -128,11 +134,18 @@ preview, record detail), container registration of `ContextValidationService` an
 TestClient: build → preview (995 tokens, `structural`) → 9 pending → approval v2 → `POST /ask`
 answered from context-compiled planning.
 
-Subsystem specifications produced with their implementation milestones:
-`taxonomy.md` / `ontology.md` / `topology.md` / `granularity.md` / `semantic-enrichment.md` (M5),
-`graph-abstraction.md` / `neo4j.md` / `knowledge-graph-schema.md` (M6–M7), `lifecycle.md` /
-`provenance.md` (M8), `context-retrieval.md` / `context-composition.md` (M10), `api.md` (M11),
-`security.md` / `multi-tenancy.md` / `observability.md` / `testing-strategy.md` (M12).
+M12 delivered in code: `CONTEXT_UNAVAILABLE` (503) with reason details for store failures, context
+metrics (`builds`, `retrievals` by outcome, durations, tokens, `insufficient`, `validations`) on
+`/metrics`, cross-tenant/credential-hygiene/injection security tests, end-to-end degradation tests
+for `/ask` (retriever failure → live catalog; insufficient package → clarification), and the
+`security.md` / `multi-tenancy.md` / `observability.md` / `testing-strategy.md` specifications.
+All twelve milestones of the Context Layer brief are complete: **695 tests, 54 env-gated skips**.
+
+Subsystem specifications (all delivered): `taxonomy.md` / `ontology.md` / `topology.md` /
+`granularity.md` / `semantic-enrichment.md` (M5), `graph-abstraction.md` / `neo4j.md` /
+`knowledge-graph-schema.md` (M6–M7), `lifecycle.md` / `provenance.md` (M8),
+`context-retrieval.md` / `context-composition.md` (M10), `api.md` (M11), `security.md` /
+`multi-tenancy.md` / `observability.md` / `testing-strategy.md` (M12).
 
 ## Non-goals (V1)
 
