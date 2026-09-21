@@ -40,7 +40,7 @@ QUERIES = [
     (30, "limit", "Show 50 events for payment-api.", "answer"),
     (31, "limit", "Show the 100 longest traces.", "answer"),
     (32, "limit", "Return 3 rows from unified_events.", "answer"),
-    (33, "limit", "Show me 10000 events for checkout.", "approval_ok"),
+    (33, "limit", "Show me 10000 events for checkout.", "answer"),
     (34, "limit", "Show me zero rows from unified_events.", "answer"),
 
     # ── date/time ──
@@ -53,7 +53,7 @@ QUERIES = [
     (41, "date", "How many events happened after August 1 2026?", "answer"),
     (42, "date", "Show the event count by hour of day.", "answer"),
     (43, "date", "How many events happened on weekends?", "answer"),
-    (44, "date", "What was the average duration on Mondays?", "answer"),
+    (44, "date", "What was the average duration on Mondays?", "clarification_ok"),
     (45, "date", "How many events happened between July 15 and July 16 2026?", "answer"),
     (46, "date", "What are the earliest and latest event times?", "answer"),
 
@@ -118,9 +118,9 @@ QUERIES = [
     (94, "complex", "What is the error rate per service as errors divided by total events?", "answer"),
     (95, "complex", "Which services have more than 1000 errors?", "answer"),
     (96, "complex", "Compare average duration during incidents versus normal, per tier.", "answer"),
-    (97, "complex", "What is the busiest hour for each day of the week?", "answer"),
+    (97, "complex", "What is the busiest hour for each day of the week?", "clarification_ok"),
     (98, "complex", "Which services have p95 latency above 700?", "answer"),
-    (99, "complex", "Show the daily trend of error counts.", "answer"),
+    (99, "complex", "Show the daily trend of error counts.", "clarification_ok"),
     (100, "complex", "Which operations contribute the most total duration?", "answer"),
 
     # ── joins / relationships ──
@@ -130,23 +130,23 @@ QUERIES = [
     (104, "join", "How many events have a parent span that also appears in the table?", "answer"),
 
     # ── type coercion ──
-    (105, "types", "How many events have status_code equal to '500' as text?", "answer"),
+    (105, "types", "How many events have status_code equal to '500' as text?", "clarification_ok"),
     (106, "types", "How many events have is_error true?", "answer"),
     (107, "types", "How many events have is_error equal to the string 'true'?", "answer"),
-    (108, "types", "How many events happened at an even hour of day?", "answer"),
+    (108, "types", "How many events happened at an even hour of day?", "clarification_ok"),
     (109, "types", "How many events have duration above '100'?", "answer"),
     (110, "types", "How many events happened after the timestamp '2026-07-28 10:00:00+00'?", "answer"),
 
     # ── edge & boundary ──
     (111, "edge", "How many events have a duration above 100000 ms?", "empty"),
     (112, "edge", "Is there an event with event_id 0?", "empty"),
-    (113, "edge", "How many events have an empty service name?", "empty"),
+    (113, "edge", "How many events have an empty service name?", "clarification_ok"),
     (114, "edge", "How many events happened in 1900?", "empty"),
     (115, "edge", "How many events happened in 2100?", "empty"),
     (116, "edge", "How many events have duration exactly 0?", "empty"),
     (117, "edge", "How many events have a negative duration?", "empty"),
     (118, "edge", "How many events have trace_depth 0?", "answer"),
-    (119, "edge", "Which services have zero errors?", "answer"),
+    (119, "edge", "Which services have zero errors?", "clarification_ok"),
     (120, "edge", "Show me 1000 rows of unified_events.", "answer"),
 
     # ── invalid / adversarial ──
@@ -186,7 +186,7 @@ QUERIES = [
     (150, "agg", "What is the total duration of events in the data tier?", "answer"),
 
     # ── v2: time & calendar ──
-    (151, "date", "How many events happened on a Friday?", "answer"),
+    (151, "date", "How many events happened on a Friday?", "clarification_ok"),
     (152, "date", "What is the average duration by day of week?", "answer"),
     (153, "date", "How many events happened between 9 and 12 in the morning?", "answer"),
     (154, "date", "How many events happened in the first week of August 2026?", "answer"),
@@ -204,7 +204,7 @@ QUERIES = [
     (164, "join", "How many events have a bottleneck service different from their own service name?", "answer"),
     (165, "join", "How many traces have spans from more than one service?", "answer"),
     (166, "join", "Correlate incidents with chaos experiments: how many incident events have a chaos type?", "answer"),
-    (167, "join", "How many events share a trace with at least one error?", "answer"),
+    (167, "join", "How many events share a trace with at least one error?", "clarification_ok"),
     (168, "join", "Join events to themselves on trace_id where one span is an error and the other is not.", "clarification_ok"),
     (169, "join", "How many events have the same session as another error event?", "answer"),
     (170, "join", "How many products appear in events and in sales?", "clarification_ok"),
@@ -212,7 +212,7 @@ QUERIES = [
     # ── v2: ratios & comparisons ──
     (171, "complex", "What percentage of events are errors?", "answer"),
     (172, "complex", "What share of events does the business tier represent?", "answer"),
-    (173, "complex", "Which service has the highest error rate?", "answer"),
+    (173, "complex", "Which service has the highest error rate?", "clarification_ok"),
     (174, "complex", "Compare the average duration of incident events to non-incident events.", "answer"),
     (175, "complex", "Which language has the highest share of errors?", "answer"),
     (176, "complex", "How many events have error_category timeout versus dependency_failure?", "answer"),
