@@ -67,6 +67,10 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
 - [`observability.md`](observability.md) — metrics catalogue, audit events, non-goals (M12)
 - [`testing-strategy.md`](testing-strategy.md) — test levels, conventions, FR→test coverage map
   (M12)
+- [`context-layer-overview.md`](context-layer-overview.md) — consolidated how-it-works guide:
+  architecture, artifact catalogue, build/runtime sequencing, guarantees, evidence
+- [`context-layer-deck.html`](context-layer-deck.html) — self-contained presentation deck
+  (open in a browser, arrow keys to navigate, print to PDF)
 - [`ADR/`](ADR/) — 13 architecture decision records (subsystem boundary, persistent vs runtime,
   schema KG, Neo4j, graph abstraction, registry, package model, human validation, freshness, change
   detection, storage split, multi-tenancy, LLM vs deterministic)

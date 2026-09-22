@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DataHek Context Layer — Overview</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0b0d10; --panel: #13161b; --panel2: #181c22; --border: #262b33;
+    --text: #e6e9ee; --muted: #8b93a1; --accent: #4f8cff; --ok: #3ddc97;
+    --warn: #ffc857; --danger: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: "Inter", "Segoe UI", system-ui, sans-serif; }
+  .deck { position: relative; height: 100vh; overflow: hidden; }
+  .slide { position: absolute; inset: 0; padding: 48px 64px 64px; opacity: 0;
+    transform: translateX(24px); transition: opacity .25s ease, transform .25s ease;
+    pointer-events: none; overflow: auto; }
+  .slide.active { opacity: 1; transform: none; pointer-events: auto; }
+  h1 { font-size: 34px; margin: 0 0 8px; }
+  h2 { font-size: 26px; margin: 0 0 20px; }
+  h3 { font-size: 15px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted);
+    margin: 22px 0 8px; }
+  p, li { line-height: 1.55; color: var(--text); }
+  .muted { color: var(--muted); }
+  .subtitle { color: var(--muted); font-size: 17px; }
+  ul { margin: 6px 0 6px 20px; padding: 0; }
+  code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+  code { background: var(--panel2); padding: 1px 5px; border-radius: 2px; font-size: 13px; }
+  pre { background: var(--panel); border: 1px solid var(--border); border-radius: 2px;
+    padding: 16px 18px; font-size: 13.5px; line-height: 1.45; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 10px;
+    border-bottom: 1px solid var(--border); }
+  td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 2px;
+    border: 1px solid var(--border); color: var(--muted); }
+  .badge.ok { color: var(--ok); border-color: var(--ok); }
+  .badge.warn { color: var(--warn); border-color: var(--warn); }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .cols3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 2px;
+    padding: 14px 16px; }
+  .card h4 { margin: 0 0 6px; font-size: 14px; }
+  .card p { margin: 0; font-size: 13px; color: var(--muted); }
+  .big { font-size: 40px; font-weight: 700; }
+  .kpi { display: flex; gap: 36px; margin-top: 20px; }
+  .kpi div { }
+  .kpi .value { font-size: 30px; font-weight: 700; color: var(--accent); }
+  .kpi .label { color: var(--muted); font-size: 13px; }
+  .footer { position: fixed; bottom: 14px; left: 64px; right: 64px; display: flex;
+    justify-content: space-between; color: var(--muted); font-size: 12px; }
+  .progress { position: fixed; top: 0; left: 0; height: 2px; background: var(--accent);
+    transition: width .2s ease; z-index: 10; }
+  .title-slide { display: flex; flex-direction: column; justify-content: center; }
+  .title-slide h1 { font-size: 44px; }
+  .arrow { color: var(--accent); }
+  .seq { color: var(--accent); font-weight: 600; }
+  @media print {
+    .deck { height: auto; overflow: visible; }
+    .slide { position: static; opacity: 1; transform: none; page-break-after: always;
+      height: 100vh; }
+    .footer, .progress { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<div class="deck" id="deck">
+
+<section class="slide title-slide">
+  <h1>DataHek Context Layer</h1>
+  <p class="subtitle">Minimum relevant, trustworthy, governed, versioned context — as structured
+    artifacts, not prose.</p>
+  <p class="muted" style="margin-top:28px">How it works · build sequencing · runtime sequencing ·
+    evidence</p>
+  <p class="muted" style="margin-top:40px">Use <code>→</code> / <code>←</code> (or space) to navigate
+    · <code>Print → PDF</code> for handouts</p>
+</section>
+
+<section class="slide">
+  <h2>Why a Context Layer</h2>
+  <div class="cols">
+    <div>
+      <h3>Before</h3>
+      <ul>
+        <li>Schema dumped into every prompt</li>
+        <li>No notion of trust or freshness</li>
+        <li>LLM guesses semantics (encodings, grains)</li>
+        <li>Enterprise policy bolted onto prompts</li>
+        <li>No review, no versioning, no audit</li>
+      </ul>
+    </div>
+    <div>
+      <h3>With the Context Layer</h3>
+      <ul>
+        <li>Bounded, relevant slices per question</li>
+        <li>Provenance + trust on every artifact</li>
+        <li>Semantics derived, proposed, then human-validated</li>
+        <li>Governance travels with context, enforced by the engine</li>
+        <li>Immutable versions, full audit trail</li>
+      </ul>
+    </div>
+  </div>
+  <pre style="margin-top:22px">Persistent Context <span class="arrow">→</span> Retrieval <span class="arrow">→</span> Selection <span class="arrow">→</span> Composition <span class="arrow">→</span> Compilation <span class="arrow">→</span> Context Package <span class="arrow">→</span> Agent <span class="arrow">→</span> LLM</pre>
+</section>
+
+<section class="slide">
+  <h2>Architecture at a glance</h2>
+  <pre>  connection ──► snapshot ──► profiler ──► topology ──► granularity
+  (credentials        │           │            │             │
+   never enter        ▼           ▼            ▼             ▼
+   artifacts)     taxonomy ◄── profiles     join graph    grain rules
+                      │
+                      ▼
+                 enrichment (LLM, optional, PENDING)
+                      │
+                      ▼
+                 Schema Knowledge Graph (Neo4j | in-memory)
+                      │
+                      ▼
+                 quality + freshness ──► registry (versioned, immutable)
+                                    │
+                                    ▼
+  question ──► retriever ──► composer ──► compiler ──► ContextPackage ──► planner</pre>
+  <p class="muted">One LLM stage (enrichment). Everything else is deterministic and testable
+    without a model.</p>
+</section>
+
+<section class="slide">
+  <h2>Context artifacts</h2>
+  <table>
+    <tr><th>Artifact</th><th>Contents</th><th>Provenance</th></tr>
+    <tr><td>Schema</td><td>tables, columns, types, PK/FK, indexes</td><td>Database</td></tr>
+    <tr><td>Profile</td><td>null ratio, distinct, uniqueness, min/max/avg, roles</td><td>Database</td></tr>
+    <tr><td>Topology</td><td>FK + inferred edges, cardinality, join paths</td><td>DB / inferred</td></tr>
+    <tr><td>Granularity</td><td>"1 row of X means …" grain statements</td><td>System</td></tr>
+    <tr><td>Taxonomy</td><td>Dimension / Measure / Identifier / Temporal hierarchy</td><td>System</td></tr>
+    <tr><td>Ontology</td><td>concepts, synonyms, controlled relationships</td><td>LLM (PENDING)</td></tr>
+    <tr><td>Governance</td><td>sensitive/restricted columns, allowed operations</td><td>System</td></tr>
+    <tr><td>Quality / Freshness</td><td>coverage scores, staleness signals</td><td>System</td></tr>
+  </table>
+  <p class="muted" style="margin-top:14px">Every artifact carries an envelope: kind, version,
+    provenance, trust, validation status, confidence. Sensitive columns are counts-only —
+    no raw values, ever.</p>
+</section>
+
+<section class="slide">
+  <h2>Build sequencing — 9 ordered stages</h2>
+  <pre>INTROSPECT ─► PROFILE ─► TOPOLOGY ─► GRANULARITY ─► TAXONOMY ─► ENRICH ─► GRAPH_BUILD ─► QUALITY ─► PUBLISH</pre>
+  <div class="cols">
+    <div class="card"><h4>Fixed order</h4><p>Later stages consume earlier artifacts: topology needs
+      schema, taxonomy needs profiles, enrichment needs taxonomy, the graph needs everything.</p></div>
+    <div class="card"><h4>Retry + degrade</h4><p>Each stage retries once; failures degrade with a
+      warning and the build still publishes a lower-quality record.</p></div>
+    <div class="card"><h4>Enrichment is opt-in</h4><p>The only LLM stage — spends tokens, so it is
+      off by default; proposals arrive PENDING, never authoritative.</p></div>
+    <div class="card"><h4>Skip if current</h4><p>A build whose schema hash matches the active
+      record is skipped; graph rebuilds MERGE by stable ids and prune.</p></div>
+  </div>
+  <p class="muted" style="margin-top:12px">Live (InsForge, 40 cols / 730k rows): ~29 s total,
+    PROFILE ≈ 27 s (exact distinct counts dominate).</p>
+</section>
+
+<section class="slide">
+  <h2>Lifecycle &amp; versioning</h2>
+  <pre>BUILDING ─► ACTIVE ─► SUPERSEDED
+                │  └─► STALE ─► (rebuild) ─► ACTIVE (v+1)
+                └─► INVALIDATED</pre>
+  <ul>
+    <li>Versions are monotonic per <code>(org, connection, scope)</code>; ACTIVE versions are
+      immutable.</li>
+    <li><code>supersedes</code> chains versions; history stays readable forever.</li>
+    <li>Invalidation on schema-hash mismatch, permission change, manual request, or staleness.</li>
+    <li>Retrieval surfaces <code>stale=true</code>; stale governance is never served.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h2>Runtime sequencing — question to answer</h2>
+  <pre>POST /ask
+  │
+  ├─ <span class="seq">1</span> Input guardrail        injection / denied patterns — before any model call
+  ├─ <span class="seq">2</span> Retrieve               active record → tokens → bounded selection (~36 ms)
+  │      └─ no record / store down ──────────────────────────► live catalog fallback
+  ├─ <span class="seq">3</span> Compose                budget 4000 → ordered degradation
+  ├─ <span class="seq">4</span> Compile                deterministic package, trust floor, semantics
+  │      └─ INSUFFICIENT ────────────────────────────────────► clarification (fail closed)
+  ├─ <span class="seq">5</span> Planner                package schema + grain + joins + metrics → model
+  ├─ <span class="seq">6</span> Engine                 guardrails → policy (+RLS FILTER) → approval → execute
+  └─ <span class="seq">7</span> Assembly               checkpoint(executed plan) → explain ∥ verify ∥ suggest</pre>
+  <table>
+    <tr><th>#</th><th>Guarantee</th><th>Why</th></tr>
+    <tr><td>1</td><td>Retrieval precedes any model call</td><td>deterministic, cheap, auditable</td></tr>
+    <tr><td>2</td><td>Context failure degrades to live catalog</td><td>never breaks /ask</td></tr>
+    <tr><td>3</td><td>INSUFFICIENT clarifies instead of guessing</td><td>no answers on unverified foundations</td></tr>
+    <tr><td>4</td><td>Policy/RLS run after planning, in the engine</td><td>context informs; guardrails enforce</td></tr>
+    <tr><td>5</td><td>Checkpoints store the executed plan</td><td>audit and replay see real SQL</td></tr>
+  </table>
+</section>
+
+<section class="slide">
+  <h2>Retrieval — deterministic selection</h2>
+  <div class="cols">
+    <div>
+      <ul>
+        <li>Tokenize: lowercase, split snake_case (<code>error_category</code> → error, category),
+          drop stopwords</li>
+        <li>Score tables: name ×3, column match +2, metric/ontology/taxonomy boosts</li>
+        <li>Pull one-hop join neighbours</li>
+        <li>Caps: <strong>8 tables, 40 columns</strong>; no-match floor in schema order</li>
+        <li>Filter profiles, grain, taxonomy, ontology to selected tables; topology to edges
+          <em>between</em> them; metrics by overlap</li>
+        <li>Governance always included in full</li>
+        <li><code>stale=true</code> when the schema hash moved</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Bounded by construction</h4>
+      <p>A hostile "select everything" question still returns a capped slice. No LLM, no
+        embeddings, no whole-store dumps — reproducible for the same question and record.</p>
+      <p style="margin-top:10px">Live p50: <strong>36.5 ms</strong> including parallel artifact
+        reads.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <h2>Composition — budget with ordered degradation</h2>
+  <div class="cols">
+    <div>
+      <h3>Mandatory</h3>
+      <ul>
+        <li><strong>schema</strong></li>
+        <li><strong>governance</strong></li>
+        <li><strong>granularity</strong></li>
+      </ul>
+      <p class="muted">If these alone exceed the budget → <code>insufficient_reason="budget"</code>.
+        They are never dropped.</p>
+    </div>
+    <div>
+      <h3>Optional — drop order</h3>
+      <pre>profiles → taxonomy → topology → ontology → metrics</pre>
+      <p class="muted">Metrics are relevance-pruned before being dropped wholesale.
+        Cost model: <code>len(str(section)) // 4</code> — deterministic and monotonic.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <h2>Compilation — deterministic packages</h2>
+  <ul>
+    <li><strong>Byte-identical</strong> for the same inputs — replayable and diffable.</li>
+    <li><strong>Semantics summary</strong>: dimensions/identifiers/temporal from taxonomy;
+      profile roles as fallback; metrics carried through.</li>
+    <li><strong>Trust floor</strong>: minimum effective trust of included content — an included
+      LLM ontology lowers the package to <code>PROPOSED</code>.</li>
+    <li><strong>Governance</strong>: composed block, or synthesized SYSTEM governance
+      (SELECT only) for OSS local.</li>
+    <li><strong>Degradation</strong>: dropped sections recorded in
+      <code>budget.dropped_sections</code> and <code>degraded</code>.</li>
+    <li><strong>Fail closed</strong>: insufficient composition overrides quality to
+      <code>INSUFFICIENT</code> with the reason.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h2>Planner integration &amp; degradation matrix</h2>
+  <p>With a package the planner renders <em>schema + grain + joins + restricted columns +
+    metrics</em> and skips the live catalog. Without one, the pre-context path runs unchanged.</p>
+  <table>
+    <tr><th>Failure</th><th>Behavior</th></tr>
+    <tr><td>No active record</td><td>Live-catalog planning; /ask unaffected</td></tr>
+    <tr><td>Store / retriever down</td><td>Log warning, live-catalog fallback</td></tr>
+    <tr><td>Package INSUFFICIENT</td><td>Clarification — no guessing</td></tr>
+    <tr><td>Stale context</td><td>Returned with stale=true; planning still works</td></tr>
+    <tr><td>Preview store failure</td><td>CONTEXT_UNAVAILABLE (503) with reason</td></tr>
+  </table>
+</section>
+
+<section class="slide">
+  <h2>Human validation loop</h2>
+  <pre>build ─► PENDING items ─► GET /context/pending ─► approve | edit | reject
+              │                                          │
+              │                                          ▼
+              └──── fixed priors ◄──── new version (HUMAN_VALIDATED)</pre>
+  <ul>
+    <li>Reviewable: ontology concepts/relationships, taxonomy nodes, grain statements.</li>
+    <li>Edits are whitelisted; rejections stay traceable to their origin.</li>
+    <li>Validated items are fed back as "already validated — do not re-propose".</li>
+    <li>Humans are never asked the same question twice.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h2>Schema Knowledge Graph</h2>
+  <ul>
+    <li>Projects schema, profiles, topology, grain, taxonomy, metrics, ontology into a property
+      graph — stable ids, vocabulary-only edges, version/provenance stamps.</li>
+    <li>Idempotent rebuilds: MERGE by id, prune stale nodes per connection.</li>
+    <li>Backends: Neo4j (optional <code>[graph]</code> extra + compose profile) and an
+      in-memory adapter passing the same contract suite.</li>
+    <li>Every read tenant-scoped and depth-bounded; Cypher confined to the adapter.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h2>Security &amp; tenancy</h2>
+  <div class="cols">
+    <div>
+      <ul>
+        <li>Credentials never enter artifacts (verified with a password-bearing build).</li>
+        <li>Sensitive columns: counts only; taxonomy excludes them.</li>
+        <li>Every read scoped by <code>org_id</code> at the storage layer.</li>
+        <li>Cross-tenant retrieval/validation returns nothing / NOT_FOUND.</li>
+      </ul>
+    </div>
+    <div>
+      <ul>
+        <li>LLM content is PROPOSED/PENDING; it can never raise the trust floor.</li>
+        <li>Injected text reaches prompts only as data — never the system prompt.</li>
+        <li>Encoded columns without documented semantics → clarification (fail closed).</li>
+        <li>RLS filters (Enterprise) are applied in the engine and stored in checkpoints.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <h2>Observability &amp; testing</h2>
+  <div class="cols">
+    <div>
+      <h3>Metrics</h3>
+      <pre>datahek_context_builds_total{outcome}
+datahek_context_build_duration_seconds
+datahek_context_retrievals_total{hit|miss|insufficient|error}
+datahek_context_retrieval_duration_seconds
+datahek_context_tokens
+datahek_context_insufficient_total
+datahek_context_validations_total</pre>
+      <p class="muted">Audit: <code>context.build</code>, <code>context.validate</code>.</p>
+    </div>
+    <div>
+      <h3>Tests</h3>
+      <ul>
+        <li>Unit: deterministic services on temp SQLite</li>
+        <li>Contract: graph adapters, serialization round-trips</li>
+        <li>Integration: build job, registry, validation, REST</li>
+        <li>Hardening: tenant isolation, injection, degradation</li>
+        <li><strong>733 tests OK</strong> in the OSS suite</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <h2>Milestones M1 → M12</h2>
+  <table>
+    <tr><th>M1–M2</th><td>Analysis, research, architecture, context model, SRD, ADRs</td></tr>
+    <tr><th>M3</th><td>Domain model + contracts</td></tr>
+    <tr><th>M4</th><td>Schema discovery + profiling</td></tr>
+    <tr><th>M5</th><td>Taxonomy, ontology, topology, granularity</td></tr>
+    <tr><th>M6–M7</th><td>Graph abstraction, Neo4j adapter, Schema KG builder</td></tr>
+    <tr><th>M8</th><td>Registry, persistence, versioning, build job</td></tr>
+    <tr><th>M9</th><td>Human semantic validation</td></tr>
+    <tr><th>M10</th><td>Retrieval, composer, compiler</td></tr>
+    <tr><th>M11</th><td>Planner integration + REST surface</td></tr>
+    <tr><th>M12</th><td>Testing, observability, security hardening</td></tr>
+  </table>
+</section>
+
+<section class="slide">
+  <h2>Evidence</h2>
+  <div class="kpi">
+    <div><div class="value">730,962</div><div class="label">rows profiled (InsForge)</div></div>
+    <div><div class="value">29 s</div><div class="label">full context build</div></div>
+    <div><div class="value">36.5 ms</div><div class="label">retrieval p50</div></div>
+    <div><div class="value">215/215</div><div class="label">E2E queries correct-or-safe</div></div>
+    <div><div class="value">733</div><div class="label">tests OK</div></div>
+  </div>
+  <ul style="margin-top:26px">
+    <li>Composition + compilation &lt; 0.1 ms — deterministic, byte-identical packages.</li>
+    <li>Build degrades safely: graph/enrichment outages lower quality, never block publish.</li>
+    <li>REST surface: status, build, versions, pending, validate, preview.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h2>Known limitations &amp; future work</h2>
+  <div class="cols">
+    <div>
+      <h3>Limitations</h3>
+      <ul>
+        <li>Value hints in profiles (deferred): encoded columns clarify instead of guessing</li>
+        <li>No window functions or self-joins in plans</li>
+        <li>Profiling cost scales with width (exact distinct counts)</li>
+        <li>Upstream model latency dominates end-to-end time</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Next</h3>
+      <ul>
+        <li>Low-cardinality value hints (non-sensitive) into profiles</li>
+        <li>Approximate distinct counts for very wide tables</li>
+        <li>REST/UI review inbox for the validation queue</li>
+        <li>Enterprise policy/RLS refinements layered on the same contracts</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="slide title-slide">
+  <h1>Questions</h1>
+  <p class="subtitle">Deep dives: <code>docs/context/</code> — README, architecture, context-model,
+    SRD, retrieval, composition, validation, security, observability, testing-strategy.</p>
+  <p class="muted" style="margin-top:24px">Full query-to-response trace:
+    <code>docs/query-workflow.md</code></p>
+</section>
+
+</div>
+<div class="footer">
+  <span>DataHek Context Layer</span>
+  <span><span id="counter">1</span> / <span id="total">0</span></span>
+</div>
+<script>
+  const slides = Array.from(document.querySelectorAll(".slide"));
+  const counter = document.getElementById("counter");
+  const total = document.getElementById("total");
+  const progress = document.getElementById("progress");
+  let index = Math.max(0, Math.min(slides.length - 1,
+    Number((location.hash || "#1").slice(1)) - 1));
+  total.textContent = slides.length;
+
+  function show(next) {
+    index = Math.max(0, Math.min(slides.length - 1, next));
+    slides.forEach((slide, i) => slide.classList.toggle("active", i === index));
+    counter.textContent = index + 1;
+    progress.style.width = ((index + 1) / slides.length * 100) + "%";
+    history.replaceState(null, "", "#" + (index + 1));
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (["ArrowRight", "ArrowDown", " ", "PageDown"].includes(event.key)) {
+      event.preventDefault(); show(index + 1);
+    } else if (["ArrowLeft", "ArrowUp", "PageUp"].includes(event.key)) {
+      event.preventDefault(); show(index - 1);
+    } else if (event.key === "Home") { show(0); }
+    else if (event.key === "End") { show(slides.length - 1); }
+  });
+  document.getElementById("deck").addEventListener("click", (event) => {
+    const half = window.innerWidth / 2;
+    show(event.clientX > half ? index + 1 : index - 1);
+  });
+  show(index);
+</script>
+</body>
+</html>
