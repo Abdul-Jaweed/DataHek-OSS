@@ -231,3 +231,70 @@ class TestContextApi(_Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestContextTenantAwareness(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+
+        self._tmp = tempfile.TemporaryDirectory()
+        os.environ["DATAHEK_DB_PATH"] = str(Path(self._tmp.name) / "datahek.db")
+        container = build_app_container()
+        container.override(ModelProvider, _FakeModel())
+        registry = ProviderRegistry()
+        registry.register(_FakeProvider())
+        container.override(ProviderRegistry, registry)
+        container.override(ContextBuildJob, _FakeBuildJob())
+
+        from datahek.contracts.auth import AuthenticatedIdentity, AuthProvider
+        from datahek.defaults.auth import AuthConfig
+
+        class _AcmeIdentity(AuthenticatedIdentity):
+            organization_id: str = "acme"
+
+        class _AcmeAuth:
+            async def authenticate(self, *credentials):
+                return _AcmeIdentity(user_id="alice", authenticated=True,
+                                     roles=frozenset({"admin"}), provider="sso")
+
+            async def authenticate_api_key(self, token):
+                return await self.authenticate(token)
+
+        container.override(AuthProvider, _AcmeAuth())
+        container.override(AuthConfig, AuthConfig(mode="local"))
+        self.container = container
+        self.client = TestClient(create_app(container))
+        self.headers = {"X-API-Key": "token"}
+
+        service = container.resolve(ContextRegistryService)
+        asyncio.run(service.publish(
+            RequestContext(source="cli", organization_id="acme"),
+            connection_id="acme-conn", scope="connection", schema_hash="h1",
+            artifacts={ArtifactKind.SCHEMA: _schema(),
+                       ArtifactKind.GOVERNANCE: _governance()},
+            quality=_quality(), freshness=_freshness()))
+
+    def tearDown(self):
+        os.environ.pop("DATAHEK_DB_PATH", None)
+        self._tmp.cleanup()
+
+    def test_status_reads_caller_organization(self):
+        response = self.client.get("/connections/acme-conn/context", headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNotNone(response.json()["context"])
+        self.assertEqual(response.json()["context"]["org_id"], "acme")
+
+    def test_other_organization_sees_nothing(self):
+        from datahek.defaults.auth import AuthConfig
+
+        response = self.client.get("/connections/acme-conn/context")
+        self.assertEqual(response.status_code, 401)
+
+    def test_pending_and_versions_scoped(self):
+        pending = self.client.get("/connections/acme-conn/context/pending",
+                                  headers=self.headers)
+        self.assertEqual(pending.status_code, 200)
+        versions = self.client.get("/connections/acme-conn/context/versions",
+                                   headers=self.headers)
+        self.assertEqual([v["org_id"] for v in versions.json()["versions"]], ["acme"])

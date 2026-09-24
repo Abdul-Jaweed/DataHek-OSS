@@ -593,39 +593,46 @@ def create_app(container=None) -> FastAPI:
         }
 
     @app.get("/connections/{connection_id}/context")
-    async def get_connection_context(connection_id: str, _identity=Depends(_require_auth)):
+    async def get_connection_context(request: Request, connection_id: str,
+                                     scope: str = "connection",
+                                     _identity=Depends(_require_auth)):
         from datahek.context.registry import ContextRegistryService
         from datahek.context.serialization import record_to_dict
 
         record = await c.resolve(ContextRegistryService).active(
-            RequestContext(source="api"), connection_id=connection_id, scope="connection")
+            _request_context(request, _identity), connection_id=connection_id,
+            scope=scope)
         return {"context": record_to_dict(record) if record is not None else None}
 
     @app.get("/connections/{connection_id}/context/versions")
-    async def get_connection_context_versions(connection_id: str, limit: int = 20,
+    async def get_connection_context_versions(request: Request, connection_id: str,
+                                              limit: int = 20, scope: str = "connection",
                                               _identity=Depends(_require_auth)):
         from datahek.contracts.context import ContextRegistry
         from datahek.context.serialization import record_to_dict
 
         records = await c.resolve(ContextRegistry).versions(
-            RequestContext(source="api"), connection_id=connection_id, scope="connection")
+            _request_context(request, _identity), connection_id=connection_id, scope=scope)
         newest = sorted(records, key=lambda record: record.version, reverse=True)
         return {"versions": [record_to_dict(record)
                              for record in newest[:min(max(limit, 1), 100)]]}
 
     @app.get("/connections/{connection_id}/context/pending")
-    async def get_connection_context_pending(connection_id: str,
+    async def get_connection_context_pending(request: Request, connection_id: str,
+                                             scope: str = "connection",
                                              _identity=Depends(_require_auth)):
         from dataclasses import asdict
 
         from datahek.context.validation import ContextValidationService
 
         items = await c.resolve(ContextValidationService).list_pending(
-            RequestContext(source="api"), connection_id=connection_id)
+            _request_context(request, _identity), connection_id=connection_id, scope=scope)
         return {"items": [asdict(item) for item in items]}
 
     @app.post("/connections/{connection_id}/context/validate")
-    async def validate_connection_context(connection_id: str, req: ContextValidateRequest,
+    async def validate_connection_context(request: Request, connection_id: str,
+                                          req: ContextValidateRequest,
+                                          scope: str = "connection",
                                           _identity=Depends(_require_auth)):
         from datahek.contracts.context import ArtifactKind
         from datahek.context.serialization import record_to_dict
@@ -643,8 +650,8 @@ def create_app(container=None) -> FastAPI:
                                                 section=item.section, patch=item.patch))
         try:
             record = await c.resolve(ContextValidationService).apply(
-                RequestContext(source="api"), connection_id=connection_id,
-                decisions=tuple(decisions))
+                _request_context(request, _identity), connection_id=connection_id,
+                decisions=tuple(decisions), scope=scope)
         except Exception:
             metrics.inc("datahek_context_validations_total", outcome="error")
             raise
@@ -656,7 +663,9 @@ def create_app(container=None) -> FastAPI:
         return {"context": record_to_dict(record)}
 
     @app.post("/connections/{connection_id}/context/preview")
-    async def preview_connection_context(connection_id: str, req: ContextPreviewRequest,
+    async def preview_connection_context(request: Request, connection_id: str,
+                                         req: ContextPreviewRequest,
+                                         scope: str = "connection",
                                          _identity=Depends(_require_auth)):
         from datahek.contracts.context import (
             ContextCompiler,
@@ -665,11 +674,11 @@ def create_app(container=None) -> FastAPI:
             RuntimeContext,
         )
 
-        ctx = RequestContext(source="api")
+        ctx = _request_context(request, _identity)
         started = time.perf_counter()
         try:
             retrieved = await c.resolve(ContextRetriever).retrieve(
-                ctx, connection_id=connection_id, question=req.question)
+                ctx, connection_id=connection_id, question=req.question, scope=scope)
             if retrieved is None:
                 metrics.inc("datahek_context_retrievals_total", outcome="miss")
                 raise DatahekError(ErrorCode.NOT_FOUND,
@@ -708,13 +717,14 @@ def create_app(container=None) -> FastAPI:
         }
 
     @app.post("/connections/{connection_id}/context/build")
-    async def build_connection_context(connection_id: str, req: ContextBuildRequest,
+    async def build_connection_context(request: Request, connection_id: str,
+                                       req: ContextBuildRequest,
                                        _identity=Depends(_require_auth)):
         from dataclasses import asdict
 
         from datahek.context.jobs.build_context import ContextBuildJob
 
-        ctx = RequestContext(source="api")
+        ctx = _request_context(request, _identity)
         connection = await conn_mgr.get_connection(ctx, connection_id)
         provider = registry.get(connection.provider)
         started = time.perf_counter()
@@ -734,11 +744,13 @@ def create_app(container=None) -> FastAPI:
         return asdict(result)
 
     @app.get("/contexts/{context_id}")
-    async def get_context_record(context_id: str, _identity=Depends(_require_auth)):
+    async def get_context_record(request: Request, context_id: str,
+                                 _identity=Depends(_require_auth)):
         from datahek.contracts.context import ContextRegistry
         from datahek.context.serialization import record_to_dict
 
-        record = await c.resolve(ContextRegistry).get(RequestContext(source="api"), context_id)
+        record = await c.resolve(ContextRegistry).get(
+            _request_context(request, _identity), context_id)
         if record is None:
             raise DatahekError(ErrorCode.NOT_FOUND, f"Context '{context_id}' not found")
         return {"context": record_to_dict(record),

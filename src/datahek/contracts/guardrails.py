@@ -2,7 +2,8 @@
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol, runtime_checkable
 
-GuardrailDecision = Literal["ALLOW", "DENY", "REDACT", "MASK", "REQUIRE_APPROVAL", "RATE_LIMIT"]
+GuardrailDecision = Literal["ALLOW", "DENY", "REDACT", "MASK", "REQUIRE_APPROVAL",
+                            "RATE_LIMIT", "FILTER"]
 
 GuardrailStage = Literal["input", "plan", "sql", "output"]
 
