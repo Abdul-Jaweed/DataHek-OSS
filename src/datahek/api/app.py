@@ -22,6 +22,7 @@ from datahek.defaults.guardrails import sanitize_output
 from datahek.contracts.models import ModelProvider
 from datahek.engine.executor import Engine, ProviderRegistry
 from datahek.engine.planner import Planner
+from datahek.context.jobs.rebuild_queue import ContextRebuildQueue
 from datahek.engine.schema import SchemaService
 from datahek.kernel.capabilities import OSS_CAPABILITIES
 from datahek.kernel.context import RequestContext
@@ -126,10 +127,14 @@ class PromptRequest(BaseModel):
 
 class ContextBuildRequest(BaseModel):
     enrichment: bool = False
+    scope: str = Field("connection", pattern="^(connection|schema|table)$")
+    tables: list[str] | None = Field(None, max_length=64)
 
 
 class ContextPreviewRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=10_000)
+    budget_tokens: int | None = Field(None, ge=100, le=200_000)
+    persist: bool = False
 
 
 class ContextDecisionRequest(BaseModel):
@@ -456,6 +461,11 @@ def create_app(container=None) -> FastAPI:
                     logging.getLogger(__name__).warning(
                         "LLM settings reload from Redis failed (%s); continuing with env config", exc)
 
+        rebuild_queue = None
+        if c.has(ContextRebuildQueue):
+            rebuild_queue = c.resolve(ContextRebuildQueue)
+            await rebuild_queue.start()
+
         scheduler = None
         if c.has(SavedQueryStore):
             from datahek.defaults.scheduler import LocalScheduler
@@ -484,6 +494,8 @@ def create_app(container=None) -> FastAPI:
         yield
         if scheduler is not None:
             await scheduler.stop()
+        if rebuild_queue is not None:
+            await rebuild_queue.stop()
 
     from datahek.defaults.log_setup import configure_logging
 
@@ -676,6 +688,7 @@ def create_app(container=None) -> FastAPI:
 
         ctx = _request_context(request, _identity)
         started = time.perf_counter()
+        rebuild_job = None
         try:
             retrieved = await c.resolve(ContextRetriever).retrieve(
                 ctx, connection_id=connection_id, question=req.question, scope=scope)
@@ -684,7 +697,8 @@ def create_app(container=None) -> FastAPI:
                 raise DatahekError(ErrorCode.NOT_FOUND,
                                    f"No active context for connection '{connection_id}'")
             composed = await c.resolve(ContextComposer).compose(
-                ctx, retrieved, RuntimeContext(question=req.question))
+                ctx, retrieved, RuntimeContext(question=req.question),
+                budget_tokens=req.budget_tokens)
             package = await c.resolve(ContextCompiler).compile(
                 ctx, composed, quality=retrieved.quality, freshness=retrieved.freshness)
         except DatahekError:
@@ -701,7 +715,21 @@ def create_app(container=None) -> FastAPI:
         if insufficient:
             metrics.inc("datahek_context_insufficient_total")
         metrics.observe("datahek_context_tokens", float(package.budget.tokens_estimate))
+        from datahek.context.jobs.rebuild_queue import maybe_enqueue_rebuild
+
+        auto_rebuild = os.environ.get("DATAHEK_CONTEXT_AUTO_REBUILD", "off").lower()             in ("on", "1", "true")
+        rebuild_job = await maybe_enqueue_rebuild(
+            c.resolve(ContextRebuildQueue) if c.has(ContextRebuildQueue) else None,
+            ctx, connection_id, scope, retrieved.stale, auto_rebuild)
+        persisted = False
+        if req.persist:
+            from datahek.contracts.context import ContextStore
+
+            await c.resolve(ContextStore).put_package(ctx, package.context_id, package)
+            persisted = True
         return {
+            "rebuild_job": rebuild_job,
+            "persisted": persisted,
             "context_id": package.context_id,
             "version": package.version,
             "schema_hash": package.schema_hash,
@@ -730,7 +758,8 @@ def create_app(container=None) -> FastAPI:
         started = time.perf_counter()
         try:
             result = await c.resolve(ContextBuildJob).run(
-                ctx, connection, provider, enrichment=req.enrichment)
+                ctx, connection, provider, enrichment=req.enrichment,
+                tables=req.tables, scope=req.scope)
         except Exception:
             metrics.inc("datahek_context_builds_total", outcome="error")
             raise
@@ -740,7 +769,8 @@ def create_app(container=None) -> FastAPI:
         await _audit_event(c, "context.build", "build", actor=_actor(_identity),
                            resource_ref=result.context_id or connection_id,
                            payload={"connection": connection_id, "state": result.state,
-                                    "enrichment": req.enrichment})
+                                    "enrichment": req.enrichment, "scope": req.scope,
+                                    "tables": req.tables})
         return asdict(result)
 
     @app.get("/contexts/{context_id}")
@@ -755,6 +785,44 @@ def create_app(container=None) -> FastAPI:
             raise DatahekError(ErrorCode.NOT_FOUND, f"Context '{context_id}' not found")
         return {"context": record_to_dict(record),
                 "artifact_kinds": [kind.value for kind in record.artifact_kinds]}
+
+    @app.post("/connections/{connection_id}/context/rebuild", status_code=202)
+    async def rebuild_connection_context(request: Request, connection_id: str,
+                                         enrichment: bool = False, scope: str = "connection",
+                                         _identity=Depends(_require_auth)):
+        if not c.has(ContextRebuildQueue):
+            raise DatahekError(ErrorCode.CONTEXT_UNAVAILABLE,
+                               "Context rebuild queue is not configured")
+        job = await c.resolve(ContextRebuildQueue).enqueue(
+            _request_context(request, _identity), connection_id, scope=scope,
+            enrichment=enrichment)
+        await _audit_event(c, "context.rebuild", "enqueue", actor=_actor(_identity),
+                           resource_ref=connection_id,
+                           payload={"job": job["id"], "enrichment": enrichment})
+        return job
+
+    @app.get("/context/rebuilds")
+    async def list_context_rebuilds(request: Request, job_id: str | None = None,
+                                    _identity=Depends(_require_auth)):
+        if not c.has(ContextRebuildQueue):
+            raise DatahekError(ErrorCode.CONTEXT_UNAVAILABLE,
+                               "Context rebuild queue is not configured")
+        ctx = _request_context(request, _identity)
+        return {"jobs": c.resolve(ContextRebuildQueue).status(
+            job_id=job_id, org_id=ctx.organization_id)}
+
+    @app.get("/contexts/{context_id}/package")
+    async def get_context_package(request: Request, context_id: str,
+                                  _identity=Depends(_require_auth)):
+        from datahek.contracts.context import ContextStore
+        from datahek.context.serialization import package_to_dict
+
+        package = await c.resolve(ContextStore).get_package(
+            _request_context(request, _identity), context_id)
+        if package is None:
+            raise DatahekError(ErrorCode.NOT_FOUND,
+                               f"No persisted package for context '{context_id}'")
+        return {"package": package_to_dict(package)}
 
     @app.post("/auth/login")
     async def auth_login(req: LoginRequest, _identity=None):

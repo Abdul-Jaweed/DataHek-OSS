@@ -5,6 +5,7 @@ Always bounded (table and column caps) — never the whole store or graph. Stale
 context is returned with ``stale=True`` so callers can warn and queue a rebuild.
 """
 import asyncio
+import os
 import re
 
 from datahek.contracts.context import (
@@ -29,8 +30,8 @@ _STOPWORDS = frozenset({
     "between", "over", "past", "count", "average", "avg", "total", "sum",
     "number", "please", "give", "list", "using", "where",
 })
-_TABLE_CAP = 8
-_COLUMN_CAP = 40
+_DEFAULT_TABLE_CAP = 8
+_DEFAULT_COLUMN_CAP = 40
 
 
 def question_tokens(question: str) -> frozenset[str]:
@@ -43,10 +44,17 @@ def _overlap(text: str, tokens: frozenset[str]) -> int:
 
 
 class ContextRetrieverService:
-    def __init__(self, registry, store, semantic_store=None):
+    def __init__(self, registry, store, semantic_store=None, table_cap=None,
+                 column_cap=None):
         self._registry = registry
         self._store = store
         self._semantic_store = semantic_store
+        self._table_cap = int(table_cap if table_cap is not None
+                              else os.environ.get("DATAHEK_CONTEXT_TABLE_CAP",
+                                                  _DEFAULT_TABLE_CAP))
+        self._column_cap = int(column_cap if column_cap is not None
+                               else os.environ.get("DATAHEK_CONTEXT_COLUMN_CAP",
+                                                   _DEFAULT_COLUMN_CAP))
 
     async def retrieve(self, ctx: RequestContext, *, connection_id: str, question: str,
                        scope: str = "connection",
@@ -132,8 +140,7 @@ class ContextRetrieverService:
         return tuple(sorted((dict(metric) for metric in metrics),
                             key=lambda metric: str(metric.get("name", ""))))
 
-    @staticmethod
-    def _select_tables(schema: SchemaContext, artifacts, metrics, tokens) -> list:
+    def _select_tables(self, schema: SchemaContext, artifacts, metrics, tokens) -> list:
         def table_score(table) -> int:
             score = 3 * _overlap(table.name, tokens)
             if any(_overlap(column.name, tokens) for column in table.columns):
@@ -168,11 +175,10 @@ class ContextRetrieverService:
         ranked = sorted(schema.tables, key=lambda table: (-scores[table.name], table.name))
         matched = [table for table in ranked if scores[table.name] > 0]
         chosen = matched or ranked
-        return chosen[:_TABLE_CAP]
+        return chosen[:self._table_cap]
 
-    @staticmethod
-    def _select_columns(table, tokens) -> tuple[str, ...]:
-        if len(table.columns) <= _COLUMN_CAP:
+    def _select_columns(self, table, tokens) -> tuple[str, ...]:
+        if len(table.columns) <= self._column_cap:
             return tuple(column.name for column in table.columns)
         matched = [column for column in table.columns if _overlap(column.name, tokens)]
         remaining = sorted(
@@ -180,7 +186,7 @@ class ContextRetrieverService:
             key=lambda column: (not column.is_primary_key, not column.is_foreign_key,
                                 column.ordinal))
         ordered = matched + remaining
-        return tuple(column.name for column in ordered[:_COLUMN_CAP])
+        return tuple(column.name for column in ordered[:self._column_cap])
 
     @staticmethod
     def _filter_topology(topology: TopologyContext, selected: set[str]) -> TopologyContext:

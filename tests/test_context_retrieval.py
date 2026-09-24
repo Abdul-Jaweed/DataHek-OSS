@@ -246,3 +246,37 @@ class TestTokens(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestConfigurableCaps(unittest.TestCase):
+    def _service(self, **kwargs):
+        from datahek.context.retriever import ContextRetrieverService
+
+        class _Store:
+            async def get(self, *args, **kwargs):
+                return None
+
+        class _Registry:
+            async def active(self, *args, **kwargs):
+                return None
+
+        return ContextRetrieverService(_Registry(), _Store(), **kwargs)
+
+    def test_default_caps(self):
+        service = self._service()
+        self.assertEqual(service._table_cap, 8)
+        self.assertEqual(service._column_cap, 40)
+
+    def test_custom_caps(self):
+        service = self._service(table_cap=3, column_cap=5)
+        self.assertEqual(service._table_cap, 3)
+        self.assertEqual(service._column_cap, 5)
+
+    def test_env_caps(self):
+        import os
+
+        os.environ["DATAHEK_CONTEXT_TABLE_CAP"] = "2"
+        try:
+            self.assertEqual(self._service()._table_cap, 2)
+        finally:
+            os.environ.pop("DATAHEK_CONTEXT_TABLE_CAP", None)

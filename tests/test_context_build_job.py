@@ -262,3 +262,36 @@ class TestBuildJob(_Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestScopedBuild(unittest.TestCase):
+    def test_build_publishes_under_requested_scope(self):
+        import tempfile
+        from pathlib import Path
+
+        from datahek.context.registry import ContextRegistryService
+        from datahek.defaults.context_store import SqliteContextRegistry, SqliteContextStore
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "ctx.db")
+            registry = SqliteContextRegistry(path)
+            store = SqliteContextStore(path)
+            service = ContextRegistryService(registry, store)
+            provider = _FakeProvider()
+            engine_registry = ProviderRegistry()
+            engine_registry.register(provider)
+            job = ContextBuildJob(
+                schema_service=SchemaService(), registry_service=service,
+                profiler=SchemaProfiler(Engine(engine_registry)),
+                graph_builder=SchemaGraphBuilder(InMemoryGraphRepository()))
+            ctx = RequestContext(source="cli")
+            connection = Connection(id="c1", name="fake", provider="fake",
+                                    org_id="default", project_id="default")
+            result = asyncio.run(job.run(ctx, connection, provider, enrichment=False,
+                                         scope="schema", tables=["orders"]))
+            self.assertEqual(result.state, "active")
+            scoped = asyncio.run(registry.active(ctx, connection_id="c1", scope="schema"))
+            self.assertIsNotNone(scoped)
+            self.assertEqual(scoped.scope, "schema")
+            self.assertIsNone(asyncio.run(
+                registry.active(ctx, connection_id="c1", scope="connection")))

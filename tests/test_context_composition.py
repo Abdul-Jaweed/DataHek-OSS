@@ -254,3 +254,22 @@ class TestCompiler(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestConfigurableBudget(unittest.TestCase):
+    def test_default_budget_is_configurable(self):
+        from datahek.context.composer import BudgetContextComposer
+
+        composer = BudgetContextComposer(default_budget=50)
+        self.assertEqual(composer._default_budget, 50)
+
+    def test_env_budget(self):
+        import os
+
+        from datahek.context.composer import BudgetContextComposer
+
+        os.environ["DATAHEK_CONTEXT_BUDGET_TOKENS"] = "123"
+        try:
+            self.assertEqual(BudgetContextComposer()._default_budget, 123)
+        finally:
+            os.environ.pop("DATAHEK_CONTEXT_BUDGET_TOKENS", None)

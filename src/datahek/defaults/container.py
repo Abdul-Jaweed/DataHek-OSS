@@ -38,6 +38,7 @@ from datahek.context.composer import BudgetContextComposer
 from datahek.context.enrichment import OntologyEnricher
 from datahek.context.graph.builder import SchemaGraphBuilder
 from datahek.context.jobs.build_context import ContextBuildJob
+from datahek.context.jobs.rebuild_queue import ContextRebuildQueue
 from datahek.context.profiler import SchemaProfiler
 from datahek.context.retriever import ContextRetrieverService
 from datahek.context.validation import ContextValidationService
@@ -207,6 +208,12 @@ def build_app_container() -> Container:
         policy=c.resolve(PolicyEngine),
         approvals=c.resolve(ApprovalService),
         rate_limit=int(os.environ.get("DATAHEK_RATE_LIMIT_PER_MINUTE", "120")),
+    ), singleton=True)
+    c.register(ContextRebuildQueue, lambda: ContextRebuildQueue(
+        job=c.resolve(ContextBuildJob),
+        registry_service=c.resolve(ContextRegistryService),
+        connection_manager=c.resolve(ConnectionManager),
+        provider_registry=c.resolve(ProviderRegistry),
     ), singleton=True)
     c.register(ContextBuildJob, lambda: ContextBuildJob(
         schema_service=c.resolve(SchemaService),

@@ -298,3 +298,110 @@ class TestContextTenantAwareness(unittest.TestCase):
         versions = self.client.get("/connections/acme-conn/context/versions",
                                    headers=self.headers)
         self.assertEqual([v["org_id"] for v in versions.json()["versions"]], ["acme"])
+
+
+class TestContextPackagePersistence(_Base):
+    def test_preview_persist_and_read_package(self):
+        self.publish()
+        preview = self.client.post("/connections/conn1/context/preview",
+                                   json={"question": "count events", "persist": True})
+        self.assertEqual(preview.status_code, 200)
+        body = preview.json()
+        self.assertTrue(body["persisted"])
+        package = self.client.get(f"/contexts/{body['context_id']}/package")
+        self.assertEqual(package.status_code, 200)
+        stored = package.json()["package"]
+        self.assertEqual(stored["schema_hash"], body["schema_hash"])
+        self.assertEqual(stored["budget"]["tokens_estimate"], body["tokens"])
+
+    def test_preview_without_persist_has_no_package(self):
+        record = self.publish()
+        self.client.post("/connections/conn1/context/preview",
+                         json={"question": "count events"})
+        response = self.client.get(f"/contexts/{record.context_id}/package")
+        self.assertEqual(response.status_code, 404)
+
+    def test_unknown_package_404(self):
+        self.assertEqual(self.client.get("/contexts/missing/package").status_code, 404)
+
+    def test_preview_budget_override_produces_insufficient(self):
+        self.publish()
+        preview = self.client.post("/connections/conn1/context/preview",
+                                   json={"question": "count events", "budget_tokens": 100})
+        self.assertEqual(preview.status_code, 200)
+        self.assertTrue(preview.json()["insufficient"])
+
+
+class _FakeQueue:
+    def __init__(self):
+        self.enqueued = []
+
+    async def enqueue(self, ctx, connection_id, scope="connection", enrichment=False,
+                      tables=None):
+        self.enqueued.append({"connection_id": connection_id, "org": ctx.organization_id})
+        return {"id": "job-1", "state": "queued", "connection_id": connection_id}
+
+    def status(self, job_id=None, org_id=None):
+        return [{"id": "job-1", "state": "queued"}] if org_id else []
+
+
+class TestContextRebuildApi(_Base):
+    def setUp(self):
+        super().setUp()
+        from datahek.context.jobs.rebuild_queue import ContextRebuildQueue
+
+        self.queue = _FakeQueue()
+        self.container = build_app_container()
+        self.container.override(ModelProvider, _FakeModel())
+        registry = ProviderRegistry()
+        registry.register(_FakeProvider())
+        self.container.override(ProviderRegistry, registry)
+        self.container.override(ContextBuildJob, _FakeBuildJob())
+        self.container.register(ContextRebuildQueue, self.queue, singleton=True)
+        # rebuild the client so the app resolves the faked queue
+        self.client = TestClient(create_app(self.container))
+
+    def test_enqueue_rebuild(self):
+        response = self.client.post("/connections/conn1/context/rebuild?enrichment=true")
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["state"], "queued")
+        self.assertEqual(self.queue.enqueued[0]["connection_id"], "conn1")
+
+    def test_list_rebuilds(self):
+        response = self.client.get("/context/rebuilds")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["jobs"][0]["id"], "job-1")
+
+
+class TestAutoRebuildHelper(unittest.TestCase):
+    def test_enqueues_when_stale_and_enabled(self):
+        from datahek.context.jobs.rebuild_queue import maybe_enqueue_rebuild
+
+        queue = _FakeQueue()
+        ctx = RequestContext(source="api", organization_id="acme")
+        job = asyncio.run(maybe_enqueue_rebuild(queue, ctx, "conn1", "connection",
+                                                stale=True, enabled=True))
+        self.assertEqual(job["id"], "job-1")
+        self.assertEqual(queue.enqueued[0]["org"], "acme")
+
+    def test_skips_when_not_stale_or_disabled_or_missing(self):
+        from datahek.context.jobs.rebuild_queue import maybe_enqueue_rebuild
+
+        ctx = RequestContext(source="api")
+        queue = _FakeQueue()
+        for stale, enabled, target in ((False, True, queue), (True, False, queue),
+                                       (True, True, None)):
+            self.assertIsNone(asyncio.run(maybe_enqueue_rebuild(
+                target, ctx, "conn1", "connection", stale=stale, enabled=enabled)))
+        self.assertEqual(queue.enqueued, [])
+
+    def test_enqueue_failure_is_swallowed(self):
+        from datahek.context.jobs.rebuild_queue import maybe_enqueue_rebuild
+
+        class _Boom:
+            async def enqueue(self, *args, **kwargs):
+                raise RuntimeError("queue down")
+
+        ctx = RequestContext(source="api")
+        self.assertIsNone(asyncio.run(maybe_enqueue_rebuild(
+            _Boom(), ctx, "conn1", "connection", stale=True, enabled=True)))

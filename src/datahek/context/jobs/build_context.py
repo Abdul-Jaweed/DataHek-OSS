@@ -77,7 +77,8 @@ class ContextBuildJob:
     async def run(self, ctx: RequestContext, connection, provider, *, tables=None,
                   metrics=(), enrichment: bool = True,
                   require_validation: bool = False,
-                  skip_if_current: bool = True) -> BuildResult:
+                  skip_if_current: bool = True,
+                  scope: str = "connection") -> BuildResult:
         stages: list[StageResult] = []
         warnings: list[str] = []
         degraded = False
@@ -93,7 +94,7 @@ class ContextBuildJob:
         schema = build_schema_context(catalog, database=connection.database or connection.name)
 
         if skip_if_current and await self._registry_service.is_current(
-                ctx, connection_id=connection.id, scope="connection",
+                ctx, connection_id=connection.id, scope=scope,
                 schema_hash=schema.schema_hash):
             return BuildResult(connection_id=connection.id, state="current",
                                stages=tuple(stages))
@@ -132,7 +133,7 @@ class ContextBuildJob:
         ontology = None
         if enrichment and self._enricher is not None and taxonomy is not None:
             prior_artifact = await self._registry_service.active_artifact(
-                ctx, connection_id=connection.id, scope="connection",
+                ctx, connection_id=connection.id, scope=scope,
                 kind=ArtifactKind.ONTOLOGY)
             validated_priors: tuple = ()
             if prior_artifact is not None:
@@ -200,7 +201,7 @@ class ContextBuildJob:
         record, stage = await self._stage(
             "PUBLISH",
             lambda: self._registry_service.publish(
-                ctx, connection_id=connection.id, scope="connection",
+                ctx, connection_id=connection.id, scope=scope,
                 schema_hash=schema.schema_hash, artifacts=artifacts, quality=quality,
                 freshness=freshness, notes="context build", require_validation=require_validation))
         stages.append(stage)

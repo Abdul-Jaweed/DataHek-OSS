@@ -5,8 +5,12 @@ in that order when over budget (empty sections are simply absent, not
 "dropped"). Schema, governance, and granularity are mandatory — if they cannot
 fit, the composed context is marked insufficient and the compiler fails closed.
 """
+import os
+
 from datahek.contracts.context import ComposedContext, RetrievedContext, RuntimeContext
 from datahek.context.retriever import question_tokens
+
+_DEFAULT_BUDGET = 4000
 
 _OPTIONAL_ORDER = ("profiles", "taxonomy", "topology", "ontology", "metrics")
 
@@ -23,8 +27,14 @@ def _metric_overlap(metric: dict, tokens: frozenset[str]) -> int:
 
 
 class BudgetContextComposer:
+    def __init__(self, default_budget: int | None = None):
+        self._default_budget = int(default_budget if default_budget is not None
+                                   else os.environ.get("DATAHEK_CONTEXT_BUDGET_TOKENS",
+                                                       _DEFAULT_BUDGET))
+
     async def compose(self, ctx, retrieved: RetrievedContext, runtime: RuntimeContext, *,
-                      budget_tokens: int = 4000) -> ComposedContext:
+                      budget_tokens: int | None = None) -> ComposedContext:
+        budget_tokens = self._default_budget if budget_tokens is None else int(budget_tokens)
         sections = {
             "schema": retrieved.schema,
             "governance": retrieved.governance,
