@@ -88,3 +88,21 @@ never read, aggregated into extrema, or persisted.
 `tests/test_context_profiler.py` (8 tests): full column profile, measure min/max/avg, dimension and
 temporal roles, sensitive-column counts-only, artifact envelope, table filtering, and zero-row
 behavior — all against a scripted provider through the real `Engine`.
+
+## Value hints (low-cardinality examples)
+
+For **non-sensitive string columns** whose distinct count is at or below
+`DATAHEK_PROFILE_HINT_MAX_DISTINCT` (default 25), the profiler also records the top
+`DATAHEK_PROFILE_HINT_TOP_K` (default 5) values as `ColumnProfile.top_values`. These hints are
+rendered into the planner's schema block (`service_name:text (e.g. ad, checkout, payment)`) so the
+model can match entities and encoded categories without guessing.
+
+Privacy guards: sensitive-patterned columns are skipped, free-text/identifier columns
+(`*_id`, `*_message`, `*_url`, JSON, …) are skipped, values are truncated to 24 characters, and at
+most `DATAHEK_PROFILE_HINT_MAX_COLUMNS` (default 6) columns per table are hinted. Disable
+entirely with `DATAHEK_PROFILE_VALUE_HINTS=off`.
+
+Cost: each hint is a grouped `count(*)` scan of the table through the guarded engine. On the
+InsForge fixture (730k rows) six hints add ~17 s to the build (PROFILE ≈ 27 s → 44 s), which is a
+one-time build cost. Exact counts are kept; sampling/approximate distinct for very large tables
+remains future work.

@@ -106,12 +106,29 @@ def build_schema_summary(catalog: SchemaCatalog) -> str:
     return "\n".join(lines) or "(no tables found)"
 
 
+def _value_hints(package: ContextPackage, limit: int = 12) -> dict[str, str]:
+    """Example values for low-cardinality columns (profiler hints, non-sensitive)."""
+    hints: dict[str, str] = {}
+    if not package.profile:
+        return hints
+    for table, columns in package.profile.items():
+        for column in columns:
+            if not column.top_values or len(hints) >= limit:
+                continue
+            values = ", ".join(str(value)[:24] for value, _ in column.top_values[:5])
+            hints[f"{table}.{column.name}"] = f" (e.g. {values})"
+    return hints
+
+
 def build_context_summary(package: ContextPackage) -> str:
     """Render the compiled context package as the planner's schema block."""
     lines = []
+    hints = _value_hints(package)
     for table in package.schema[:MAX_TABLES_IN_PROMPT]:
         visible = table.columns[:MAX_COLUMNS_IN_PROMPT]
-        cols = ", ".join(f"{c.name}:{c.data_type}" for c in visible)
+        cols = ", ".join(
+            f"{c.name}:{c.data_type}{hints.get(f'{table.name}.{c.name}', '')}"
+            for c in visible)
         hidden = len(table.columns) - len(visible)
         if hidden > 0:
             cols += f", … (+{hidden} more columns)"

@@ -36,6 +36,12 @@ class _ProfileProvider:
 
     async def compile_and_execute(self, client, plan, ctx):
         aggregates = plan.nodes[0].aggregates
+        node = plan.nodes[0]
+        if node.group_by and len(aggregates) == 1 and aggregates[0].alias == "n":
+            column = node.group_by[0]
+            return {"columns": [{"name": column, "type": "text"},
+                                {"name": "n", "type": "Int"}],
+                    "rows": [(f"{column}_alpha", 60), (f"{column}_beta", 40)]}
         values = {"n": 100}
         for agg in aggregates:
             if agg.alias == "n":
@@ -213,3 +219,42 @@ class TestSchemaProfiler(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestValueHints(unittest.TestCase):
+    def _profile(self, provider=None):
+        registry = ProviderRegistry()
+        registry.register(provider or _ProfileProvider())
+        profiler = SchemaProfiler(Engine(registry))
+        return asyncio.run(profiler.profile(
+            RequestContext(source="api"), _conn(), _CATALOG))
+
+    def test_low_cardinality_string_columns_get_hints(self):
+        columns = {c.name: c for c in self._profile().tables["orders"]}
+        hints = dict(columns["status"].top_values)
+        self.assertEqual(hints, {"status_alpha": 60, "status_beta": 40})
+
+    def test_numeric_columns_get_no_hints(self):
+        columns = {c.name: c for c in self._profile().tables["orders"]}
+        self.assertEqual(columns["amount"].top_values, ())
+
+    def test_sensitive_columns_never_get_hints(self):
+        columns = {c.name: c for c in self._profile().tables["orders"]}
+        self.assertEqual(columns["card_number"].top_values, ())
+
+    def test_high_cardinality_columns_skipped(self):
+        class _HighCardinality(_ProfileProvider):
+            DISTINCT = {**_ProfileProvider.DISTINCT, "status": 500}
+
+        columns = {c.name: c for c in self._profile(_HighCardinality()).tables["orders"]}
+        self.assertEqual(columns["status"].top_values, ())
+
+    def test_hints_can_be_disabled(self):
+        import os
+
+        os.environ["DATAHEK_PROFILE_VALUE_HINTS"] = "off"
+        try:
+            columns = {c.name: c for c in self._profile().tables["orders"]}
+            self.assertEqual(columns["status"].top_values, ())
+        finally:
+            os.environ.pop("DATAHEK_PROFILE_VALUE_HINTS", None)

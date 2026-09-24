@@ -254,3 +254,42 @@ class TestPlannerWithContext(_Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestValueHintsInContextSummary(_Base):
+    def _publish_with_hints(self):
+        from datahek.contracts.context import ColumnProfile, ProfileContext
+
+        registry = self.retriever._registry
+        store = self.retriever._store
+        service = ContextRegistryService(registry, store)
+        asyncio.run(service.publish(
+            self.ctx, connection_id="c1", scope="connection", schema_hash="h1",
+            artifacts={
+                ArtifactKind.SCHEMA: _schema(),
+                ArtifactKind.PROFILE: ProfileContext(
+                    envelope=_envelope(ArtifactKind.PROFILE),
+                    tables={"events": (ColumnProfile(
+                        name="customer_id", row_count=10, null_ratio=0.0,
+                        distinct_count=2,
+                        top_values=(("payment", 6), ("checkout", 4)),
+                        role_candidates=("dimension",)),)}),
+                ArtifactKind.GOVERNANCE: _governance(),
+            },
+            quality=_quality(), freshness=_freshness()))
+
+    def test_example_values_reach_the_prompt(self):
+        self._publish_with_hints()
+        model = _FakeModel(json.dumps(_plan_json()))
+        result = asyncio.run(self._planner(model).plan("count events", self.ctx,
+                                                      self.conn, self.provider))
+        self.assertIsNotNone(result.plan)
+        prompt = self._prompt(model)
+        self.assertIn("customer_id:int (e.g. payment, checkout)", prompt)
+
+    def test_no_hints_without_profiles(self):
+        model = _FakeModel(json.dumps(_plan_json()))
+        asyncio.run(self._planner(model).plan("count events", self.ctx, self.conn,
+                                              self.provider))
+        self.assertIn("customer_id:int", self._prompt(model))
+        self.assertNotIn("(e.g.", self._prompt(model).split("Restricted")[0])

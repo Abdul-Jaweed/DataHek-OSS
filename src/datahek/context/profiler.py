@@ -4,6 +4,8 @@ One aggregate plan per table runs through the guarded engine (validation,
 policy, audit). Sensitive columns contribute counts only; raw text values are
 never read (schema-profiling.md).
 """
+import asyncio
+import os
 from datetime import datetime, timezone
 
 from datahek.contracts.context import (
@@ -17,6 +19,16 @@ from datahek.contracts.context import (
 )
 from datahek.engine.plan import Aggregate, LogicalPlan, ReadNode, type_family
 from datahek.engine.schema import SchemaCatalog, TableMeta
+
+_FREE_TEXT = ("message", "error", "description", "desc", "note", "comment", "url",
+              "path", "json", "query", "sql", "stack", "trace_id", "span_id", "session",
+              "user_id", "order_id", "product_id", "incident_id", "event_id")
+
+
+def _looks_free_text(name: str) -> bool:
+    lowered = name.lower()
+    return any(marker in lowered for marker in _FREE_TEXT)
+
 
 ARTIFACT_SCHEMA_VERSION = 1
 
@@ -75,6 +87,11 @@ class SchemaProfiler:
 
     def __init__(self, engine):
         self._engine = engine
+        self._value_hints = os.environ.get("DATAHEK_PROFILE_VALUE_HINTS", "on").lower() \
+            not in ("off", "0", "false")
+        self._hint_max_columns = int(os.environ.get("DATAHEK_PROFILE_HINT_MAX_COLUMNS", "6"))
+        self._hint_top_k = int(os.environ.get("DATAHEK_PROFILE_HINT_TOP_K", "5"))
+        self._hint_max_distinct = int(os.environ.get("DATAHEK_PROFILE_HINT_MAX_DISTINCT", "25"))
 
     async def profile(self, ctx, connection, catalog: SchemaCatalog, *,
                       tables: list[str] | None = None,
@@ -125,6 +142,10 @@ class SchemaProfiler:
         row = dict(zip(columns, result.rows[0])) if result.rows else {}
         total = int(row.get("n") or 0)
 
+        hints: dict[str, tuple[tuple[str, int], ...]] = {}
+        if self._value_hints and include_distinct and total:
+            hints = await self._value_hints_for(ctx, connection, table, metadata, row)
+
         profiles: list[ColumnProfile] = []
         for index, (name, sensitive, family) in enumerate(metadata):
             non_null = int(row.get(f"nn_{index}") or 0)
@@ -146,8 +167,52 @@ class SchemaProfiler:
                 min_value=_as_text(row.get(f"mn_{index}")),
                 max_value=_as_text(row.get(f"mx_{index}")),
                 avg_value=_as_float(row.get(f"av_{index}")),
+                top_values=hints.get(name, ()),
                 role_candidates=roles,
                 role_confidence=confidence,
                 sensitive=sensitive,
             ))
         return tuple(profiles)
+
+    def _hint_candidates(self, metadata) -> list[tuple[int, str]]:
+        candidates: list[tuple[int, str]] = []
+        for index, (name, sensitive, family) in enumerate(metadata):
+            if sensitive or family != "string":
+                continue
+            if _looks_free_text(name):
+                continue
+            candidates.append((index, name))
+        return candidates[:self._hint_max_columns]
+
+    async def _value_hints_for(self, ctx, connection, table: TableMeta, metadata,
+                               row: dict) -> dict[str, tuple[tuple[str, int], ...]]:
+        """Top values for low-cardinality, non-sensitive string columns (privacy-guarded)."""
+        candidates = []
+        for index, name in self._hint_candidates(metadata):
+            distinct = row.get(f"dc_{index}")
+            if distinct is None:
+                continue
+            try:
+                if int(distinct) > self._hint_max_distinct:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            candidates.append((index, name))
+        if not candidates:
+            return {}
+
+        async def fetch(name: str) -> tuple[str, tuple[tuple[str, int], ...]]:
+            plan = LogicalPlan(nodes=[ReadNode(
+                source=table.name, columns=[name], group_by=[name],
+                aggregates=[Aggregate(function="count", column="*", alias="n")],
+                order_by=["n DESC", name], limit=self._hint_top_k)])
+            result = await self._engine.execute(ctx, plan, connection)
+            pairs = []
+            for row in result.rows:
+                value = _as_text(row[0]) if row else ""
+                count = int(row[1] or 0) if len(row) > 1 else 0
+                pairs.append((value or "", count))
+            return name, tuple(pairs)
+
+        results = await asyncio.gather(*(fetch(name) for _, name in candidates))
+        return {name: pairs for name, pairs in results}
