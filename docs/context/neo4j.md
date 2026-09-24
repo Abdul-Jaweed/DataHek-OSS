@@ -2,6 +2,7 @@
 
 **Status:** Milestone 6 deliverable
 **Related:** ADR-004 (Neo4j first) · ADR-005 (abstraction) · ADR-011 (storage split)
+> **Full design & implementation guide:** [`schema-knowledge-graph.md`](schema-knowledge-graph.md)
 
 Neo4j is the initial Schema Knowledge Graph backend. It runs as an **optional, separate service**;
 the default OSS stack works without it and graph-dependent features degrade to

@@ -2,6 +2,7 @@
 
 **Status:** Milestone 6 deliverable
 **Related:** FR-009, FR-017 · ADR-005 · ADR-012
+> **Full design & implementation guide:** [`schema-knowledge-graph.md`](schema-knowledge-graph.md)
 
 The Schema Knowledge Graph (M7) is built through a **replaceable** contract. Replacing Neo4j must
 never require touching the context domain — that is a hard architectural requirement, not a

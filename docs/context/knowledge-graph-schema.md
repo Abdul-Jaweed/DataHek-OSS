@@ -2,6 +2,7 @@
 
 **Status:** Milestone 7 deliverable
 **Related:** FR-009, FR-017 · ADR-003 (schema KG) · ADR-005 (abstraction) · ADR-011 (projection)
+> **Full design & implementation guide:** [`schema-knowledge-graph.md`](schema-knowledge-graph.md)
 
 The Schema KG is a **projection** of context artifacts — schema, profiles, topology, granularity,
 taxonomy, metrics, and ontology — into a `GraphRepository`. It stores metadata and semantics,

@@ -77,6 +77,7 @@ Since M12, the subsystem also ships: **background rebuild queue** (deduplicated,
 **package persistence** (`/contexts/{id}/package`), **configurable caps/budget** (env +
 per-request `budget_tokens`), **profiler value hints** for low-cardinality non-sensitive columns,
 and an OSS web **Context page** with a review inbox (`/context`).
+- [`schema-knowledge-graph.md`](schema-knowledge-graph.md) — **single source of truth** for how the Context Layer uses Neo4j to build, store, retrieve, and operationalize its Schema Knowledge Graph: graph fundamentals, taxonomy/ontology/topology/granularity, the complete Neo4j model, Cypher cookbook, performance/security/observability, storage architecture, and the final recommended architecture (~55 Mermaid diagrams, ~45 Cypher recipes)
 - [`ADR/`](ADR/) — 13 architecture decision records (subsystem boundary, persistent vs runtime,
   schema KG, Neo4j, graph abstraction, registry, package model, human validation, freshness, change
   detection, storage split, multi-tenancy, LLM vs deterministic)
