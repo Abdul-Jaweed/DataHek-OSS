@@ -8,6 +8,7 @@ import { ConnectionsPage } from './features/ConnectionsPage';
 import { ConversationsPage } from './features/ConversationsPage';
 import { PromptsPage } from './features/PromptsPage';
 import { ApprovalsPage } from './features/ApprovalsPage';
+import { ContextPage } from './features/ContextPage';
 import { MetricsPage } from './features/MetricsPage';
 import { SavedQueriesPage } from './features/SavedQueriesPage';
 import { EvaluationsPage } from './features/EvaluationsPage';
@@ -35,6 +36,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/conversations" element={<AppPage><ConversationsPage /></AppPage>} />
         <Route path="/prompts" element={<AppPage><PromptsPage /></AppPage>} />
         <Route path="/approvals" element={<AppPage><ApprovalsPage /></AppPage>} />
+        <Route path="/context" element={<AppPage><ContextPage /></AppPage>} />
         <Route path="/metrics" element={<AppPage><MetricsPage /></AppPage>} />
         <Route path="/saved" element={<AppPage><SavedQueriesPage /></AppPage>} />
         <Route path="/evaluations" element={<AppPage><EvaluationsPage /></AppPage>} />

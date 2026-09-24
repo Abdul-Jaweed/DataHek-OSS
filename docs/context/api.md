@@ -20,6 +20,16 @@ degrades to the live catalog (FR-019/FR-020).
 | POST | `/connections/{id}/context/validate` | Apply decisions, publish a new version |
 | POST | `/connections/{id}/context/preview` | Retrieve → compose → compile summary for a question |
 | GET | `/contexts/{context_id}` | Record summary plus artifact kinds |
+| GET | `/contexts/{context_id}/package` | Persisted compiled package (404 when none) |
+| POST | `/connections/{id}/context/rebuild` | Queue a background rebuild (202, deduplicated) |
+| GET | `/context/rebuilds[?job_id=]` | Rebuild queue status for the caller's organization |
+
+All context routes accept `?scope=connection|schema|table` and are tenant-aware: the active
+record is read/written for the caller's organization. `POST …/context/build` accepts
+`{"scope": "...", "tables": [...]}` to build a scoped record. `POST …/context/preview` accepts
+`{"budget_tokens": n}` (per-request budget) and `{"persist": true}` (store the compiled package,
+readable at `/contexts/{id}/package`). When `DATAHEK_CONTEXT_AUTO_REBUILD=on`, a preview that
+detects stale context enqueues a rebuild and returns the job.
 
 ### Preview
 

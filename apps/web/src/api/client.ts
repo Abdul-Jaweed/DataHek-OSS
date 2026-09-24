@@ -145,3 +145,92 @@ export async function* streamAsk(
     }
   }
 }
+
+export interface ContextRecord {
+  context_id: string;
+  org_id: string;
+  connection_id: string;
+  scope: string;
+  version: number;
+  state: string;
+  schema_hash: string;
+  artifact_kinds: string[];
+  quality: { state: string; human_validation: number; [key: string]: unknown };
+  freshness: { state: string; schema_hash_matches: boolean; [key: string]: unknown };
+}
+
+export interface PendingItem {
+  kind: string;
+  section: string;
+  index: number;
+  label: string;
+  provenance: string;
+  validation: string;
+  confidence: number;
+}
+
+export interface ContextPreview {
+  context_id: string;
+  version: number;
+  schema_hash: string;
+  stale: boolean;
+  tables: { name: string; columns: number }[];
+  metrics: string[];
+  tokens: number;
+  dropped: string[];
+  insufficient: string;
+  trust: string;
+  quality: string;
+  persisted?: boolean;
+  rebuild_job?: { id: string; state: string } | null;
+}
+
+export const contextApi = {
+  status: (connectionId: string, scope = 'connection') =>
+    request<{ context: ContextRecord | null }>(
+      `/connections/${connectionId}/context?scope=${encodeURIComponent(scope)}`,
+    ),
+  versions: (connectionId: string, scope = 'connection') =>
+    request<{ versions: ContextRecord[] }>(
+      `/connections/${connectionId}/context/versions?scope=${encodeURIComponent(scope)}`,
+    ),
+  pending: (connectionId: string, scope = 'connection') =>
+    request<{ items: PendingItem[] }>(
+      `/connections/${connectionId}/context/pending?scope=${encodeURIComponent(scope)}`,
+    ),
+  validate: (
+    connectionId: string,
+    decisions: { kind: string; index: number; action: string; section?: string; patch?: Record<string, unknown> }[],
+    scope = 'connection',
+  ) =>
+    request<{ context: ContextRecord }>(
+      `/connections/${connectionId}/context/validate?scope=${encodeURIComponent(scope)}`,
+      { method: 'POST', body: JSON.stringify({ decisions }) },
+    ),
+  build: (
+    connectionId: string,
+    body: { enrichment?: boolean; scope?: string; tables?: string[] | null } = {},
+  ) =>
+    request<{ state: string; version: number | null; context_id: string | null; degraded: boolean; stages: { name: string; status: string; duration_ms: number }[] }>(
+      `/connections/${connectionId}/context/build`,
+      { method: 'POST', body: JSON.stringify({ enrichment: false, scope: 'connection', ...body }) },
+    ),
+  rebuild: (connectionId: string, enrichment = false, scope = 'connection') =>
+    request<{ id: string; state: string }>(
+      `/connections/${connectionId}/context/rebuild?enrichment=${enrichment ? 'true' : 'false'}&scope=${encodeURIComponent(scope)}`,
+      { method: 'POST' },
+    ),
+  rebuilds: () => request<{ jobs: { id: string; connection_id: string; state: string; version: number | null; error: string }[] }>('/context/rebuilds'),
+  preview: (connectionId: string, question: string, options: { persist?: boolean; budgetTokens?: number; scope?: string } = {}) =>
+    request<ContextPreview>(
+      `/connections/${connectionId}/context/preview?scope=${encodeURIComponent(options.scope ?? 'connection')}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          question,
+          persist: options.persist ?? false,
+          budget_tokens: options.budgetTokens ?? null,
+        }),
+      },
+    ),
+};

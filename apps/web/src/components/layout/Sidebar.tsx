@@ -1,5 +1,6 @@
 import {
   BookmarkSimple,
+  Brain,
   ChatCircleText,
   ClockCounterClockwise,
   Database,
@@ -43,6 +44,7 @@ const GROUPS: NavGroup[] = [
     label: 'Governance',
     items: [
       { to: '/approvals', label: 'Approvals', icon: <ShieldCheck size={16} /> },
+      { to: '/context', label: 'Context', icon: <Brain size={16} /> },
       { to: '/metrics', label: 'Semantics', icon: <Ruler size={16} /> },
       { to: '/prompts', label: 'Prompts', icon: <FileText size={16} /> },
     ],

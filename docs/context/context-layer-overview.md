@@ -169,6 +169,12 @@ Exact order guarantees:
 | 4 | Policy/RLS run **after** planning, in the engine | context informs the plan; guardrails enforce |
 | 5 | Checkpoints store the **executed** plan (post-RLS) | re-execution and audit see real SQL |
 | 6 | Explain/verify/suggest run concurrently | up to two model latencies removed |
+| 7 | Stale context can enqueue a background rebuild | repair without blocking `/ask` |
+
+Stale context is repaired by `POST /connections/{id}/context/rebuild` (or automatically from a
+stale preview when `DATAHEK_CONTEXT_AUTO_REBUILD=on`). A single background worker drains the
+queue inside the API lifespan; jobs are deduplicated per `(org, connection, scope)` and their
+state is visible at `GET /context/rebuilds`.
 
 ## 7. Retrieval
 
@@ -183,13 +189,19 @@ Exact order guarantees:
 5. Filter slices: profiles, grain, taxonomy, ontology to selected tables; topology to edges
    **between** selected tables; metrics by token overlap.
 6. Governance is always attached in full.
-7. Return `stale=true` when `current_schema_hash` differs — caller queues a rebuild.
+7. Return `stale=true` when `current_schema_hash` differs — the caller (or auto-rebuild) queues
+   a rebuild.
+8. Low-cardinality non-sensitive string columns carry top-value hints from the profiler, rendered
+   in the planner schema block (`service_name:text (e.g. ad, checkout, payment)`).
 
 ## 8. Composition
 
 `BudgetContextComposer.compose(..., budget_tokens=4000)`:
 
 - Cost model: `len(str(section)) // 4` — deterministic, monotonic.
+- Defaults are configurable: `DATAHEK_CONTEXT_BUDGET_TOKENS` (4000) and a per-request
+  `budget_tokens` override; retrieval caps via `DATAHEK_CONTEXT_TABLE_CAP` /
+  `DATAHEK_CONTEXT_COLUMN_CAP`.
 - **Mandatory**: schema, governance, granularity. If they alone exceed the budget →
   `insufficient_reason="budget"`.
 - **Optional drop order**: `profiles → taxonomy → topology → ontology → metrics`.

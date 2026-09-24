@@ -71,6 +71,12 @@ Persistent Context → Retrieval → Selection → Composition → Compilation �
   architecture, artifact catalogue, build/runtime sequencing, guarantees, evidence
 - [`context-layer-deck.html`](context-layer-deck.html) — self-contained presentation deck
   (open in a browser, arrow keys to navigate, print to PDF)
+
+Since M12, the subsystem also ships: **background rebuild queue** (deduplicated, tenant-scoped,
+`GET /context/rebuilds`), **scoped records** (`scope=connection|schema|table` + `tables` filter),
+**package persistence** (`/contexts/{id}/package`), **configurable caps/budget** (env +
+per-request `budget_tokens`), **profiler value hints** for low-cardinality non-sensitive columns,
+and an OSS web **Context page** with a review inbox (`/context`).
 - [`ADR/`](ADR/) — 13 architecture decision records (subsystem boundary, persistent vs runtime,
   schema KG, Neo4j, graph abstraction, registry, package model, human validation, freshness, change
   detection, storage split, multi-tenancy, LLM vs deterministic)

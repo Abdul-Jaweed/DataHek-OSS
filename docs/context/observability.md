@@ -31,6 +31,7 @@ extra infrastructure.
 |---|---|---|
 | `context.build` | `POST /connections/{id}/context/build` completes | `connection`, `state`, `enrichment` |
 | `context.validate` | `POST …/context/validate` publishes a version | `connection`, `decisions` |
+| `context.rebuild` | `POST …/context/rebuild` enqueues a job | `job`, `enrichment` |
 
 Both carry actor (API identity when auth is on, `anonymous` otherwise), `resource_ref` (context
 id), and `decision=ALLOW`. Build-job internals record stage status in the `BuildResult` rather
