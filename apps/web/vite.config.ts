@@ -24,6 +24,8 @@ export default defineConfig({
       '/saved-queries': apiTarget,
       '/schedules': apiTarget,
       '/audit': apiTarget,
+      '/contexts': apiTarget,
+      '/context/rebuilds': apiTarget,
     },
   },
   build: { outDir: 'dist' },
